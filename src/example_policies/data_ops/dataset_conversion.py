@@ -1,11 +1,11 @@
 # Copyright 2025 Poke & Wiggle GmbH. All rights reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     https://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -27,7 +27,7 @@ from example_policies.data_ops.pipeline.frame_buffer import FrameBuffer
 
 
 def convert_episodes(
-    episode_paths,
+    episode_dir: pathlib.Path,
     output_dir: pathlib.Path,
     config: pipeline_config.PipelineConfig,
 ):
@@ -36,6 +36,10 @@ def convert_episodes(
     frame_buffer = FrameBuffer(config)
 
     dataset_manager = DatasetWriter(output_dir, features, config)
+
+    episode_paths = list(episode_dir.rglob("*.mcap"))
+    # Sort by creation date (oldest first)
+    episode_paths.sort(key=lambda p: p.stat().st_ctime)
 
     now = time.time()
 
@@ -154,12 +158,9 @@ def main():
     if not args.episodes_dir.is_dir():
         raise FileNotFoundError(f"Input directory not found: {args.episodes_dir}")
 
-    episode_paths = list(args.episodes_dir.rglob("*.mcap"))
-    # Sort by creation date (oldest first)
-    episode_paths.sort(key=lambda p: p.stat().st_ctime)
     print(f"Converting with config: {config}")
 
-    convert_episodes(episode_paths, args.output, config)
+    convert_episodes(args.episodes_dir, args.output, config)
 
 
 if __name__ == "__main__":
