@@ -23,11 +23,11 @@ import numpy as np
 import torch
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
-from ex_pol.robot_deploy.action_translator import ActionTranslator
-from ex_pol.robot_deploy.debug_helpers.utils import print_info
-from ex_pol.robot_deploy.policy_loader import load_policy
-from ex_pol.robot_deploy.robot_io.robot_interface import RobotInterface
-from ex_pol.robot_deploy.robot_io.robot_service import (
+from example_policies.robot_deploy.action_translator import ActionTranslator
+from example_policies.robot_deploy.debug_helpers.utils import print_info
+from example_policies.robot_deploy.policy_loader import load_policy
+from example_policies.robot_deploy.robot_io.robot_interface import RobotInterface
+from example_policies.robot_deploy.robot_io.robot_service import (
     robot_service_pb2,
     robot_service_pb2_grpc,
 )
