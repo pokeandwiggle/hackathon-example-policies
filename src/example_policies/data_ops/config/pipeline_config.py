@@ -1,11 +1,11 @@
 # Copyright 2025 Poke & Wiggle GmbH. All rights reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     https://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -72,11 +72,11 @@ class PipelineConfig:
         task_name: Human-readable task descriptor for metadata.
         max_pause_seconds: Threshold to classify inactivity (combined with pause_velocity).
         pause_velocity: Norm velocity below which motion considered paused.
-        save_pauses: If True, retains pause segments instead of filtering.
+        save_pauses: If True, saves pauses into an extra dataset for validation.
         gripper_active_speed: Velocity threshold to consider gripper in active motion (for speedup logic).
         boost_factor: Temporal acceleration factor for segments (if implemented externally).
         grace_period_seconds: Hysteresis window to avoid rapid pause/unpause flipping.
-        save_normal: If True, always save non-boosted stream (dual outputs).
+        save_normal: If True, always save non-boosted stream (dual outputs) for validation.
         recording_fps: Raw acquisition frequency from robot / sensors.
         target_fps: Desired resulting FPS after subsampling.
         subsample_offset: Phase offset into frame sequence when subsampling.
