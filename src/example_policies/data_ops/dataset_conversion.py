@@ -23,7 +23,7 @@ from mcap.reader import NonSeekingReader
 
 from example_policies.data_ops.config import argparse_pipeline_config, pipeline_config
 from example_policies.data_ops.pipeline.dataset_writer import DatasetWriter
-from example_policies.data_ops.pipeline.frame_buffer import FrameBuffer
+from example_policies.data_ops.pipeline.message_buffer import MessageBuffer
 
 
 def convert_episodes(
@@ -33,7 +33,7 @@ def convert_episodes(
 ):
     """Convert the episodes to the LeRobot dataset format."""
     features = pipeline_config.build_features(config)
-    frame_buffer = FrameBuffer(config)
+    frame_buffer = MessageBuffer(config)
 
     dataset_manager = DatasetWriter(output_dir, features, config)
 
@@ -75,11 +75,6 @@ def convert_episodes(
                     if not frame_buffer.is_complete():
                         continue
 
-                    if seen_frames % config.capture_frequency != 0:
-                        frame_buffer.reset()
-                        seen_frames += 1
-                        continue
-
                     seen_frames += 1
                     global_frames += 1
 
@@ -99,6 +94,8 @@ def convert_episodes(
                         )
                         frame_start = frame_end
                 print()
+
+                # Blacklist short episodes
                 if saved_frames > 0:
                     print(f"Saving {episode_path} processed with {seen_frames} frames.")
                     perform_save = dataset_manager.save_episode(ep_idx)
@@ -117,6 +114,7 @@ def convert_episodes(
             print(
                 f"Skipping faulty file: {episode_path} due to {type(e).__name__}: {e}"
             )
+            raise e
             continue
 
     with open(output_dir / "meta" / "episode_mapping.json", "w", encoding="utf-8") as f:

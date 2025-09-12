@@ -18,8 +18,8 @@ import numpy as np
 
 from ..config import pipeline_config
 from ..config.dataset_type import DatasetType
-from .frame_buffer import FrameBuffer
 from .frame_parser import FrameParser
+from .message_buffer import MessageBuffer
 
 
 class FrameTargeter:
@@ -61,7 +61,7 @@ class FrameTargeter:
         return self.gripper_active_counter >= self.cfg.grace_period_frames
 
     def determine_targets(
-        self, frame_buffer: FrameBuffer, frame_assembler: FrameParser
+        self, frame_buffer: MessageBuffer, frame_assembler: FrameParser
     ) -> List[DatasetType]:
         """
         Determines the target dataset(s) for a given frame based on its state.

@@ -20,9 +20,10 @@ from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from ..config import pipeline_config
 from ..config.dataset_type import DatasetType
 from .frame_assembler import FrameAssembler
-from .frame_buffer import FrameBuffer
 from .frame_parser import FrameParser
 from .frame_targeter import FrameTargeter
+from .message_buffer import MessageBuffer
+from .video_decode_buffer import VideoDecodeBuffer
 
 
 class DatasetWriter:
@@ -36,6 +37,7 @@ class DatasetWriter:
     ):
         self.cfg = cfg
         self.frame_parser = FrameParser(cfg)
+        self.video_decode_buffer = VideoDecodeBuffer(cfg)
         self.frame_targeter = FrameTargeter(cfg)
         self.frame_assembler = FrameAssembler(cfg)
         self.datasets: Dict[DatasetType, LeRobotDataset] = {}
@@ -74,6 +76,7 @@ class DatasetWriter:
             DatasetType.PAUSE: 0,
             DatasetType.NO_SPEED_BOOST: 0,
         }
+        self.frame_parser.reset()
         self.frame_targeter.reset()
         self.frame_assembler.reset()
 
@@ -91,10 +94,17 @@ class DatasetWriter:
             features=features,
         )
 
-    def add_frame(self, frame_buffer: FrameBuffer) -> bool:
+    def add_frame(self, msg_buffer: MessageBuffer) -> bool:
+
+        for synced_buffer, image_dict in self.video_decode_buffer.add_and_decode(
+            msg_buffer
+        ):
+            self.process_frame(synced_buffer, image_dict)
+
+    def process_frame(self, msg_buffer: MessageBuffer, image_dict: dict) -> bool:
         """Adds a frame to the appropriate dataset(s) based on its classification."""
         target_datasets = self.frame_targeter.determine_targets(
-            frame_buffer, self.frame_parser
+            msg_buffer, self.frame_parser
         )
 
         frame = None
@@ -102,11 +112,13 @@ class DatasetWriter:
 
         for target in target_datasets:
             if target in self.datasets:
+                # Lazily parse and assemble the frame only if needed
                 if frame is None:
-                    # Lazily parse the frame only if it's needed for at least one dataset
-                    frame = self.frame_parser.parse_frame(frame_buffer)
-                    frame = self.frame_assembler.assemble(frame)
-                self.datasets[target].add_frame(frame, task=self.cfg.task_name)
+                    frame_dict = self.frame_parser.parse_frame(msg_buffer)
+                    frame_dict.update(image_dict)
+                    frame_dict = self.frame_assembler.assemble(frame_dict)
+
+                self.datasets[target].add_frame(frame_dict, task=self.cfg.task_name)
                 self.dataset_frame_counter[target] += 1
                 performed_save = True
         return performed_save

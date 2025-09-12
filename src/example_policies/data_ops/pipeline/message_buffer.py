@@ -14,11 +14,11 @@
 
 from typing import Any, List
 
-from ..config.pipeline_config import ActionLevel, PipelineConfig
+from ..config.pipeline_config import PipelineConfig, ActionLevel
 from ..config.rosbag_topics import RosSchemaEnum, RosTopicEnum
 
 
-class FrameBuffer:
+class MessageBuffer:
     def __init__(self, config: PipelineConfig):
         self.config = config
         self.listen_topics = _build_required_attributes(config)

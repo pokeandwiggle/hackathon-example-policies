@@ -14,9 +14,9 @@
 
 from typing import List, Optional
 
+import av
 import numpy as np
 from rosbags.serde import deserialize_cdr
-from rosbags.typesys import Stores, get_types_from_msg, register_types
 
 from ..config.pipeline_config import GripperType, PipelineConfig
 from ..config.rosbag_topics import RosSchemaEnum
@@ -44,16 +44,6 @@ _RIGHT_ROBOTIQ_GRIPPER = ["panda_right_" + joint for joint in _ROBOTIQ_JOINTS]
 
 CANONICAL_ARM_JOINTS = _LEFT_ARM + _RIGHT_ARM
 ARM_JOINT_COUNT = len(_LEFT_ARM) + len(_RIGHT_ARM)  # Should be 14
-
-POSE_TWIST_MSG_DEF = """
-std_msgs/Header header
-geometry_msgs/Pose pose
-geometry_msgs/Twist twist
-"""
-
-# Register custom type with rosbags
-types = get_types_from_msg(POSE_TWIST_MSG_DEF, "teleop_controller_msgs/msg/PoseTwist")
-register_types(types)
 
 
 def create_joint_order(cfg: PipelineConfig):
@@ -116,11 +106,17 @@ def parse_joints(cfg: PipelineConfig, msg_data, schema_name: RosSchemaEnum):
 
 
 def parse_image(
-    cfg: PipelineConfig, msg_data, schema_name: RosSchemaEnum
+    cfg: PipelineConfig, msg_data, schema_name: RosSchemaEnum, decoder=None
 ) -> np.ndarray:
-    assert (
-        schema_name == RosSchemaEnum.IMAGE
-    ), f"Unexpected RGB image schema: {schema_name}"
+    assert schema_name in [
+        RosSchemaEnum.IMAGE,
+        RosSchemaEnum.VIDEO,
+    ], f"Unexpected RGB image schema: {schema_name}"
+
+    # Support both single images and hardware encoded video streams
+    if schema_name == RosSchemaEnum.VIDEO:
+        return parse_video_frame(cfg, msg_data, schema_name, decoder=decoder)
+
     img_msg = deserialize_cdr(msg_data, schema_name.value)
     img_bytes = img_msg.data
     is_depth = "compressedDepth" in img_msg.format
@@ -132,6 +128,43 @@ def parse_image(
         is_depth,
     )
 
+    return img
+
+
+def parse_video_frame(
+    cfg: PipelineConfig, msg_data, schema_name: RosSchemaEnum, decoder=None
+) -> np.ndarray:
+    assert schema_name == RosSchemaEnum.VIDEO, f"Unexpected video schema: {schema_name}"
+    assert decoder is not None, "A decoder must be provided for video frames"
+
+    video_msg = deserialize_cdr(msg_data, schema_name.value)
+    decoded_frames = []
+
+    try:
+        packets = decoder.parse(video_msg.data)
+
+        if not packets:
+            return None
+
+        for packet in packets:
+            # Feed the packet to the decoder
+            frames = decoder.decode(packet)
+            for frame in frames:
+                # Convert the decoded PyAV frame to a NumPy array in BGR format for OpenCV
+                img_array = frame.to_ndarray(format="bgr24")
+                decoded_frames.append(img_array)
+    except av.error.InvalidDataError:
+        return None
+
+    if not decoded_frames:
+        return None
+
+    img = process_image_bytes(
+        decoded_frames[0],
+        cfg.image_resolution[0],
+        cfg.image_resolution[1],
+        is_depth=False,
+    )
     return img
 
 

@@ -20,7 +20,7 @@ from PIL import Image, ImageOps
 
 
 def process_image_bytes(
-    img_bytes: bytes,
+    img_bytes: bytes | np.ndarray,
     width: int,
     height: int,
     is_depth: bool,
@@ -32,12 +32,16 @@ def process_image_bytes(
     within the target dimensions while maintaining aspect ratio, then crops
     the center to match the target dimensions exactly.
     """
-    png_data = img_bytes[12:] if is_depth else img_bytes
 
-    # Decode the image from bytes using OpenCV
-    nparr = np.frombuffer(png_data, np.uint8)
-    read_flag = cv2.IMREAD_UNCHANGED if is_depth else cv2.IMREAD_COLOR
-    img_array = cv2.imdecode(nparr, read_flag)
+    if isinstance(img_bytes, np.ndarray):
+        img_array = img_bytes
+    else:
+        png_data = img_bytes[12:] if is_depth else img_bytes
+
+        # Decode the image from bytes using OpenCV
+        nparr = np.frombuffer(png_data, np.uint8)
+        read_flag = cv2.IMREAD_UNCHANGED if is_depth else cv2.IMREAD_COLOR
+        img_array = cv2.imdecode(nparr, read_flag)
 
     # For RGB images, convert from BGR to RGB
     if not is_depth and len(img_array.shape) == 3:

@@ -15,15 +15,19 @@
 from enum import Enum
 from typing import Any
 
+from rosbags.typesys import get_types_from_msg, register_types
+
 
 class RosSchemaEnum(Enum):
     JOINT = "sensor_msgs/msg/JointState"
+    JOINT_WAYPOINT = "trajectory_msgs/msg/JointTrajectory"
+
     IMAGE = "sensor_msgs/msg/CompressedImage"
+    VIDEO = "foxglove_msgs/msg/CompressedVideo"
+
     TRANSFORM = "geometry_msgs/msg/Transform"
     POSE = "geometry_msgs/msg/PoseStamped"
     ARRAY = "std_msgs/msg/Float64MultiArray"
-
-    JOINT_WAYPOINT = "trajectory_msgs/msg/JointTrajectory"
 
     # Currently unused topics
     STRING = "std_msgs/msg/String"
@@ -40,6 +44,11 @@ class RosSchemaEnum(Enum):
 
 class RosTopicEnum(Enum):
     ANNOTATION = "/annotation"
+
+    # Actual States
+    ACTUAL_JOINT_STATE = "/joint_states"
+    ACTUAL_TCP_LEFT = "/panda_left/tcp"
+    ACTUAL_TCP_RIGHT = "/panda_right/tcp"
 
     # Left camera topics
     DEPTH_LEFT_INFO = "/cam_left/aligned_depth_to_color/camera_info"
@@ -75,11 +84,6 @@ class RosTopicEnum(Enum):
     DES_JOINT_LEFT = "/left_desired_joint_waypoint"
     DES_JOINT_RIGHT = "/right_desired_joint_waypoint"
 
-    # Actual States
-    ACTUAL_JOINT_STATE = "/joint_states"
-    ACTUAL_TCP_LEFT = "/panda_left/tcp"
-    ACTUAL_TCP_RIGHT = "/panda_right/tcp"
-
     # VR
     VR_CAMERA_POSE = "/vr_camera"
     VR_CAMERA_SCALE = "/vr_camera_scale"
@@ -88,3 +92,29 @@ class RosTopicEnum(Enum):
     def _missing_(cls, value: object) -> Any:
         full_path = f"{cls.__module__}.{cls.__qualname__}"
         raise ValueError(f"{value} is not a known {full_path} Enum")
+
+
+def register_custom_messages():
+    POSE_TWIST_MSG_DEF = """
+    std_msgs/Header header
+    geometry_msgs/Pose pose
+    geometry_msgs/Twist twist
+    """
+
+    # Register custom type with rosbags
+    types = get_types_from_msg(POSE_TWIST_MSG_DEF, RosSchemaEnum.POSE_TWIST.value)
+    register_types(types)
+
+    COMPRESSED_VIDEO_MSG_DEF = """
+    builtin_interfaces/msg/Time timestamp
+    string frame_id
+    uint8[] data
+    string format
+    """
+
+    # The full name of the message type you are defining
+    types = get_types_from_msg(COMPRESSED_VIDEO_MSG_DEF, RosSchemaEnum.VIDEO.value)
+    register_types(types)
+
+
+register_custom_messages()

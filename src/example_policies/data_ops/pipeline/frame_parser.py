@@ -12,13 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
-
 from ..config.pipeline_config import ActionLevel, PipelineConfig
 from ..config.rosbag_topics import RosTopicEnum
 from ..utils import message_parsers as rmp
 from ..utils.geometric import positive_quat
-from .frame_buffer import FrameBuffer
+from .message_buffer import MessageBuffer
 
 
 class FrameParser:
@@ -30,14 +28,14 @@ class FrameParser:
     def __init__(self, config: PipelineConfig):
         self.config = config
 
-    def parse_velocities(self, frame_buffer: FrameBuffer):
+    def parse_velocities(self, frame_buffer: MessageBuffer):
         """Parses only the joint velocities for quick pause detection."""
         assert frame_buffer.is_complete(), "Frame buffer is not complete"
         msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.ACTUAL_JOINT_STATE)
         _, joint_velocity, _ = rmp.parse_joints(self.config, msg_data, schema_name)
         return joint_velocity
 
-    def parse_frame(self, frame_buffer: FrameBuffer) -> dict:
+    def parse_frame(self, frame_buffer: MessageBuffer) -> dict:
         """Parses a complete frame buffer into a structured dictionary."""
         assert frame_buffer.is_complete(), "Frame buffer is not complete"
 
@@ -109,56 +107,16 @@ class FrameParser:
 
         return desired_frame
 
-    def _parse_images(self, frame_buffer) -> dict:
-        """Assembles the dictionary of image futures."""
+    def _parse_images(self, msg_buffer: MessageBuffer) -> dict:
         images = {}
-        # Static camera is always included
-        msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.RGB_STATIC_IMAGE)
-        images["observation.images.rgb_static"] = rmp.parse_image(
-            self.config, msg_data, schema_name
-        )
-
-        if self.config.include_rgb_images:
-            msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.RGB_LEFT_IMAGE)
-            images["observation.images.rgb_left"] = rmp.parse_image(
-                self.config, msg_data, schema_name
-            )
-
-            msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.RGB_RIGHT_IMAGE)
-            images["observation.images.rgb_right"] = rmp.parse_image(
-                self.config, msg_data, schema_name
-            )
-
         if self.config.include_depth_images:
-            msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DEPTH_LEFT_IMAGE)
+            msg_data, schema_name = msg_buffer.get_msg(RosTopicEnum.DEPTH_LEFT_IMAGE)
             images["observation.images.depth_left"] = rmp.parse_image(
-                self.config, msg_data, schema_name
+                self.config, msg_data, schema_name, decoder=None
             )
 
-            msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DEPTH_RIGHT_IMAGE)
+            msg_data, schema_name = msg_buffer.get_msg(RosTopicEnum.DEPTH_RIGHT_IMAGE)
             images["observation.images.depth_right"] = rmp.parse_image(
-                self.config, msg_data, schema_name
-            )
-
-        if self.config.include_depth_images:
-            msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DEPTH_LEFT_IMAGE)
-            images["observation.images.depth_left"] = rmp.parse_image(
-                self.config, msg_data, schema_name
-            )
-
-            msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DEPTH_RIGHT_IMAGE)
-            images["observation.images.depth_right"] = rmp.parse_image(
-                self.config, msg_data, schema_name
-            )
-
-        if self.config.include_depth_images:
-            msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DEPTH_LEFT_IMAGE)
-            images["observation.images.depth_left"] = rmp.parse_image(
-                self.config, msg_data, schema_name
-            )
-
-            msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DEPTH_RIGHT_IMAGE)
-            images["observation.images.depth_right"] = rmp.parse_image(
-                self.config, msg_data, schema_name
+                self.config, msg_data, schema_name, decoder=None
             )
         return images
