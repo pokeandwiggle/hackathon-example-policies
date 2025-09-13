@@ -12,46 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
-import os
+from pprint import pprint
 import pathlib
 import sys
 
-from lerobot.configs.default import DatasetConfig
 from lerobot.configs.policies import PreTrainedConfig
 from lerobot.configs.train import TrainPipelineConfig
-from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata
-from lerobot.datasets.utils import dataset_to_policy_features
 
 from .robot_deploy.policy_loader import get_checkpoint_path
+from .training.utils import create_dataset_config
 
 
-def make_white_list(dataset_root_dir: str):
-    blacklist_path = os.path.join(dataset_root_dir, "meta", "blacklist.json")
-    episodes_path = os.path.join(dataset_root_dir, "meta", "episodes.jsonl")
-
-    if not os.path.exists(blacklist_path):
-        return None
-
-    with open(blacklist_path, "r") as f:
-        # Use a set for efficient lookup of blacklisted indices.
-        blacklisted_indices = set(json.load(f))
-
-    all_episodes = []
-    with open(episodes_path, "r") as f:
-        # Correctly parse the .jsonl file line by line.
-        for line in f:
-            if line.strip():  # Ensure the line is not empty
-                all_episodes.append(json.loads(line)["episode_index"])
-
-    # Create a whitelist of episodes that are not in the blacklist.
-    whitelist = [
-        episode for episode in all_episodes if episode not in blacklisted_indices
-    ]
-    return whitelist
-
-
-def create_predefined_model_config(
+def create_lerobot_config(
     model_name: str,
     dataset_root_dir: str,
     pretrained_config: PreTrainedConfig | None = None,
@@ -79,11 +51,7 @@ def create_predefined_model_config(
     if policy_kwargs is None:
         policy_kwargs = {}
 
-    # get last folder name of dataset_root_dir_path. Nice Side Effect: Automatic Tag in WandB
-    dataset_root_dir_path = pathlib.Path(dataset_root_dir)
-    fake_repo_id = dataset_root_dir_path.name
-
-    episode_list = make_white_list(dataset_root_dir)
+    dataset_cfg, features = create_dataset_config(pathlib.Path(dataset_root_dir))
 
     if pretrained_config is None:
         pretrained_config = PreTrainedConfig.get_choice_class(model_name)(
@@ -92,9 +60,7 @@ def create_predefined_model_config(
 
     cfg = TrainPipelineConfig(
         policy=pretrained_config,
-        dataset=DatasetConfig(
-            repo_id=fake_repo_id, root=dataset_root_dir, episodes=episode_list
-        ),
+        dataset=dataset_cfg,
         batch_size=batch_size,
         steps=steps,
         save_freq=save_freq,
@@ -107,12 +73,6 @@ def create_predefined_model_config(
         if hasattr(cfg.policy, "optimizer_lr_backbone"):
             cfg.policy.optimizer_lr_backbone = lr
 
-    meta_data = LeRobotDatasetMetadata(
-        repo_id=fake_repo_id,
-        root=dataset_root_dir,
-    )
-    features = dataset_to_policy_features(meta_data.features)
-
     if resume_path is not None:
         resume_path = get_checkpoint_path(resume_path)
         cfg.resume = True
@@ -123,12 +83,12 @@ def create_predefined_model_config(
         cfg.scheduler = cfg.policy.get_scheduler_preset()
 
     print("\nFinal Training Configuration (full details):")
-    print(cfg)
-    return cfg, features
+    pprint(cfg)
+    return cfg
 
 
-def act_config(dataset_root_dir: str, batch_size: int = 32, resume_path: str = None):
-    cfg, input_features = create_predefined_model_config(
+def act_config(dataset_root_dir: str, batch_size: int = 24, resume_path: str = None):
+    cfg = create_lerobot_config(
         # Model selection: e.g., "act", "diffusion", "pi0", "smolvla"
         model_name="integrated_so3_act",
         # Path to the LeRobot dataset directory
@@ -150,12 +110,12 @@ def act_config(dataset_root_dir: str, batch_size: int = 32, resume_path: str = N
             "n_decoder_layers": 7,
         },
     )
-    return cfg, input_features
+    return cfg
 
 
 def smolvla_config(
     dataset_root_dir: str,
-    batch_size: int = 96,
+    batch_size: int = 24,
     resume_path: str = None,
     pretrained_actions: bool = False,
 ):
@@ -164,7 +124,7 @@ def smolvla_config(
         policy = PreTrainedConfig.from_pretrained("lerobot/smolvla_base")
         policy.push_to_hub = False
 
-    cfg, input_features = create_predefined_model_config(
+    cfg = create_lerobot_config(
         # Model selection: e.g., "act", "diffusion", "pi0", "smolvla"
         model_name="smolvla",
         dataset_root_dir=dataset_root_dir,
@@ -183,7 +143,7 @@ def smolvla_config(
             "n_action_steps": 20,
         },
     )
-    return cfg, input_features
+    return cfg
 
 
 def pi0_config(
@@ -196,7 +156,7 @@ def pi0_config(
     if pretrained_actions:
         policy = PreTrainedConfig.from_pretrained("lerobot/pi0")
         policy.push_to_hub = False
-    cfg, input_features = create_predefined_model_config(
+    cfg = create_lerobot_config(
         # Model selection: e.g., "act", "diffusion", "pi0", "smolvla"
         model_name="pi0",
         dataset_root_dir=dataset_root_dir,
@@ -216,7 +176,7 @@ def pi0_config(
         },
     )
 
-    return cfg, input_features
+    return cfg
 
 
 def diffusion_config(
@@ -227,7 +187,7 @@ def diffusion_config(
     horizon: int = 32
     n_action_steps: int = 16
 
-    cfg, input_features = create_predefined_model_config(
+    cfg = create_lerobot_config(
         # Model selection: e.g., "act", "diffusion", "pi0", "smolvla"
         model_name="integrated_so3_diffusion",
         # Path to the LeRobot dataset directory
@@ -258,4 +218,4 @@ def diffusion_config(
             "drop_n_last_frames": horizon - n_action_steps - n_obs_steps + 1,
         },
     )
-    return cfg, input_features
+    return cfg
