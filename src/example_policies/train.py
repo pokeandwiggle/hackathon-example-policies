@@ -15,6 +15,8 @@
 import argparse
 from pprint import pprint
 
+from copy import deepcopy
+
 # First Import Numpy. Workaround for torch / lerobot bug
 import numpy
 
@@ -33,6 +35,22 @@ def select_inputs(include_depth: bool = False):
         selected_inputs.append("observation.images.depth_left")
         selected_inputs.append("observation.images.depth_right")
     return selected_inputs
+
+
+def filter_depth(cfg, include_depth: bool = False):
+    # --- 2. Inspect Dataset and Select Model Inputs ---
+    print("Available dataset features:")
+    for name, feature in cfg.input_features.items():
+        print(f"  - {name}: shape={feature.shape}")
+
+    selected_inputs = select_inputs(include_depth)
+
+    input_features = deepcopy(cfg.input_features)
+    cfg.policy.input_features = {
+        k: v for k, v in input_features.items() if k in selected_inputs
+    }
+
+    return cfg
 
 
 def main(
@@ -58,36 +76,13 @@ def main(
     # Reduce System Memory
     # cfg.num_workers = 2
 
-    # --- 2. Inspect Dataset and Select Model Inputs ---
-    print("Available dataset features:")
-    for name, feature in input_features.items():
-        print(f"  - {name}: shape={feature.shape}")
+    cfg = filter_depth(cfg, include_depth)
 
-    # Define which of the available features will be used as input to the policy.
-    # This is a critical choice that determines what information the model has access to.
-    # Experiment with different combinations to see how it affects performance.
-    # The 'action' feature is the prediction target and should never be in the inputs.
-    print(cfg.policy.input_features)
+    train(cfg)
 
-    selected_inputs = select_inputs(include_depth)
 
-    cfg.policy.input_features = {
-        k: v for k, v in input_features.items() if k in selected_inputs
-    }
-
-    print(cfg.policy.input_features)
-
-    # --- 3. (Optional) Override Other Configuration ---
-    # You can programmatically override any configuration parameter.
-    # For example, to change the learning rate:
-    # cfg.policy.optimizer_lr = 1e-4
-
-    # --- 4. Review Final Configuration and Start Training ---
-    print("\nFinal Training Configuration (full details):")
-    pprint(cfg)
-
+def train(cfg):
     print("\nStarting training...")
-
     # import after monkey patching
     from lerobot.scripts.train import init_logging, train
 
