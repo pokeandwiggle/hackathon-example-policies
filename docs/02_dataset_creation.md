@@ -1,6 +1,6 @@
 # Create a Custom Dataset
 
-This guide explains how to convert raw robot data from `.mcap` files into the LeRobot dataset format using the provided conversion script.
+This guide explains how to convert raw robot data from `.mcap` files into the LeRobot dataset format using the provided [conversion script](../notebooks/01_create_dataset.ipynb).
 
 ### Basic Usage
 
@@ -60,7 +60,7 @@ These dynamics settings highly depend on the robot task.
 
 ### Output Directory Structure
 
-The conversion script generates a directory with the following structure, compatible with the LeRobot library.
+The [conversion script](../notebooks/01_create_dataset.ipynb) generates a directory with the following structure, compatible with the LeRobot framework.
 
 ```
 <output-dataset>/
