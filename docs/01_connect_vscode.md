@@ -24,7 +24,7 @@ First, establish a session on the JupyterHub server through your web browser.
 
 Next, configure VS Code to use the remote server as its kernel.
 
-1.  Open a Jupyter Notebook in VS Code, such as [`notebooks/00_setup.ipynb](../notebooks/00_setup.ipynb)
+1.  Open a Jupyter Notebook in VS Code, such as [notebooks/00_setup.ipynb](../notebooks/00_setup.ipynb)
 2.  Click the **Select Kernel** button in the top-right corner of the notebook editor.
 3.  Choose **Select Another Kernel...** from the command palette dropdown.
 4.  Select **Existing Jupyter Server...**.
