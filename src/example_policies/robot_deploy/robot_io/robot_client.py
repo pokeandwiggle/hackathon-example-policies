@@ -23,19 +23,55 @@ class RobotClient:
         self.stub = service_stub
 
     def get_snapshot(self):
-        snapshot_request = robot_service_pb2.GetSnapshotRequest()
-        snapshot_response = self.stub.GetSnapshot(snapshot_request)
+        snapshot_request = robot_service_pb2.GetStateRequest()
+        snapshot_response = self.stub.GetState(snapshot_request)
 
-        if not snapshot_response.robots:
+        state = snapshot_response.current_state
+
+        if not state.robots:
             print("No robots found in snapshot")
             return None, None
 
-        robot_names = list(snapshot_response.robots.keys())
+        robot_names = list(state.robots.keys())
 
-        return snapshot_response, robot_names
+        return state, robot_names
 
-    def send_target(self, target: robot_service_pb2.Target):
-        set_target_request = robot_service_pb2.SetTargetRequest()
-        set_target_request.targets.append(target)
-        response = self.stub.SetTarget(set_target_request)
+    def send_cart_queue_target(self, cart_target: robot_service_pb2.CartesianTarget):
+        prepare_request = robot_service_pb2.PrepareExecutionRequest()
+        prepare_request.execution_mode = (
+            robot_service_pb2.ExecutionMode.EXECUTION_MODE_CARTESIAN_TARGET_QUEUE
+        )
+        response = self.stub.PrepareExecution(prepare_request)
+
+        queue_target_request = robot_service_pb2.EnqueueCartesianTargetsRequest()
+        queue_target_request.cartesian_targets.append(cart_target)
+        # response = self.stub.EnqueueCartesianTargets(queue_target_request)
+        return response
+
+    def send_cart_direct_target(self, cart_target: robot_service_pb2.CartesianTarget):
+        prepare_request = robot_service_pb2.PrepareExecutionRequest()
+        prepare_request.execution_mode = (
+            robot_service_pb2.ExecutionMode.EXECUTION_MODE_CARTESIAN_TARGET
+        )
+        response = self.stub.PrepareExecution(prepare_request)
+
+        set_target_request = robot_service_pb2.SetCartesianTargetRequest()
+        set_target_request.cartesian_target.CopyFrom(cart_target)
+
+        # Currently not safe
+        response = self.stub.SetCartesianTarget(set_target_request)
+        return response
+
+    def send_joint_direct_target(self, joint_target: robot_service_pb2.JointTarget):
+        prepare_request = robot_service_pb2.PrepareExecutionRequest()
+        prepare_request.execution_mode = (
+            robot_service_pb2.ExecutionMode.EXECUTION_MODE_JOINT_TARGET
+        )
+        response = self.stub.PrepareExecution(prepare_request)
+
+        set_target_request = robot_service_pb2.SetJointTargetRequest()
+        set_target_request.joint_target.CopyFrom(joint_target)
+
+        # Currently not safe
+        response = self.stub.SetJointTarget(set_target_request)
         return response

@@ -17,7 +17,6 @@
 import warnings
 
 import grpc
-
 from . import robot_service_pb2 as robot__service__pb2
 
 GRPC_GENERATED_VERSION = "1.74.0"
@@ -52,22 +51,46 @@ class RobotServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.StreamSnapshot = channel.unary_stream(
-            "/robot_service.RobotService/StreamSnapshot",
-            request_serializer=robot__service__pb2.StreamSnapshotRequest.SerializeToString,
-            response_deserializer=robot__service__pb2.SnapshotResponse.FromString,
+        self.ResetDrivers = channel.unary_unary(
+            "/robot_service.RobotService/ResetDrivers",
+            request_serializer=robot__service__pb2.ResetDriversRequest.SerializeToString,
+            response_deserializer=robot__service__pb2.ResetDriversResponse.FromString,
             _registered_method=True,
         )
-        self.GetSnapshot = channel.unary_unary(
-            "/robot_service.RobotService/GetSnapshot",
-            request_serializer=robot__service__pb2.GetSnapshotRequest.SerializeToString,
-            response_deserializer=robot__service__pb2.SnapshotResponse.FromString,
+        self.PrepareExecution = channel.unary_unary(
+            "/robot_service.RobotService/PrepareExecution",
+            request_serializer=robot__service__pb2.PrepareExecutionRequest.SerializeToString,
+            response_deserializer=robot__service__pb2.PrepareExecutionResponse.FromString,
             _registered_method=True,
         )
-        self.SetTarget = channel.unary_unary(
-            "/robot_service.RobotService/SetTarget",
-            request_serializer=robot__service__pb2.SetTargetRequest.SerializeToString,
-            response_deserializer=robot__service__pb2.SetTargetResponse.FromString,
+        self.GetState = channel.unary_unary(
+            "/robot_service.RobotService/GetState",
+            request_serializer=robot__service__pb2.GetStateRequest.SerializeToString,
+            response_deserializer=robot__service__pb2.GetStateResponse.FromString,
+            _registered_method=True,
+        )
+        self.StreamState = channel.unary_stream(
+            "/robot_service.RobotService/StreamState",
+            request_serializer=robot__service__pb2.StreamStateRequest.SerializeToString,
+            response_deserializer=robot__service__pb2.State.FromString,
+            _registered_method=True,
+        )
+        self.EnqueueCartesianTargets = channel.unary_unary(
+            "/robot_service.RobotService/EnqueueCartesianTargets",
+            request_serializer=robot__service__pb2.EnqueueCartesianTargetsRequest.SerializeToString,
+            response_deserializer=robot__service__pb2.EnqueueCartesianTargetsResponse.FromString,
+            _registered_method=True,
+        )
+        self.SetCartesianTarget = channel.unary_unary(
+            "/robot_service.RobotService/SetCartesianTarget",
+            request_serializer=robot__service__pb2.SetCartesianTargetRequest.SerializeToString,
+            response_deserializer=robot__service__pb2.SetCartesianTargetResponse.FromString,
+            _registered_method=True,
+        )
+        self.SetJointTarget = channel.unary_unary(
+            "/robot_service.RobotService/SetJointTarget",
+            request_serializer=robot__service__pb2.SetJointTargetRequest.SerializeToString,
+            response_deserializer=robot__service__pb2.SetJointTargetResponse.FromString,
             _registered_method=True,
         )
 
@@ -75,19 +98,43 @@ class RobotServiceStub(object):
 class RobotServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
-    def StreamSnapshot(self, request, context):
+    def ResetDrivers(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
-    def GetSnapshot(self, request, context):
+    def PrepareExecution(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
-    def SetTarget(self, request, context):
+    def GetState(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def StreamState(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def EnqueueCartesianTargets(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def SetCartesianTarget(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def SetJointTarget(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
@@ -96,20 +143,40 @@ class RobotServiceServicer(object):
 
 def add_RobotServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-        "StreamSnapshot": grpc.unary_stream_rpc_method_handler(
-            servicer.StreamSnapshot,
-            request_deserializer=robot__service__pb2.StreamSnapshotRequest.FromString,
-            response_serializer=robot__service__pb2.SnapshotResponse.SerializeToString,
+        "ResetDrivers": grpc.unary_unary_rpc_method_handler(
+            servicer.ResetDrivers,
+            request_deserializer=robot__service__pb2.ResetDriversRequest.FromString,
+            response_serializer=robot__service__pb2.ResetDriversResponse.SerializeToString,
         ),
-        "GetSnapshot": grpc.unary_unary_rpc_method_handler(
-            servicer.GetSnapshot,
-            request_deserializer=robot__service__pb2.GetSnapshotRequest.FromString,
-            response_serializer=robot__service__pb2.SnapshotResponse.SerializeToString,
+        "PrepareExecution": grpc.unary_unary_rpc_method_handler(
+            servicer.PrepareExecution,
+            request_deserializer=robot__service__pb2.PrepareExecutionRequest.FromString,
+            response_serializer=robot__service__pb2.PrepareExecutionResponse.SerializeToString,
         ),
-        "SetTarget": grpc.unary_unary_rpc_method_handler(
-            servicer.SetTarget,
-            request_deserializer=robot__service__pb2.SetTargetRequest.FromString,
-            response_serializer=robot__service__pb2.SetTargetResponse.SerializeToString,
+        "GetState": grpc.unary_unary_rpc_method_handler(
+            servicer.GetState,
+            request_deserializer=robot__service__pb2.GetStateRequest.FromString,
+            response_serializer=robot__service__pb2.GetStateResponse.SerializeToString,
+        ),
+        "StreamState": grpc.unary_stream_rpc_method_handler(
+            servicer.StreamState,
+            request_deserializer=robot__service__pb2.StreamStateRequest.FromString,
+            response_serializer=robot__service__pb2.State.SerializeToString,
+        ),
+        "EnqueueCartesianTargets": grpc.unary_unary_rpc_method_handler(
+            servicer.EnqueueCartesianTargets,
+            request_deserializer=robot__service__pb2.EnqueueCartesianTargetsRequest.FromString,
+            response_serializer=robot__service__pb2.EnqueueCartesianTargetsResponse.SerializeToString,
+        ),
+        "SetCartesianTarget": grpc.unary_unary_rpc_method_handler(
+            servicer.SetCartesianTarget,
+            request_deserializer=robot__service__pb2.SetCartesianTargetRequest.FromString,
+            response_serializer=robot__service__pb2.SetCartesianTargetResponse.SerializeToString,
+        ),
+        "SetJointTarget": grpc.unary_unary_rpc_method_handler(
+            servicer.SetJointTarget,
+            request_deserializer=robot__service__pb2.SetJointTargetRequest.FromString,
+            response_serializer=robot__service__pb2.SetJointTargetResponse.SerializeToString,
         ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -126,7 +193,97 @@ class RobotService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
-    def StreamSnapshot(
+    def ResetDrivers(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/robot_service.RobotService/ResetDrivers",
+            robot__service__pb2.ResetDriversRequest.SerializeToString,
+            robot__service__pb2.ResetDriversResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def PrepareExecution(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/robot_service.RobotService/PrepareExecution",
+            robot__service__pb2.PrepareExecutionRequest.SerializeToString,
+            robot__service__pb2.PrepareExecutionResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def GetState(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/robot_service.RobotService/GetState",
+            robot__service__pb2.GetStateRequest.SerializeToString,
+            robot__service__pb2.GetStateResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def StreamState(
         request,
         target,
         options=(),
@@ -141,9 +298,9 @@ class RobotService(object):
         return grpc.experimental.unary_stream(
             request,
             target,
-            "/robot_service.RobotService/StreamSnapshot",
-            robot__service__pb2.StreamSnapshotRequest.SerializeToString,
-            robot__service__pb2.SnapshotResponse.FromString,
+            "/robot_service.RobotService/StreamState",
+            robot__service__pb2.StreamStateRequest.SerializeToString,
+            robot__service__pb2.State.FromString,
             options,
             channel_credentials,
             insecure,
@@ -156,7 +313,7 @@ class RobotService(object):
         )
 
     @staticmethod
-    def GetSnapshot(
+    def EnqueueCartesianTargets(
         request,
         target,
         options=(),
@@ -171,9 +328,9 @@ class RobotService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            "/robot_service.RobotService/GetSnapshot",
-            robot__service__pb2.GetSnapshotRequest.SerializeToString,
-            robot__service__pb2.SnapshotResponse.FromString,
+            "/robot_service.RobotService/EnqueueCartesianTargets",
+            robot__service__pb2.EnqueueCartesianTargetsRequest.SerializeToString,
+            robot__service__pb2.EnqueueCartesianTargetsResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -186,7 +343,7 @@ class RobotService(object):
         )
 
     @staticmethod
-    def SetTarget(
+    def SetCartesianTarget(
         request,
         target,
         options=(),
@@ -201,9 +358,39 @@ class RobotService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            "/robot_service.RobotService/SetTarget",
-            robot__service__pb2.SetTargetRequest.SerializeToString,
-            robot__service__pb2.SetTargetResponse.FromString,
+            "/robot_service.RobotService/SetCartesianTarget",
+            robot__service__pb2.SetCartesianTargetRequest.SerializeToString,
+            robot__service__pb2.SetCartesianTargetResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def SetJointTarget(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/robot_service.RobotService/SetJointTarget",
+            robot__service__pb2.SetJointTargetRequest.SerializeToString,
+            robot__service__pb2.SetJointTargetResponse.FromString,
             options,
             channel_credentials,
             insecure,

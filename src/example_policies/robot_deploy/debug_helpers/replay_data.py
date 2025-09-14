@@ -23,7 +23,7 @@ import numpy as np
 import torch
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
-from example_policies.robot_deploy.action_translator import ActionTranslator
+from example_policies.robot_deploy.action_translator import ActionTranslator, ActionMode
 from example_policies.robot_deploy.debug_helpers.utils import print_info
 from example_policies.robot_deploy.policy_loader import load_policy
 from example_policies.robot_deploy.robot_io.robot_interface import RobotInterface
@@ -80,7 +80,7 @@ def inference_loop(
 
     input("Press Enter to move robot to start...")
 
-    robot_interface.send_action(torch.from_numpy(action))
+    robot_interface.send_action(torch.from_numpy(action), ActionMode.ABS_TCP)
 
     input("Press Enter to continue...")
     # Inference Loop
@@ -96,10 +96,13 @@ def inference_loop(
 
             action = batch["action"]
 
+            input("Press Enter to send next action...")
+
+            model_to_action_trans.action_mode = ActionMode.ABS_TCP
             action = model_to_action_trans.translate(action, observation)
             print_info(step, observation, action)
 
-            robot_interface.send_action(action)
+            robot_interface.send_action(action, model_to_action_trans.action_mode)
             # policy._queues["action"].clear()
 
         # wait for execution to finish

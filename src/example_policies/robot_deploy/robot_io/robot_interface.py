@@ -25,6 +25,8 @@ from .robot_service import (
     robot_service_pb2,
     robot_service_pb2_grpc,
 )
+from ..action_translator import ActionMode
+from ...data_ops.utils.message_parsers import CANONICAL_ARM_JOINTS
 
 
 class RobotInterface:
@@ -52,39 +54,67 @@ class RobotInterface:
     def send_action(
         self,
         action: torch.Tensor,
+        action_mode: ActionMode,
     ):
         """Sends a predicted action to the robot service."""
         numpy_action = action.squeeze(0).to("cpu").numpy()
-
         self.last_command = numpy_action[: dc.LEFT_GRIPPER_IDX]
 
-        left_desired = _build_des_msg(
-            numpy_action[dc.LEFT_ARM], numpy_action[dc.LEFT_GRIPPER_IDX]
-        )
-        right_desired = _build_des_msg(
-            numpy_action[dc.RIGHT_ARM], numpy_action[dc.RIGHT_GRIPPER_IDX]
-        )
+        if action_mode in (ActionMode.DELTA_TCP, ActionMode.ABS_TCP):
+            target = _build_cart_target(numpy_action)
+            self.client.send_cart_queue_target(target)
 
-        target = robot_service_pb2.Target()
-        target.robots["left"].CopyFrom(left_desired)
-        target.robots["right"].CopyFrom(right_desired)
-
-        response = self.client.send_target(target)
-        print(response)
+        elif action_mode in (ActionMode.DELTA_JOINT, ActionMode.ABS_JOINT):
+            target = _build_joint_target(numpy_action)
+            self.client.send_joint_direct_target(target)
+        else:
+            raise RuntimeError(f"Unknown action mode: {action_mode}")
 
 
-def _build_des_msg(
-    action_slice: np.ndarray, gripper_width: float
-) -> robot_service_pb2.RobotDesired:
+def _build_des_pose_msg(action_slice: np.ndarray) -> robot_service_pb2.Pose:
     """Creates a RobotDesired message from an action slice."""
-    desired_msg = robot_service_pb2.RobotDesired()
-    desired_msg.pose.position.x = action_slice[0]
-    desired_msg.pose.position.y = action_slice[1]
-    desired_msg.pose.position.z = action_slice[2]
-    desired_msg.pose.orientation.x = action_slice[3]
-    desired_msg.pose.orientation.y = action_slice[4]
-    desired_msg.pose.orientation.z = action_slice[5]
-    desired_msg.pose.orientation.w = action_slice[6]
+    des_pose = robot_service_pb2.Pose()
 
-    desired_msg.gripper_width = gripper_width
-    return desired_msg
+    des_pose.position.x = action_slice[0]
+    des_pose.position.y = action_slice[1]
+    des_pose.position.z = action_slice[2]
+    des_pose.orientation.x = action_slice[3]
+    des_pose.orientation.y = action_slice[4]
+    des_pose.orientation.z = action_slice[5]
+    des_pose.orientation.w = action_slice[6]
+
+    return des_pose
+
+
+def _build_cart_target(np_action: np.ndarray) -> robot_service_pb2.CartesianTarget:
+    left_desired = _build_des_pose_msg(np_action[dc.LEFT_ARM])
+    left_gripper = np_action[dc.LEFT_GRIPPER_IDX]
+    right_desired = _build_des_pose_msg(np_action[dc.RIGHT_ARM])
+    right_gripper = np_action[dc.RIGHT_GRIPPER_IDX]
+
+    des_target_msg = robot_service_pb2.CartesianTarget()
+    des_target_msg.robot_poses["left"].CopyFrom(left_desired)
+    des_target_msg.robot_poses["right"].CopyFrom(right_desired)
+
+    des_target_msg.gripper_widths["left"] = left_gripper
+    des_target_msg.gripper_widths["right"] = right_gripper
+
+    des_target_msg.robot_stiffnesses["left"] = 1.0
+    des_target_msg.robot_stiffnesses["right"] = 1.0
+
+    return des_target_msg
+
+
+def _build_joint_target(np_action: np.ndarray) -> robot_service_pb2.JointTarget:
+    """Creates a RobotDesired message from an action slice."""
+    des_target_msg = robot_service_pb2.JointTarget()
+    for i, joint_name in enumerate(CANONICAL_ARM_JOINTS):
+        des_target_msg.joint_angles[joint_name] = np_action[i]
+
+    des_target_msg.gripper_widths["left"] = np_action[dc.LEFT_GRIPPER_IDX]
+    des_target_msg.gripper_widths["right"] = np_action[dc.RIGHT_GRIPPER_IDX]
+
+    des_target_msg.robot_stiffnesses["left"] = 1.0
+    des_target_msg.robot_stiffnesses["right"] = 1.0
+
+    return des_target_msg
