@@ -33,13 +33,8 @@ from example_policies.robot_deploy.robot_io.robot_service import (
 
 
 def inference_loop(
-    checkpoint_dir: Path, service_stub: robot_service_pb2_grpc.RobotServiceStub
+    policy, cfg, hz: float, service_stub: robot_service_pb2_grpc.RobotServiceStub
 ):
-    # Select your device
-    device = "cpu" if not torch.cuda.is_available() else "cuda"
-
-    policy, cfg = load_policy(checkpoint_dir)
-    policy.to(device)
 
     robot_interface = RobotInterface(service_stub, cfg)
     model_to_action_trans = ActionTranslator(cfg)
@@ -49,12 +44,11 @@ def inference_loop(
 
     # Inference Loop
     print("Starting inference loop...")
-    hz = 1.5
     period = 1.0 / hz
     while not done:
         start_time = time.time()
         print(policy.config.input_features)
-        observation = robot_interface.get_observation(device, show=False)
+        observation = robot_interface.get_observation(policy.device, show=False)
 
         if observation:
             # Predict the next action with respect to the current observation
@@ -68,7 +62,7 @@ def inference_loop(
             print(f"\n=== ABSOLUTE ROBOT COMMANDS ===")
             print_info(step, observation, action)
 
-            robot_interface.send_action(action)
+            robot_interface.send_action(action, model_to_action_trans.action_mode)
             # policy._queues["action"].clear()
 
         # wait for execution to finish
@@ -98,10 +92,20 @@ def main():
     )
     args = parser.parse_args()
 
-    channel = grpc.insecure_channel(args.server)
+    # Select your device
+    device = "cpu" if not torch.cuda.is_available() else "cuda"
+
+    policy, cfg = load_policy(args.checkpoint)
+    policy.to(device)
+
+    deploy_policy(policy, cfg, hz=1.5, server=args.server)
+
+
+def deploy_policy(policy, cfg, hz: float, server: str):
+    channel = grpc.insecure_channel(server)
     stub = robot_service_pb2_grpc.RobotServiceStub(channel)
     try:
-        inference_loop(args.checkpoint, stub)
+        inference_loop(policy, cfg, hz, stub)
     except Exception as e:
         print(f"Error occurred: {e}")
         raise e
