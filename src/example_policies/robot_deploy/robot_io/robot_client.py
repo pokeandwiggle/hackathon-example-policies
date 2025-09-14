@@ -26,13 +26,15 @@ class RobotClient:
         snapshot_request = robot_service_pb2.GetStateRequest()
         snapshot_response = self.stub.GetState(snapshot_request)
 
-        if not snapshot_response.robots:
+        state = snapshot_response.current_state
+
+        if not state.robots:
             print("No robots found in snapshot")
             return None, None
 
-        robot_names = list(snapshot_response.robots.keys())
+        robot_names = list(state.robots.keys())
 
-        return snapshot_response, robot_names
+        return state, robot_names
 
     def send_cart_queue_target(self, cart_target: robot_service_pb2.CartesianTarget):
         prepare_request = robot_service_pb2.PrepareExecutionRequest()
@@ -43,7 +45,7 @@ class RobotClient:
 
         queue_target_request = robot_service_pb2.EnqueueCartesianTargetsRequest()
         queue_target_request.cartesian_targets.append(cart_target)
-        response = self.stub.EnqueueCartesianTargets(queue_target_request)
+        # response = self.stub.EnqueueCartesianTargets(queue_target_request)
         return response
 
     def send_cart_direct_target(self, cart_target: robot_service_pb2.CartesianTarget):

@@ -96,17 +96,21 @@ class ObservationBuilder:
             torch.from_numpy(full_state).to(device).unsqueeze(0)
         )
 
-        # 3. Process camera images
-        rgb_images = self._process_camera_images(
-            snapshot_response.rgb_cameras, "rgb", device
-        )
-        observation.update(rgb_images)
-        depth_images = self._process_camera_images(
-            snapshot_response.depth_cameras, "depth", device
-        )
-        observation.update(depth_images)
+        images = self.process_all_cameras(snapshot_response, device)
+        observation.update(images)
 
         return observation
+
+    def process_all_cameras(self, snapshot_response, device):
+        images = {}
+
+        cameras = snapshot_response.cameras
+        # ['cam_right_color_optical_frame', 'cam_right_depth_optical_frame', 'cam_static_optical_frame', 'cam_left_depth_optical_frame', 'cam_left_color_optical_frame']
+        for cam_name in list(cameras.keys()):
+            images.update(
+                self._process_camera_image(cameras[cam_name], cam_name, device)
+            )
+        return images
 
     def _get_joint_state(self, snapshot) -> np.ndarray:
         """Extracts joint states from the snapshot for the given robots."""
@@ -171,30 +175,27 @@ class ObservationBuilder:
                 cmd = last_command
         return np.array(cmd, dtype=np.float32)
 
-    def _process_camera_images(self, camera_data, modality, device):
+    def _process_camera_image(self, camera_data, camera_name: str, device):
         """Processes a batch of camera images and returns them in a dict."""
         cfg = self.cfg
 
-        processed_images = {}
-        for cam_name, cam_data in camera_data.items():
-            side = cam_name.split("_")[-1]
-            obs_key = f"observation.images.{modality}_{side}"
-            if obs_key not in cfg.input_features:
-                continue
+        side = camera_name.split("_")[1]
+        modality = "depth" if "depth" in camera_name else "rgb"
 
-            # Lerobot Model Config Shape is Channel Height Width for some reason
-            cfg_shape = cfg.input_features[obs_key].shape
-            if cfg_shape is None:
-                continue
+        obs_key = f"observation.images.{modality}_{side}"
+        if obs_key not in cfg.input_features:
+            return {}
 
-            img_array = image_processor.process_image_bytes(
-                cam_data.data,
-                width=cfg_shape[2],
-                height=cfg_shape[1],
-                is_depth=(modality == "depth"),
-            )
-            image = torch.from_numpy(img_array)
-            image = image.permute(2, 0, 1)
-            image = image.to(device)
-            processed_images[obs_key] = image.unsqueeze(0)
-        return processed_images
+        # Lerobot Model Config Shape is Channel Height Width for some reason
+        cfg_shape = cfg.input_features[obs_key].shape
+
+        img_array = image_processor.process_image_bytes(
+            camera_data.data,
+            width=cfg_shape[2],
+            height=cfg_shape[1],
+            is_depth=(modality == "depth"),
+        )
+        image = torch.from_numpy(img_array)
+        image = image.permute(2, 0, 1)
+        image = image.to(device)
+        return {obs_key: image.unsqueeze(0)}
