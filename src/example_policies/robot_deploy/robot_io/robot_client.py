@@ -35,23 +35,41 @@ class RobotClient:
         return snapshot_response, robot_names
 
     def send_cart_queue_target(self, cart_target: robot_service_pb2.CartesianTarget):
+        prepare_request = robot_service_pb2.PrepareExecutionRequest()
+        prepare_request.execution_mode = (
+            robot_service_pb2.ExecutionMode.EXECUTION_MODE_CARTESIAN_TARGET_QUEUE
+        )
+        response = self.stub.PrepareExecution(prepare_request)
+
         queue_target_request = robot_service_pb2.EnqueueCartesianTargetsRequest()
         queue_target_request.cartesian_targets.append(cart_target)
-        # response = self.stub.EnqueueCartesianTargets(queue_target_request)
-        # return response
+        response = self.stub.EnqueueCartesianTargets(queue_target_request)
+        return response
 
     def send_cart_direct_target(self, cart_target: robot_service_pb2.CartesianTarget):
+        prepare_request = robot_service_pb2.PrepareExecutionRequest()
+        prepare_request.execution_mode = (
+            robot_service_pb2.ExecutionMode.EXECUTION_MODE_CARTESIAN_TARGET
+        )
+        response = self.stub.PrepareExecution(prepare_request)
+
         set_target_request = robot_service_pb2.SetCartesianTargetRequest()
         set_target_request.cartesian_target.CopyFrom(cart_target)
 
         # Currently not safe
-        # response = self.stub.SetCartesianTarget(set_target_request)
-        # return response
+        response = self.stub.SetCartesianTarget(set_target_request)
+        return response
 
     def send_joint_direct_target(self, joint_target: robot_service_pb2.JointTarget):
+        prepare_request = robot_service_pb2.PrepareExecutionRequest()
+        prepare_request.execution_mode = (
+            robot_service_pb2.ExecutionMode.EXECUTION_MODE_JOINT_TARGET
+        )
+        response = self.stub.PrepareExecution(prepare_request)
+
         set_target_request = robot_service_pb2.SetJointTargetRequest()
         set_target_request.joint_target.CopyFrom(joint_target)
 
         # Currently not safe
-        # response = self.stub.SetJointTarget(set_target_request)
-        # return response
+        response = self.stub.SetJointTarget(set_target_request)
+        return response
