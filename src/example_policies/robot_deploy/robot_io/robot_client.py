@@ -19,6 +19,10 @@ from .robot_service import (
 
 
 class RobotClient:
+    CART_QUEUE = "cartesian_target_queue"
+    CART_DIRECT = "cartesian_target"
+    JOINT_DIRECT = "joint_target"
+
     def __init__(self, service_stub: robot_service_pb2_grpc.RobotServiceStub):
         self.stub = service_stub
         self.control_mode = None
@@ -38,7 +42,7 @@ class RobotClient:
         return state, robot_names
 
     def send_cart_queue_target(self, cart_target: robot_service_pb2.CartesianTarget):
-        ctrl_mode = "cartesian_target_queue"
+        ctrl_mode = RobotClient.CART_QUEUE
 
         if self.control_mode != ctrl_mode:
             prepare_request = robot_service_pb2.PrepareExecutionRequest()
@@ -54,7 +58,7 @@ class RobotClient:
         return response
 
     def send_cart_direct_target(self, cart_target: robot_service_pb2.CartesianTarget):
-        ctrl_mode = "cartesian_target"
+        ctrl_mode = RobotClient.CART_DIRECT
 
         if self.control_mode != ctrl_mode:
             prepare_request = robot_service_pb2.PrepareExecutionRequest()
@@ -72,7 +76,7 @@ class RobotClient:
         return response
 
     def send_joint_direct_target(self, joint_target: robot_service_pb2.JointTarget):
-        ctrl_mode = "joint_target"
+        ctrl_mode = RobotClient.JOINT_DIRECT
 
         if self.control_mode != ctrl_mode:
             prepare_request = robot_service_pb2.PrepareExecutionRequest()
