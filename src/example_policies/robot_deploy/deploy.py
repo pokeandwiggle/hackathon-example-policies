@@ -48,7 +48,7 @@ def inference_loop(
     while not done:
         start_time = time.time()
         print(policy.config.input_features)
-        observation = robot_interface.get_observation(policy.device, show=False)
+        observation = robot_interface.get_observation(cfg.device, show=False)
 
         if observation:
             # Predict the next action with respect to the current observation
