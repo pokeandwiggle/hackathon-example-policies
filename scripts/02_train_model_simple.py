@@ -50,6 +50,7 @@ from example_policies.config_factory import act_config, diffusion_config, smolvl
 repo_id = "jccj/mh2_step_1"
 cfg = act_config(
     repo_id=repo_id,
+    batch_size=16,
 )
 
 # You can specify additional keywords by looking at the lerobot configuration code, e.g. `lerobot.policies.act.configuration_act`
