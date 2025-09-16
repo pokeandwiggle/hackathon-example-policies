@@ -1,5 +1,9 @@
 # Dataset Upload and Visualization Guide
 
+> **TL;DR**: Use `upload.py` to push datasets to Hugging Face Hub and `visualize.py` to view episodes locally or from the hub. Quick commands:
+> - Upload: `python src/example_policies/data_ops/upload.py --repo-id username/dataset --root /path/to/dataset`
+> - Visualize: `python src/example_policies/data_ops/visualize.py --repo-id username/dataset` or add `--local --root /path/to/dataset` for local datasets
+
 This guide explains how to use the dataset upload and visualization tools provided in the `src/example_policies/data_ops/` directory.
 
 ## Overview
