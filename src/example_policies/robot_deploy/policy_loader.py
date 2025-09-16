@@ -40,11 +40,31 @@ def get_checkpoint_path(checkpoint_path: pathlib.Path | str) -> pathlib.Path:
     return checkpoint_path
 
 
-def load_metadata(checkpoint_dir: pathlib.Path) -> dict:
-    meta_json = checkpoint_dir / "dataset_info.json"
+def load_metadata(dir_path: pathlib.Path) -> dict:
+    """Load Metadata for a model checkpoint or a dataset dir
+
+    Args:
+        dir_path (pathlib.Path): Path to the directory of model checkpoint or dataset
+
+    Returns:
+        dict: Metadata information
+    """
+    meta_json = dir_path / "dataset_info.json"
     if not meta_json.exists():
         print("Did not find any dataset metadata")
-        return {}
+        return load_dataset_info(dir_path)
+    with open(meta_json, "r", encoding="utf-8") as f:
+        metadata = json.load(f)
+    return metadata
+
+
+def load_dataset_info(dir_path: pathlib.Path) -> dict:
+    """Load Dataset Info from lerobot package
+
+    Returns:
+        dict: Dataset Info
+    """
+    meta_json = dir_path / "meta" / "info.json"
     with open(meta_json, "r", encoding="utf-8") as f:
         metadata = json.load(f)
     return metadata

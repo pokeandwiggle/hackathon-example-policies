@@ -25,31 +25,52 @@ from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
 from example_policies.robot_deploy.action_translator import ActionTranslator, ActionMode
 from example_policies.robot_deploy.debug_helpers.utils import print_info
-from example_policies.robot_deploy.policy_loader import load_policy
+from example_policies.robot_deploy.policy_loader import load_metadata
 from example_policies.robot_deploy.robot_io.robot_interface import RobotInterface
 from example_policies.robot_deploy.robot_io.robot_service import (
     robot_service_pb2,
     robot_service_pb2_grpc,
 )
 
+from lerobot.configs.default import DatasetConfig
+from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata
+
+import numpy as np
+
+
+class FakeConfig:
+    def __init__(self, m) -> None:
+        self.metadata = m
+        self.output_features = {}
+        self.input_features = {}
+        self.input_features["observation.state"] = np.asarray(
+            m["features"]["observation.state"]["names"]
+        )
+        self.output_features["action"] = np.asarray(m["features"]["action"]["names"])
+
 
 def inference_loop(
     data_dir: Path,
-    checkpoint_dir: Path,
     service_stub: robot_service_pb2_grpc.RobotServiceStub,
     ep_index: int = 0,
 ):
 
-    policy, cfg = load_policy(checkpoint_dir)
-    robot_interface = RobotInterface(service_stub, cfg)
-    model_to_action_trans = ActionTranslator(cfg)
+    fake_repo_id = data_dir.name
+    # data_cfg = DatasetConfig(repo_id=fake_repo_id, root=data_dir, episodes=[ep_index])
+
+    meta_data = load_metadata(data_dir)
+    # Wrap in dictionary to emulate policy config
+    cfg = FakeConfig(meta_data)
 
     # We can then instantiate the dataset with these delta_timestamps configuration.
     dataset = LeRobotDataset(
-        repo_id=data_dir.name,
+        repo_id=fake_repo_id,
         root=data_dir,
         episodes=[ep_index],
     )
+
+    robot_interface = RobotInterface(service_stub, cfg)
+    model_to_action_trans = ActionTranslator(cfg)
 
     dataloader = torch.utils.data.DataLoader(
         dataset,
@@ -80,7 +101,7 @@ def inference_loop(
 
     input("Press Enter to move robot to start...")
 
-    robot_interface.send_action(torch.from_numpy(action), ActionMode.ABS_TCP)
+    # robot_interface.send_action(torch.from_numpy(action), ActionMode.ABS_TCP)
 
     input("Press Enter to continue...")
     # Inference Loop
@@ -124,13 +145,6 @@ def main():
         help="Path to the data directory",
     )
     parser.add_argument(
-        "--checkpoint",
-        type=Path,
-        required=True,
-        help="Path to the policy checkpoint directory.",
-    )
-
-    parser.add_argument(
         "--server",
         default="localhost:50051",
         help="Robot service server address (default: localhost:50051)",
@@ -148,7 +162,7 @@ def main():
     channel = grpc.insecure_channel(args.server)
     stub = robot_service_pb2_grpc.RobotServiceStub(channel)
     try:
-        inference_loop(args.data_dir, args.checkpoint, stub, args.episode)
+        inference_loop(args.data_dir, stub, args.episode)
     except Exception as e:
         print(f"Error occurred: {e}")
         raise e
