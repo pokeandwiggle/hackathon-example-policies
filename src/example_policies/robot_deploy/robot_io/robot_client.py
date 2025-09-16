@@ -21,6 +21,7 @@ from .robot_service import (
 class RobotClient:
     def __init__(self, service_stub: robot_service_pb2_grpc.RobotServiceStub):
         self.stub = service_stub
+        self.control_mode = None
 
     def get_snapshot(self):
         snapshot_request = robot_service_pb2.GetStateRequest()
@@ -37,23 +38,31 @@ class RobotClient:
         return state, robot_names
 
     def send_cart_queue_target(self, cart_target: robot_service_pb2.CartesianTarget):
-        prepare_request = robot_service_pb2.PrepareExecutionRequest()
-        prepare_request.execution_mode = (
-            robot_service_pb2.ExecutionMode.EXECUTION_MODE_CARTESIAN_TARGET_QUEUE
-        )
-        response = self.stub.PrepareExecution(prepare_request)
+        ctrl_mode = "cartesian_target_queue"
+
+        if self.control_mode != ctrl_mode:
+            prepare_request = robot_service_pb2.PrepareExecutionRequest()
+            prepare_request.execution_mode = (
+                robot_service_pb2.ExecutionMode.EXECUTION_MODE_CARTESIAN_TARGET_QUEUE
+            )
+            response = self.stub.PrepareExecution(prepare_request)
+            self.control_mode = ctrl_mode
 
         queue_target_request = robot_service_pb2.EnqueueCartesianTargetsRequest()
         queue_target_request.cartesian_targets.append(cart_target)
-        # response = self.stub.EnqueueCartesianTargets(queue_target_request)
+        response = self.stub.EnqueueCartesianTargets(queue_target_request)
         return response
 
     def send_cart_direct_target(self, cart_target: robot_service_pb2.CartesianTarget):
-        prepare_request = robot_service_pb2.PrepareExecutionRequest()
-        prepare_request.execution_mode = (
-            robot_service_pb2.ExecutionMode.EXECUTION_MODE_CARTESIAN_TARGET
-        )
-        response = self.stub.PrepareExecution(prepare_request)
+        ctrl_mode = "cartesian_target"
+
+        if self.control_mode != ctrl_mode:
+            prepare_request = robot_service_pb2.PrepareExecutionRequest()
+            prepare_request.execution_mode = (
+                robot_service_pb2.ExecutionMode.EXECUTION_MODE_CARTESIAN_TARGET
+            )
+            response = self.stub.PrepareExecution(prepare_request)
+            self.control_mode = ctrl_mode
 
         set_target_request = robot_service_pb2.SetCartesianTargetRequest()
         set_target_request.cartesian_target.CopyFrom(cart_target)
@@ -63,11 +72,15 @@ class RobotClient:
         return response
 
     def send_joint_direct_target(self, joint_target: robot_service_pb2.JointTarget):
-        prepare_request = robot_service_pb2.PrepareExecutionRequest()
-        prepare_request.execution_mode = (
-            robot_service_pb2.ExecutionMode.EXECUTION_MODE_JOINT_TARGET
-        )
-        response = self.stub.PrepareExecution(prepare_request)
+        ctrl_mode = "joint_target"
+
+        if self.control_mode != ctrl_mode:
+            prepare_request = robot_service_pb2.PrepareExecutionRequest()
+            prepare_request.execution_mode = (
+                robot_service_pb2.ExecutionMode.EXECUTION_MODE_JOINT_TARGET
+            )
+            response = self.stub.PrepareExecution(prepare_request)
+            self.control_mode = ctrl_mode
 
         set_target_request = robot_service_pb2.SetJointTargetRequest()
         set_target_request.joint_target.CopyFrom(joint_target)
