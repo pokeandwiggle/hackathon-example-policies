@@ -57,14 +57,12 @@ if __name__ == "__main__":
     if args.local and not args.root:
         raise ValueError("--root must be provided when --local is set.")
 
-    if not args.local and args.repo_id:
-        dataset = LeRobotDataset(args.repo_id)
-    elif args.local and args.root:
+    if args.local:
         dataset = LeRobotDataset(
             args.repo_id if args.repo_id else args.root, root=args.root
         )
     else:
-        raise ValueError("Invalid combination of arguments provided.")
+        dataset = LeRobotDataset(args.repo_id)
 
     print(f"Visualizing episode {args.episode_index}...")
     visualize_dataset(dataset, episode_index=args.episode_index)
