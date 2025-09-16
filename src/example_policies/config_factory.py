@@ -25,7 +25,8 @@ from .training.utils import create_dataset_config
 
 def create_lerobot_config(
     model_name: str,
-    dataset_root_dir: str,
+    dataset_root_dir: str | None = None,
+    repo_id: str | None = None,
     pretrained_config: PreTrainedConfig | None = None,
     batch_size: int = 8,
     lr: float = None,
@@ -48,10 +49,19 @@ def create_lerobot_config(
     Returns:
         _type_: _description_
     """
+    assert repo_id is not None or dataset_root_dir is not None, (
+        "Either repo_id or dataset_root_dir must be provided"
+    )
     if policy_kwargs is None:
         policy_kwargs = {}
 
-    dataset_cfg, features = create_dataset_config(pathlib.Path(dataset_root_dir))
+    dataset_root_dir = (
+        pathlib.Path(dataset_root_dir) if dataset_root_dir is not None else None
+    )
+    dataset_cfg, features = create_dataset_config(
+        dataset_root_dir=dataset_root_dir,
+        repo_id=repo_id,
+    )
 
     if pretrained_config is None:
         pretrained_config = PreTrainedConfig.get_choice_class(model_name)(
@@ -88,12 +98,15 @@ def create_lerobot_config(
 
 
 def act_config(
-    dataset_root_dir: str,
+    repo_id: str | None = None,
+    dataset_root_dir: str | None = None,
     batch_size: int = 24,
     resume_path: str = None,
     policy_kwargs: dict = None,
 ):
-
+    assert repo_id is not None or dataset_root_dir is not None, (
+        "Either repo_id or dataset_root_dir must be provided"
+    )
     default_kwargs = {
         "vision_backbone": "resnet34",
         "pretrained_backbone_weights": "ResNet34_Weights.IMAGENET1K_V1",
@@ -112,6 +125,7 @@ def act_config(
         model_name="integrated_so3_act",
         # Path to the LeRobot dataset directory
         dataset_root_dir=dataset_root_dir,
+        repo_id=repo_id,
         # Training hyperparameters
         batch_size=batch_size,
         lr=2e-5,
