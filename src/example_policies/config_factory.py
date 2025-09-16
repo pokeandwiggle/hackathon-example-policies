@@ -100,7 +100,7 @@ def create_lerobot_config(
 def act_config(
     repo_id: str | None = None,
     dataset_root_dir: str | None = None,
-    batch_size: int = 24,
+    batch_size: int = 8,
     resume_path: str = None,
     policy_kwargs: dict = None,
 ):
