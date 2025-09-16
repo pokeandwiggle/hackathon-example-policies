@@ -130,7 +130,7 @@ def act_config(
         batch_size=batch_size,
         lr=2e-5,
         steps=800_000,
-        save_freq=10_000,
+        save_freq=5_000,
         # Enable Weights & Biases for experiment tracking
         enable_wandb=True,
         resume_path=resume_path,
