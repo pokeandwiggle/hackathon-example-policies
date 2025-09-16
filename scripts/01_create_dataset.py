@@ -52,6 +52,7 @@ cfg = PipelineConfig(
     include_depth_images=True,
     # Action representation. DELTA_TCP is a good default.
     action_level=ActionLevel.DELTA_TCP,
+    image_resolution=(512, 512),
     # Subsampling and filtering. These are task-dependent.
     target_fps=10,
     max_pause_seconds=60 * 10,
