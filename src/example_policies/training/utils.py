@@ -21,12 +21,25 @@ from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata
 from lerobot.datasets.utils import dataset_to_policy_features
 
 
-def create_dataset_config(data_dir: pathlib.Path):
+def create_dataset_config(
+    data_dir: pathlib.Path | None = None,
+    repo_id: str | None = None,
+):
+    assert data_dir is not None or repo_id is not None, (
+        "Either data_dir or repo_id must be provided"
+    )
     # get last folder name of dataset_root_dir_path. Nice Side Effect: Automatic Tag in WandB
-    fake_repo_id = data_dir.name
+    fake_repo_id = repo_id if repo_id is not None else data_dir.name
 
-    episode_list = make_episode_white_list(data_dir)
-    data_cfg = DatasetConfig(repo_id=fake_repo_id, root=data_dir, episodes=episode_list)
+    if repo_id is None:
+        episode_list = make_episode_white_list(data_dir)
+    else:
+        episode_list = None
+    data_cfg = DatasetConfig(
+        repo_id=fake_repo_id,
+        root=data_dir,
+        episodes=episode_list,
+    )
 
     meta_data = LeRobotDatasetMetadata(
         repo_id=fake_repo_id,
