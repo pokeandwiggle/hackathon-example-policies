@@ -30,7 +30,7 @@ from example_policies.robot_deploy.robot_io.robot_service import (
     robot_service_pb2,
     robot_service_pb2_grpc,
 )
-from action_translator import ActionMode
+from example_policies.robot_deploy.action_translator import ActionMode
 
 
 def inference_loop(
