@@ -61,6 +61,8 @@ def load_metadata(dir_path: pathlib.Path) -> dict:
 def load_dataset_info(dir_path: pathlib.Path) -> dict:
     """Load Dataset Info from lerobot package
 
+    Args:
+        dir_path (pathlib.Path): Path to the directory of the dataset
     Returns:
         dict: Dataset Info
     """
