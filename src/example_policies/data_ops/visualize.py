@@ -20,9 +20,23 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Visualize a LeRobot dataset.")
     parser.add_argument(
-        "root",
+        "--local",
+        action="store_true",
+        help="If set, load the dataset from a local directory instead of the hub.",
+    )
+
+    parser.add_argument(
+        "--root",
         type=str,
         help="Path to the root directory of the dataset.",
+        required=False,
+    )
+
+    parser.add_argument(
+        "--repo-id",
+        type=str,
+        help="Hugging Face repo ID to load the dataset from. Example: 'username/dataset_name'",
+        required=False,
     )
 
     # Episode Index. Defaults to 0 if not provided.
@@ -35,5 +49,22 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    dataset = LeRobotDataset(args.root, root=args.root)
+    if not args.local and not args.repo_id:
+        raise ValueError(
+            "Either --local or --repo-id (for online repositories) must be provided."
+        )
+
+    if args.local and not args.root:
+        raise ValueError("--root must be provided when --local is set.")
+
+    if not args.local and args.repo_id:
+        dataset = LeRobotDataset(args.repo_id)
+    elif args.local and args.root:
+        dataset = LeRobotDataset(
+            args.repo_id if args.repo_id else args.root, root=args.root
+        )
+    else:
+        raise ValueError("Invalid combination of arguments provided.")
+
+    print(f"Visualizing episode {args.episode_index}...")
     visualize_dataset(dataset, episode_index=args.episode_index)
