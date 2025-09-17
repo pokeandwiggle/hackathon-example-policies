@@ -100,6 +100,49 @@ def create_lerobot_config(
     return cfg
 
 
+def original_act_config(
+    dataset_root_dir: str | None = None,
+    repo_id: str | None = None,
+    lr: float = 2e-5,
+    batch_size: int = 24,
+    resume_path: str = None,
+    policy_kwargs: dict = None,
+):
+    assert repo_id is not None or dataset_root_dir is not None, (
+        "Either repo_id or dataset_root_dir must be provided"
+    )
+    default_kwargs = {
+        "vision_backbone": "resnet18",
+        "pretrained_backbone_weights": "ResNet18_Weights.IMAGENET1K_V1",
+        "chunk_size": 100,
+        "n_action_steps": 100,
+        "latent_dim": 32,
+        "n_decoder_layers": 1,
+    }
+
+    if policy_kwargs is not None:
+        default_kwargs.update(policy_kwargs)
+    policy_kwargs = default_kwargs
+
+    cfg = create_lerobot_config(
+        # Model selection: e.g., "act", "diffusion", "pi0", "smolvla"
+        model_name="act",
+        # Path to the LeRobot dataset directory
+        dataset_root_dir=dataset_root_dir,
+        repo_id=repo_id,
+        # Training hyperparameters
+        batch_size=batch_size,
+        lr=lr,
+        steps=800_000,
+        save_freq=10_000,
+        # Enable Weights & Biases for experiment tracking
+        enable_wandb=True,
+        resume_path=resume_path,
+        policy_kwargs=policy_kwargs,
+    )
+    return cfg
+
+
 def act_config(
     repo_id: str | None = None,
     dataset_root_dir: str | None = None,

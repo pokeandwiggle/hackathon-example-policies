@@ -1,12 +1,17 @@
 from lerobot.datasets.transforms import ImageTransformsConfig
 
 from example_policies import lerobot_patches
-from example_policies.config_factory import act_config, diffusion_config, smolvla_config
+from example_policies.config_factory import (
+    act_config,
+    diffusion_config,
+    original_act_config,
+    smolvla_config,
+)
 
 lerobot_patches.apply_patches()
 
 repo_id = "jccj/mh2_step_1"
-cfg = act_config(
+cfg = original_act_config(
     repo_id=repo_id,
     batch_size=16,
 )
