@@ -106,13 +106,13 @@ def convert_episodes(
                         episode_counter_path_dict[actual_episode_counter] = str(
                             episode_path
                         )
-                        actual_episode_counter += 1
 
                         if saved_frames < config.min_episode_frames:
                             print(
                                 f"Episode too short ({saved_frames} frames), Adding to Blacklist."
                             )
                             blacklist.append(actual_episode_counter)
+                        actual_episode_counter += 1
         except Exception as e:
             print(
                 f"Skipping faulty file: {episode_path} due to {type(e).__name__}: {e}"

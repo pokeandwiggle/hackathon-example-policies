@@ -48,7 +48,7 @@ class DatasetWriter:
         # Create the main dataset
         self.datasets[DatasetType.MAIN] = LeRobotDataset.create(
             repo_id="local_only",
-            fps=30,
+            fps=cfg.target_fps,
             root=output_dir,
             use_videos=True,
             image_writer_threads=16,
@@ -83,7 +83,7 @@ class DatasetWriter:
         """Helper to create a secondary dataset with a specific suffix."""
         return LeRobotDataset.create(
             repo_id="local_only",
-            fps=30,
+            fps=self.cfg.target_fps,
             root=output_dir.with_name(f"{output_dir.name}_{suffix}"),
             use_videos=True,
             image_writer_threads=4,
