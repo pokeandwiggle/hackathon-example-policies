@@ -13,7 +13,7 @@ lerobot_patches.apply_patches()
 repo_id = "jccj/mh2_step_1_flip"
 cfg = original_act_config(
     repo_id=repo_id,
-    batch_size=32,
+    batch_size=16,
 )
 
 # You can specify additional keywords by looking at the lerobot configuration code, e.g. `lerobot.policies.act.configuration_act`
