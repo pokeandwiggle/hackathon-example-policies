@@ -37,7 +37,7 @@ from example_policies.data_ops.config.pipeline_config import ActionLevel, Pipeli
 RAW_DATA_DIR = pathlib.Path("data/hf")
 
 # TODO: Set your desired output directory name.
-OUTPUT_DIR = pathlib.Path("data/lerobot/filtered_dataset")
+OUTPUT_DIR = pathlib.Path("data/lerobot/filtered_dataset_joint")
 
 # --- Configuration ---
 # TODO: A descriptive label for the task, used for VLA-style text conditioning.
@@ -51,7 +51,7 @@ cfg = PipelineConfig(
     include_rgb_images=True,
     include_depth_images=True,
     # Action representation. DELTA_TCP is a good default.
-    action_level=ActionLevel.DELTA_TCP,
+    action_level=ActionLevel.JOINT,
     image_resolution=(512, 512),
     # Subsampling and filtering. These are task-dependent.
     target_fps=10,

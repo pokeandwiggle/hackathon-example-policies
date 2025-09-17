@@ -7,5 +7,5 @@ lerobot_patches.apply_patches()
 
 repo_id = "jccj/mh2_step_1_flip"
 dataset = LeRobotDataset(
-    repo_id=repo_id, root="data/lerobot/filtered_dataset"
+    repo_id=repo_id, root="data/lerobot/filtered_dataset_joint"
 ).push_to_hub()
