@@ -52,7 +52,7 @@ class DatasetWriter:
             root=output_dir,
             use_videos=True,
             image_writer_threads=16,
-            image_writer_processes=0,
+            image_writer_processes=8,
             features=features,
         )
 
@@ -87,7 +87,7 @@ class DatasetWriter:
             root=output_dir.with_name(f"{output_dir.name}_{suffix}"),
             use_videos=True,
             image_writer_threads=4,
-            image_writer_processes=0,
+            image_writer_processes=2,
             features=features,
         )
 
@@ -106,21 +106,9 @@ class DatasetWriter:
                     # Lazily parse the frame only if it's needed for at least one dataset
                     frame = self.frame_parser.parse_frame(frame_buffer)
                     frame = self.frame_assembler.assemble(frame)
-                if frame is None:
-                    print("Frame is None.")
-                    print(f"Frame buffer: {frame_buffer}")
-                    print(f"Frame parser: {self.frame_parser}")
-                    print(f"Frame assembler: {self.frame_assembler}")
-                    print(f"Frame targeter: {self.frame_targeter}")
-                    print(f"Dataset writer: {self}")
                 self.datasets[target].add_frame(frame, task=self.cfg.task_name)
                 self.dataset_frame_counter[target] += 1
                 performed_save = True
-        if not performed_save:
-            print("No save performed for frame.")
-            print(f"Target datasets: {target_datasets}")
-            print(f"Frame: {frame}")
-            print(f"datasets: {self.datasets}")
         return performed_save
 
     def save_episode(self, episode_idx: int):
