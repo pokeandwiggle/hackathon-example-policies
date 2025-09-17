@@ -79,7 +79,7 @@ def create_lerobot_config(
         save_freq=save_freq,
     )
     cfg.wandb.enable = enable_wandb
-    cfg.wandb.disable_artifact = True
+    cfg.wandb.disable_artifact = False
 
     if lr is not None:
         cfg.policy.optimizer_lr = lr
