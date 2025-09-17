@@ -18,6 +18,7 @@ from pprint import pprint
 
 from lerobot.configs.policies import PreTrainedConfig
 from lerobot.configs.train import TrainPipelineConfig
+from lerobot.datasets.transforms import ImageTransformsConfig
 
 from .robot_deploy.policy_loader import get_checkpoint_path
 from .training.utils import create_dataset_config
@@ -27,6 +28,7 @@ def create_lerobot_config(
     model_name: str,
     dataset_root_dir: str | None = None,
     repo_id: str | None = None,
+    image_transforms: ImageTransformsConfig | None = None,
     pretrained_config: PreTrainedConfig | None = None,
     batch_size: int = 8,
     lr: float = None,
@@ -61,6 +63,7 @@ def create_lerobot_config(
     dataset_cfg, features = create_dataset_config(
         dataset_root_dir=dataset_root_dir,
         repo_id=repo_id,
+        image_transforms=image_transforms,
     )
 
     if pretrained_config is None:
@@ -100,6 +103,7 @@ def create_lerobot_config(
 def act_config(
     repo_id: str | None = None,
     dataset_root_dir: str | None = None,
+    image_transforms: ImageTransformsConfig | None = None,
     batch_size: int = 8,
     resume_path: str = None,
     policy_kwargs: dict = None,
@@ -126,6 +130,7 @@ def act_config(
         # Path to the LeRobot dataset directory
         dataset_root_dir=dataset_root_dir,
         repo_id=repo_id,
+        image_transforms=image_transforms,
         # Training hyperparameters
         batch_size=batch_size,
         lr=2e-5,

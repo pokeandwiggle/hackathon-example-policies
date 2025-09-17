@@ -1,4 +1,5 @@
 # Copyright 2025 Poke & Wiggle GmbH. All rights reserved.
+
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,12 +19,14 @@ import pathlib
 
 from lerobot.configs.default import DatasetConfig
 from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata
+from lerobot.datasets.transforms import ImageTransformsConfig
 from lerobot.datasets.utils import dataset_to_policy_features
 
 
 def create_dataset_config(
     dataset_root_dir: pathlib.Path | None = None,
     repo_id: str | None = None,
+    image_transforms: ImageTransformsConfig | None = None,
 ):
     assert dataset_root_dir is not None or repo_id is not None, (
         "Either data_dir or repo_id must be provided"
@@ -35,10 +38,12 @@ def create_dataset_config(
         episode_list = make_episode_white_list(dataset_root_dir)
     else:
         episode_list = None
+    image_transforms = image_transforms or ImageTransformsConfig()
     data_cfg = DatasetConfig(
         repo_id=fake_repo_id,
         root=dataset_root_dir,
         episodes=episode_list,
+        image_transforms=image_transforms,
     )
 
     meta_data = LeRobotDatasetMetadata(
