@@ -30,11 +30,11 @@ from example_policies.robot_deploy.deploy import deploy_policy
 CHECKPOINT_DIR = "data/output"
 wandb_checkpoint_path = "jc-cj/uncategorized/060000:v0"
 # data/output/checkpoints/last/pretrained_model
-last_checkpoint_path = CHECKPOINT_DIR / "checkpoints" / "last"
+last_checkpoint_path = pathlib.Path(CHECKPOINT_DIR) / "checkpoints" / "last"
 if wandb_checkpoint_path:
     run = wandb.init()
     artifact = run.use_artifact("jc-cj/uncategorized/060000:v0", type="dataset")
-    artifact.download(root=last_checkpoint_path)
+    artifact.download(root=str(last_checkpoint_path))
 
 # TODO: Change to the robot's IP address.
 SERVER_ENDPOINT = "192.168.0.207:50051"
