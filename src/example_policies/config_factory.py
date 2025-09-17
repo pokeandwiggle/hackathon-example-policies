@@ -114,8 +114,8 @@ def original_act_config(
     default_kwargs = {
         "vision_backbone": "resnet18",
         "pretrained_backbone_weights": "ResNet18_Weights.IMAGENET1K_V1",
-        "chunk_size": 100,
-        "n_action_steps": 100,
+        "chunk_size": 20,
+        "n_action_steps": 10,
         "latent_dim": 32,
         "n_decoder_layers": 1,
     }
@@ -134,7 +134,7 @@ def original_act_config(
         batch_size=batch_size,
         lr=lr,
         steps=800_000,
-        save_freq=10_000,
+        save_freq=5000,
         # Enable Weights & Biases for experiment tracking
         enable_wandb=True,
         resume_path=resume_path,
