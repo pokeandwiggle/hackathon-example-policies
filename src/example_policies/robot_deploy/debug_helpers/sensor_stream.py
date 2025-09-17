@@ -42,17 +42,29 @@ def convert_image_for_display(img_bytes: bytes, is_depth: bool) -> np.ndarray:
 
 
 def show_response(snapshot_response):
-    # Process and display RGB images
-    for cam_name, cam_data in snapshot_response.rgb_cameras.items():
-        if cam_data.data:
-            rgb_image = convert_image_for_display(cam_data.data, is_depth=False)
-            cv2.imshow(f"RGB - {cam_name}", rgb_image)
+    images = {}
+    cameras = snapshot_response.cameras
+    # ['cam_right_color_optical_frame', 'cam_right_depth_optical_frame', 'cam_static_optical_frame', 'cam_left_depth_optical_frame', 'cam_left_color_optical_frame']
+    for cam_name in list(cameras.keys()):
+        images.update(process_camera_image(cameras[cam_name], cam_name, "cpu"))
 
-    # Process and display depth images
-    for cam_name, cam_data in snapshot_response.depth_cameras.items():
-        if cam_data.data:
-            depth_image = convert_image_for_display(cam_data.data, is_depth=True)
-            cv2.imshow(f"Depth - {cam_name}", depth_image)
+    for cam_name, img in images.items():
+        cv2.imshow(cam_name, img)
+
+
+def process_camera_image(camera_data, camera_name, device):
+    side = camera_name.split("_")[1]
+    modality = "depth" if "depth" in camera_name else "rgb"
+
+    obs_key = f"observation.images.{modality}_{side}"
+
+    img_array = image_processor.process_image_bytes(
+        camera_data.data,
+        width=640,
+        height=480,
+        is_depth=(modality == "depth"),
+    )
+    return {obs_key: img_array}
 
 
 def main(service_stub: robot_service_pb2_grpc.RobotServiceStub):
@@ -62,10 +74,10 @@ def main(service_stub: robot_service_pb2_grpc.RobotServiceStub):
     while True:
         try:
             # Request a snapshot of the robot's current state
-            snapshot_request = robot_service_pb2.GetSnapshotRequest()
-            snapshot_response = service_stub.GetSnapshot(snapshot_request)
+            snapshot_request = robot_service_pb2.GetStateRequest()
+            snapshot_response = service_stub.GetState(snapshot_request)
 
-            show_response(snapshot_response)
+            show_response(snapshot_response.current_state)
 
             # Wait for a key press. If 'q' is pressed, exit the loop.
             if cv2.waitKey(1) & 0xFF == ord("q"):
