@@ -4,6 +4,8 @@
 1. [Setting Up VSCode](./connect_vscode.md)
 2. [Creating a LeRobot Dataset](./dataset_creation.md)
 3. [Using Lerobot Directly](./03_using_lerobot.md)
+4. [Upload and Visualize Datasets](./04_upload_and_visualize_datasets.md)
+5. [Data Replay Guide](./05_replay_data.md)
 
 -----
 ## Advanced Usage
