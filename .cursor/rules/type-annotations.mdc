@@ -1,0 +1,14 @@
+---
+globs: *.py
+---
+# Type Annotations Rule
+
+Always use built-in type annotations instead of typing module imports:
+
+- Use `list` instead of `typing.List`
+- Use `tuple` instead of `typing.Tuple`
+- Use `dict` instead of `typing.Dict`
+- Use `set` instead of `typing.Set`
+- Use `frozenset` instead of `typing.FrozenSet`
+
+This applies to Python 3.9+ where these built-in types support generic type parameters directly.

@@ -216,3 +216,12 @@ outputs/*
 notebooks/outputs/*
 data
 data/*
+
+# wandb
+wandb/*
+
+# ds store
+.DS_Store
+
+# references
+references
