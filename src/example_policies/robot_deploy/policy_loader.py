@@ -76,7 +76,7 @@ def load_policy(checkpoint_dir: pathlib.Path):
     apply_patches()
     from lerobot.policies.factory import get_policy_class
 
-    checkpoint_dir = get_checkpoint_path(checkpoint_dir)
+    # checkpoint_dir = get_checkpoint_path(checkpoint_dir)
     cfg = PreTrainedConfig.from_pretrained(checkpoint_dir)
 
     PolicyCls = get_policy_class(cfg.type)
