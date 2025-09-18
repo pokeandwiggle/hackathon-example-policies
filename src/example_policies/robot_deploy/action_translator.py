@@ -145,14 +145,11 @@ class ActionTranslator:
 
         for spec in _TCP_DELTA_SPECS:
             # Position
-            print("abs_pose", abs_pose[0, spec["abs_pos"]])
-            print("observation", observation["observation.state"])
             abs_pose[0, spec["abs_pos"]] += action[0, spec["delta_pos"]]
 
             # Orientation (compose properly instead of linear add for robustness)
             last_q = abs_pose[0, spec["abs_quat"]]
             delta_rv = action[0, spec["delta_aa"]]
-            exit(0)
             # Convert rotvec to quaternion and multiply using centralized utilities
             delta_q = axis_angle_to_quat_torch(delta_rv)
             new_q = quat_mul_torch(last_q, delta_q)
