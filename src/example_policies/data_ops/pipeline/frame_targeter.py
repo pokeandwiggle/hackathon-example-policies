@@ -39,6 +39,7 @@ class FrameTargeter:
     def reset(self):
         self.pause_detection_counter = self.cfg.max_pause_frames
         self.gripper_active_counter = self.cfg.grace_period_frames
+        self_prior_gripper = None
 
     def _is_paused(self, joint_velocity: np.ndarray) -> bool:
         """Checks if the robot is in a paused state."""
@@ -48,17 +49,17 @@ class FrameTargeter:
             self.pause_detection_counter = 0
         return self.pause_detection_counter >= self.cfg.max_pause_frames
 
-    def _is_gripper_active(self, joint_velocity: np.ndarray) -> bool:
+    def _is_gripper_active(self, gripper_states: np.ndarray) -> bool:
         """
         Checks if the gripper is active (i.e., moving slowly or not at all).
         This state is used to determine if speed-boosted subsampling should apply.
         """
-        gripper_velocity_magnitude = np.sum(np.abs(joint_velocity[14:]))
-        if gripper_velocity_magnitude < self.cfg.gripper_active_speed:
-            self.gripper_active_counter += 1
-        else:
-            self.gripper_active_counter = 0
-        return self.gripper_active_counter >= self.cfg.grace_period_frames
+        if self_prior_gripper is None:
+            self_prior_gripper = gripper_states
+            return True
+        delta = np.abs(gripper_states - self_prior_gripper)
+        self_prior_gripper = gripper_states
+        return np.any(delta > 0.01)
 
     def determine_targets(
         self, frame_buffer: FrameBuffer, frame_assembler: FrameParser
@@ -68,12 +69,14 @@ class FrameTargeter:
         The logic is prioritized: pause state overrides all others.
         """
         assert frame_buffer.is_complete(), "Frame buffer is not complete"
-        joint_velocity = frame_assembler.parse_velocities(frame_buffer)
+        joint_velocity, gripper_states = frame_assembler.parse_velocities(frame_buffer)
 
-        if self._is_paused(joint_velocity):
+        gripper_active = self._is_gripper_active(gripper_states)
+
+        if self._is_paused(joint_velocity) and not gripper_active:
             return [DatasetType.PAUSE]
 
-        if self._is_gripper_active(joint_velocity):
+        if gripper_active:
             targets = [DatasetType.NO_SPEED_BOOST]
             if self.gripper_active_counter % self.cfg.boost_factor == 0:
                 targets.append(DatasetType.MAIN)

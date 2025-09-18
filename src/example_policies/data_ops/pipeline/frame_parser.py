@@ -34,8 +34,10 @@ class FrameParser:
         """Parses only the joint velocities for quick pause detection."""
         assert frame_buffer.is_complete(), "Frame buffer is not complete"
         msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.ACTUAL_JOINT_STATE)
-        _, joint_velocity, _ = rmp.parse_joints(self.config, msg_data, schema_name)
-        return joint_velocity
+        _, joint_velocity, gripper_states = rmp.parse_joints(
+            self.config, msg_data, schema_name
+        )
+        return joint_velocity, gripper_states
 
     def parse_frame(self, frame_buffer: FrameBuffer) -> dict:
         """Parses a complete frame buffer into a structured dictionary."""
