@@ -5,7 +5,7 @@ from example_policies import lerobot_patches
 lerobot_patches.apply_patches()
 
 
-repo_id = "jccj/mh2_step_1_flip_joint"
+repo_id = "jccj/mh2_step_2_pre_clean"
 dataset = LeRobotDataset(
-    repo_id=repo_id, root="data/lerobot/filtered_dataset_joint"
+    repo_id=repo_id, root="data/lerobot/step_2_pre_clean"
 ).push_to_hub()
