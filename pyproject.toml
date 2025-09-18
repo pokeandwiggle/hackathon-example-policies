@@ -36,8 +36,9 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-lerobot = { git = "https://github.com/LiXiling/lerobot.git" }
-
+# lerobot = { git = "https://github.com/LiXiling/lerobot.git", branch = "main" }
+# lerobot = { path = "../lerobot", editable = true}
+lerobot = { path = "../../lerobot-hil-serl", editable = true}
 
 [dependency-groups]
 dev = [

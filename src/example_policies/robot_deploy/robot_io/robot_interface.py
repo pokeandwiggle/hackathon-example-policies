@@ -59,7 +59,8 @@ class RobotInterface:
 
         if action_mode in (ActionMode.DELTA_TCP, ActionMode.ABS_TCP):
             target = _build_cart_target(numpy_action)
-            self.client.send_cart_queue_target(target)
+            # self.client.send_cart_queue_target(target)
+            self.client.send_cart_direct_target(target)
 
         elif action_mode in (ActionMode.DELTA_JOINT, ActionMode.ABS_JOINT):
             target = _build_joint_target(numpy_action)
@@ -96,8 +97,8 @@ def _build_cart_target(np_action: np.ndarray) -> robot_service_pb2.CartesianTarg
     des_target_msg.gripper_widths["left"] = left_gripper
     des_target_msg.gripper_widths["right"] = right_gripper
 
-    des_target_msg.robot_stiffnesses["left"] = 1.0
-    des_target_msg.robot_stiffnesses["right"] = 1.0
+    des_target_msg.robot_stiffnesses["left"] = 0.8
+    des_target_msg.robot_stiffnesses["right"] = 0.8
 
     return des_target_msg
 
