@@ -46,21 +46,8 @@ def inference_loop(
     # Inference Loop
     print("Starting inference loop...")
     period = 1.0 / hz
-
-    # Initial preparation for queued execution. 
-    prepare_request = robot_service_pb2.PrepareExecutionRequest()
-    # If check which action mode is used
     action_mode = model_to_action_trans.action_mode
-    if action_mode in (ActionMode.DELTA_TCP, ActionMode.ABS_TCP):
-        prepare_request.execution_mode = (robot_service_pb2.ExecutionMode.EXECUTION_MODE_CARTESIAN_TARGET_QUEUE)
-    # If joint direct targets are used
-    elif action_mode in (ActionMode.DELTA_JOINT, ActionMode.ABS_JOINT):
-        prepare_request.execution_mode = (robot_service_pb2.ExecutionMode.EXECUTION_MODE_JOINT_TARGET)
-    else:
-        raise ValueError(f"Unknown model to action mode: {action_mode}")
-    service_stub.PrepareExecution(prepare_request)
-
-
+    
     while not done:
         start_time = time.time()
         print(policy.config.input_features)
