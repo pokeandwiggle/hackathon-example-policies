@@ -39,6 +39,7 @@ class FrameTargeter:
     def reset(self):
         self.pause_detection_counter = self.cfg.max_pause_frames
         self.gripper_active_counter = self.cfg.grace_period_frames
+        self.gripper_stationary_counter = self.cfg.max_pause_frames
         self._prior_gripper = None
 
     def _is_paused(self, joint_velocity: np.ndarray) -> bool:
@@ -49,17 +50,24 @@ class FrameTargeter:
             self.pause_detection_counter = 0
         return self.pause_detection_counter >= self.cfg.max_pause_frames
 
-    def _is_gripper_active(self, gripper_states: np.ndarray) -> bool:
-        """
-        Checks if the gripper is active (i.e., moving slowly or not at all).
-        This state is used to determine if speed-boosted subsampling should apply.
-        """
+    def _is_gripper_stationary(self, gripper_states: np.ndarray) -> bool:
+        """Checks if the gripper has been stationary for a configured duration."""
         if self._prior_gripper is None:
             self._prior_gripper = gripper_states
+            # Assume stationary on the first frame
             return True
+
         delta = np.abs(gripper_states - self._prior_gripper)
         self._prior_gripper = gripper_states
-        return np.any(delta > 0.01)
+
+        if np.any(delta > 1e-5):
+            # Gripper moved, reset counter
+            self.gripper_stationary_counter = 0
+        else:
+            # Gripper is still, increment counter
+            self.gripper_stationary_counter += 1
+
+        return self.gripper_stationary_counter >= self.cfg.max_pause_frames
 
     def determine_targets(
         self, frame_buffer: FrameBuffer, frame_assembler: FrameParser
@@ -71,12 +79,15 @@ class FrameTargeter:
         assert frame_buffer.is_complete(), "Frame buffer is not complete"
         joint_velocity, gripper_states = frame_assembler.parse_velocities(frame_buffer)
 
-        gripper_active = self._is_gripper_active(gripper_states)
+        # Check for stationary state first for pause detection
+        is_gripper_still = self._is_gripper_stationary(gripper_states)
+        is_robot_paused = self._is_paused(joint_velocity)
 
-        if self._is_paused(joint_velocity) and not gripper_active:
+        if is_robot_paused and is_gripper_still:
             return [DatasetType.PAUSE]
 
-        if gripper_active:
+        # Check for active gripper movement for speed boost logic
+        if not is_gripper_still:
             targets = [DatasetType.NO_SPEED_BOOST]
             if self.gripper_active_counter % self.cfg.boost_factor == 0:
                 targets.append(DatasetType.MAIN)
