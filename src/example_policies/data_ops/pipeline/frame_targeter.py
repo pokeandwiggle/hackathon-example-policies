@@ -60,7 +60,7 @@ class FrameTargeter:
         delta = np.abs(gripper_states - self._prior_gripper)
         self._prior_gripper = gripper_states
 
-        if np.any(delta > 1e-5):
+        if np.any(delta > 1e-4):
             # Gripper moved, reset counter
             self.gripper_stationary_counter = 0
         else:
