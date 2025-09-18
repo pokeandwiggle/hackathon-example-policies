@@ -81,16 +81,32 @@ def positive_quat(pose: np.ndarray) -> np.ndarray:
     return pose
 
 
-def axis_angle_to_quat_torch(aa: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
+def axis_angle_to_quat_torch(aa: torch.Tensor, eps: float = 1e-3) -> torch.Tensor:
     """Convert axis-angle (...,3) to quaternions (...,4) in xyzw format."""
     angle = aa.norm(dim=-1, keepdim=True)
-    axis = aa / (angle + eps)
-    half = 0.5 * angle
-    sin_half = torch.sin(half)
+
     # Create quat tensor with correct shape
     quat = torch.zeros(*aa.shape[:-1], 4, device=aa.device, dtype=aa.dtype)
-    quat[..., :3] = axis * sin_half
-    quat[..., 3] = torch.cos(half).squeeze(-1)
+
+    # Handle small angles separately to avoid numerical issues
+    small_angle_mask = (angle < eps).squeeze(-1)
+    large_angle_mask = ~small_angle_mask
+
+    if torch.any(large_angle_mask):
+        # For large angles, use the standard conversion
+        axis = aa[large_angle_mask] / angle[large_angle_mask]
+        half = 0.5 * angle[large_angle_mask]
+        sin_half = torch.sin(half)
+        quat[large_angle_mask, :3] = axis * sin_half
+        quat[large_angle_mask, 3] = torch.cos(half).squeeze(-1)
+
+    if torch.any(small_angle_mask):
+        # For small angles, use Taylor series approximation
+        # sin(θ/2) ≈ θ/2, cos(θ/2) ≈ 1
+        # This gives us quat = [aa/2, 1] for small angles
+        quat[small_angle_mask, :3] = aa[small_angle_mask] * 0.5
+        quat[small_angle_mask, 3] = 1.0
+
     return quat
 
 
