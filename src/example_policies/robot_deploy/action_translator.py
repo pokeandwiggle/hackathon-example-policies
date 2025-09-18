@@ -19,10 +19,7 @@ from torch.nn import functional as F
 
 from example_policies import data_constants as dc
 
-from ..data_ops.utils.geometric import (
-    axis_angle_to_quat_torch,
-    quat_mul_torch,
-)
+from ..data_ops.utils.geometric import axis_angle_to_quat_torch, quat_mul_torch
 
 _TCP_DELTA_SPECS = (
     {

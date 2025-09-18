@@ -23,10 +23,7 @@ from ..action_translator import ActionMode
 from ..debug_helpers import sensor_stream as dbg_sensors
 from .observation_builder import ObservationBuilder
 from .robot_client import RobotClient
-from .robot_service import (
-    robot_service_pb2,
-    robot_service_pb2_grpc,
-)
+from .robot_service import robot_service_pb2, robot_service_pb2_grpc
 
 
 class RobotInterface:
