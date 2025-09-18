@@ -39,7 +39,7 @@ class FrameTargeter:
     def reset(self):
         self.pause_detection_counter = self.cfg.max_pause_frames
         self.gripper_active_counter = self.cfg.grace_period_frames
-        self_prior_gripper = None
+        self._prior_gripper = None
 
     def _is_paused(self, joint_velocity: np.ndarray) -> bool:
         """Checks if the robot is in a paused state."""
@@ -54,11 +54,11 @@ class FrameTargeter:
         Checks if the gripper is active (i.e., moving slowly or not at all).
         This state is used to determine if speed-boosted subsampling should apply.
         """
-        if self_prior_gripper is None:
-            self_prior_gripper = gripper_states
+        if self._prior_gripper is None:
+            self._prior_gripper = gripper_states
             return True
-        delta = np.abs(gripper_states - self_prior_gripper)
-        self_prior_gripper = gripper_states
+        delta = np.abs(gripper_states - self._prior_gripper)
+        self._prior_gripper = gripper_states
         return np.any(delta > 0.01)
 
     def determine_targets(
