@@ -34,14 +34,14 @@ from example_policies.data_ops.config.pipeline_config import ActionLevel, Pipeli
 
 # --- Paths ---
 # TODO: Set the input directory containing your .mcap files.
-RAW_DATA_DIR = pathlib.Path("data/hf_step_3")
+RAW_DATA_DIR = pathlib.Path("data/hf_step_2")
 
 # TODO: Set your desired output directory name.
-OUTPUT_DIR = pathlib.Path("data/lerobot/step_3")
+OUTPUT_DIR = pathlib.Path("data/lerobot/step_2")
 
 # --- Configuration ---
 # TODO: A descriptive label for the task, used for VLA-style text conditioning.
-TASK_LABEL = "step_3"
+TASK_LABEL = "step_2"
 
 cfg = PipelineConfig(
     include_joint_positions=True,
@@ -51,7 +51,7 @@ cfg = PipelineConfig(
     include_rgb_images=True,
     include_depth_images=True,
     # Action representation. DELTA_TCP is a good default.
-    action_level=ActionLevel.JOINT,
+    action_level=ActionLevel.DELTA_TCP,
     image_resolution=(512, 512),
     # Subsampling and filtering. These are task-dependent.
     target_fps=10,

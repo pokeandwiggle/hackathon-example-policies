@@ -10,7 +10,7 @@ from example_policies.config_factory import (
 
 lerobot_patches.apply_patches()
 
-repo_id = "jccj/mh2_step_3"
+repo_id = "jccj/mh2_step_2"
 cfg = original_act_config(
     repo_id=repo_id,
     batch_size=16,
