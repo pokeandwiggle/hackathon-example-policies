@@ -92,7 +92,7 @@ class PipelineConfig:
 
     include_rgb_images: bool = True
     include_depth_images: bool = False
-    image_resolution = (640, 640)
+    image_resolution: tuple[int, int] = (640, 640)
     depth_scale_factor: float = 1000.0
 
     action_level: ActionLevel = ActionLevel.DELTA_TCP

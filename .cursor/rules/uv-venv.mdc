@@ -1,0 +1,11 @@
+---
+globs: *.py
+description: Use uv for virtual environment management
+---
+
+# UV Virtual Environment
+
+Use `uv` for Python virtual environment management:
+
+- Activate: `source .venv/bin/activate`
+- Add dependency: `uv add <package>`

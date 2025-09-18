@@ -18,6 +18,7 @@ from pprint import pprint
 
 from lerobot.configs.policies import PreTrainedConfig
 from lerobot.configs.train import TrainPipelineConfig
+from lerobot.datasets.transforms import ImageTransformsConfig
 
 from .robot_deploy.policy_loader import get_checkpoint_path
 from .training.utils import create_dataset_config
@@ -25,7 +26,9 @@ from .training.utils import create_dataset_config
 
 def create_lerobot_config(
     model_name: str,
-    dataset_root_dir: str,
+    dataset_root_dir: str | None = None,
+    repo_id: str | None = None,
+    image_transforms: ImageTransformsConfig | None = None,
     pretrained_config: PreTrainedConfig | None = None,
     batch_size: int = 8,
     lr: float = None,
@@ -48,10 +51,20 @@ def create_lerobot_config(
     Returns:
         _type_: _description_
     """
+    assert repo_id is not None or dataset_root_dir is not None, (
+        "Either repo_id or dataset_root_dir must be provided"
+    )
     if policy_kwargs is None:
         policy_kwargs = {}
 
-    dataset_cfg, features = create_dataset_config(pathlib.Path(dataset_root_dir))
+    dataset_root_dir = (
+        pathlib.Path(dataset_root_dir) if dataset_root_dir is not None else None
+    )
+    dataset_cfg, features = create_dataset_config(
+        dataset_root_dir=dataset_root_dir,
+        repo_id=repo_id,
+        image_transforms=image_transforms,
+    )
 
     if pretrained_config is None:
         pretrained_config = PreTrainedConfig.get_choice_class(model_name)(
@@ -66,7 +79,7 @@ def create_lerobot_config(
         save_freq=save_freq,
     )
     cfg.wandb.enable = enable_wandb
-    cfg.wandb.disable_artifact = True
+    cfg.wandb.disable_artifact = False
 
     if lr is not None:
         cfg.policy.optimizer_lr = lr
@@ -87,13 +100,60 @@ def create_lerobot_config(
     return cfg
 
 
-def act_config(
-    dataset_root_dir: str,
+def original_act_config(
+    dataset_root_dir: str | None = None,
+    repo_id: str | None = None,
+    lr: float = 2e-5,
     batch_size: int = 24,
     resume_path: str = None,
     policy_kwargs: dict = None,
 ):
+    assert repo_id is not None or dataset_root_dir is not None, (
+        "Either repo_id or dataset_root_dir must be provided"
+    )
+    default_kwargs = {
+        "vision_backbone": "resnet18",
+        "pretrained_backbone_weights": "ResNet18_Weights.IMAGENET1K_V1",
+        "chunk_size": 50,
+        "n_action_steps": 25,
+        "latent_dim": 32,
+        "n_decoder_layers": 1,
+    }
 
+    if policy_kwargs is not None:
+        default_kwargs.update(policy_kwargs)
+    policy_kwargs = default_kwargs
+
+    cfg = create_lerobot_config(
+        # Model selection: e.g., "act", "diffusion", "pi0", "smolvla"
+        model_name="act",
+        # Path to the LeRobot dataset directory
+        dataset_root_dir=dataset_root_dir,
+        repo_id=repo_id,
+        # Training hyperparameters
+        batch_size=batch_size,
+        lr=lr,
+        steps=800_000,
+        save_freq=5000,
+        # Enable Weights & Biases for experiment tracking
+        enable_wandb=True,
+        resume_path=resume_path,
+        policy_kwargs=policy_kwargs,
+    )
+    return cfg
+
+
+def act_config(
+    repo_id: str | None = None,
+    dataset_root_dir: str | None = None,
+    image_transforms: ImageTransformsConfig | None = None,
+    batch_size: int = 8,
+    resume_path: str = None,
+    policy_kwargs: dict = None,
+):
+    assert repo_id is not None or dataset_root_dir is not None, (
+        "Either repo_id or dataset_root_dir must be provided"
+    )
     default_kwargs = {
         "vision_backbone": "resnet34",
         "pretrained_backbone_weights": "ResNet34_Weights.IMAGENET1K_V1",
@@ -112,11 +172,13 @@ def act_config(
         model_name="integrated_so3_act",
         # Path to the LeRobot dataset directory
         dataset_root_dir=dataset_root_dir,
+        repo_id=repo_id,
+        image_transforms=image_transforms,
         # Training hyperparameters
         batch_size=batch_size,
         lr=2e-5,
         steps=800_000,
-        save_freq=10_000,
+        save_freq=5_000,
         # Enable Weights & Biases for experiment tracking
         enable_wandb=True,
         resume_path=resume_path,
