@@ -27,8 +27,8 @@ from example_policies.robot_deploy.deploy import deploy_policy
 
 # TODO: Change to the directory containing your trained policy checkpoint.
 # Example: "outputs/2025-09-14/12-00-00"
-CHECKPOINT_DIR = "data/output"
-wandb_checkpoint_path = "jc-cj/uncategorized/060000:v0"
+CHECKPOINT_DIR = "outputs"
+wandb_checkpoint_path = None
 # data/output/checkpoints/last/pretrained_model
 last_checkpoint_path = pathlib.Path(CHECKPOINT_DIR) / "checkpoints" / "last"
 if wandb_checkpoint_path:
