@@ -34,14 +34,14 @@ from example_policies.data_ops.config.pipeline_config import ActionLevel, Pipeli
 
 # --- Paths ---
 # TODO: Set the input directory containing your .mcap files.
-RAW_DATA_DIR = pathlib.Path("data/hf")
+RAW_DATA_DIR = pathlib.Path("data/step_2_flip")
 
 # TODO: Set your desired output directory name.
-OUTPUT_DIR = pathlib.Path("data/lerobot/filtered_dataset_joint")
+OUTPUT_DIR = pathlib.Path("data/lerobot/step_2_pre_clean")
 
 # --- Configuration ---
 # TODO: A descriptive label for the task, used for VLA-style text conditioning.
-TASK_LABEL = "step_1_flip"
+TASK_LABEL = "step_2_flip"
 
 cfg = PipelineConfig(
     include_joint_positions=True,
