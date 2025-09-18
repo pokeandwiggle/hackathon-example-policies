@@ -30,6 +30,7 @@ from example_policies.robot_deploy.robot_io.robot_service import (
     robot_service_pb2,
     robot_service_pb2_grpc,
 )
+from example_policies.robot_deploy.action_translator import ActionMode
 
 
 def inference_loop(
@@ -45,6 +46,21 @@ def inference_loop(
     # Inference Loop
     print("Starting inference loop...")
     period = 1.0 / hz
+
+    # Initial preparation for queued execution. 
+    prepare_request = robot_service_pb2.PrepareExecutionRequest()
+    # If check which action mode is used
+    action_mode = model_to_action_trans.action_mode
+    if action_mode in (ActionMode.DELTA_TCP, ActionMode.ABS_TCP):
+        prepare_request.execution_mode = (robot_service_pb2.ExecutionMode.EXECUTION_MODE_CARTESIAN_TARGET_QUEUE)
+    # If joint direct targets are used
+    elif action_mode in (ActionMode.DELTA_JOINT, ActionMode.ABS_JOINT):
+        prepare_request.execution_mode = (robot_service_pb2.ExecutionMode.EXECUTION_MODE_JOINT_TARGET)
+    else:
+        raise ValueError(f"Unknown model to action mode: {action_mode}")
+    service_stub.PrepareExecution(prepare_request)
+
+
     while not done:
         start_time = time.time()
         print(policy.config.input_features)
@@ -62,7 +78,7 @@ def inference_loop(
             print(f"\n=== ABSOLUTE ROBOT COMMANDS ===")
             print_info(step, observation, action)
 
-            robot_interface.send_action(action, model_to_action_trans.action_mode)
+            robot_interface.send_action(action, action_mode)
             # policy._queues["action"].clear()
 
         # wait for execution to finish
