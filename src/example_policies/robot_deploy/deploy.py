@@ -46,8 +46,7 @@ def inference_loop(
     # Inference Loop
     print("Starting inference loop...")
     period = 1.0 / hz
-    action_mode = model_to_action_trans.action_mode
-    
+
     while not done:
         start_time = time.time()
         print(policy.config.input_features)
@@ -65,7 +64,7 @@ def inference_loop(
             print(f"\n=== ABSOLUTE ROBOT COMMANDS ===")
             print_info(step, observation, action)
 
-            robot_interface.send_action(action, action_mode)
+            robot_interface.send_action(action, model_to_action_trans.action_mode)
             # policy._queues["action"].clear()
 
         # wait for execution to finish
