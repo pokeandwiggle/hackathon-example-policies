@@ -101,7 +101,7 @@ def inference_loop(
 
     input("Press Enter to move robot to start...")
 
-    # robot_interface.send_action(torch.from_numpy(action), ActionMode.ABS_TCP)
+    robot_interface.send_action(torch.from_numpy(action), ActionMode.ABS_TCP)
 
     input("Press Enter to continue...")
     # Inference Loop
