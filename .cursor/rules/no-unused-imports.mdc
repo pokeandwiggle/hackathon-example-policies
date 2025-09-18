@@ -1,0 +1,12 @@
+---
+globs: *.py
+---
+# No Unused Imports Rule
+
+Always remove unused imports from Python files. Unused imports:
+- Increase code complexity
+- Slow down module loading
+- Create confusion about dependencies
+- Violate clean code principles
+
+Before committing any code changes, ensure all imports are actually used in the file.

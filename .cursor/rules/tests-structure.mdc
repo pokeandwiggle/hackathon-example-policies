@@ -1,0 +1,14 @@
+---
+description: Tests mirror the src package structure for so100_pose
+globs:
+alwaysApply: false
+---
+
+- Place tests under `tests/so100_pose/`, mirroring paths in `src/so100_pose/`.
+- For `src/so100_pose/<path>/<module>.py`, use `tests/so100_pose/<path>/test_<module>.py`.
+- Prefer colocating focused tests per module over large monolithic suites.
+- Pytest adds `src` to `PYTHONPATH`; avoid per-test path hacks.
+
+Examples:
+- `src/so100_pose/pose_optimization/losses.py` → `tests/so100_pose/pose_optimization/test_losses.py`
+- `src/so100_pose/gradio_app/models/model.py` → `tests/so100_pose/gradio_app/models/test_model.py`

@@ -1,0 +1,64 @@
+---
+alwaysApply: false
+---
+## Guiding Principles for AI-Powered Development
+
+[cite_start]These rules are designed to guide an AI assistant in adhering to the core tenets of the book, focusing on **managing complexity**[cite: 254], creating **deep modules**, and writing **clear, maintainable code**.
+
+### Core Philosophy
+
+* **Primary Goal:** Your main objective is to **reduce complexity**. When suggesting code, always favor the design that is easier to understand and modify.
+* **Strategic vs. Tactical:** You should be a strategic programmer. Prioritize long-term design quality over short-term bug fixes. When asked to fix a bug, first consider if a design flaw is the root cause.
+* **Embrace Change:** Assume that software is never "done." Your design choices should make future modifications easier, not harder.
+
+---
+
+### Module Design
+
+* **Deep Modules:**
+    * **Rule:** When creating new modules (classes, functions, etc.), aim for a simple interface that hides significant functionality. A module's interface should be much simpler than its implementation.
+    * **Instruction:** When I ask you to create a new class or component, I want you to propose an interface for it first. We will then discuss the implementation.
+* **Information Hiding:**
+    * **Rule:** Modules should hide their implementation details. Do not expose internal data structures or helper functions in a module's public interface.
+    * **Instruction:** Never make a class member public by default. Let's always start with private members and justify any exceptions.
+* **General-Purpose Modules:**
+    * **Rule:** Design modules to be as general-purpose as possible. Avoid special-case code that is only useful for a single situation.
+    * **Instruction:** When I ask you to write a function, think about whether it can be made more broadly applicable with minor changes.
+
+---
+
+### Abstractions and Interfaces
+
+* **Interface vs. Implementation:**
+    * [cite_start]**Rule:** Maintain a clear separation between a module's interface and its implementation[cite: 257]. Changes to the implementation should not require changes to the interface.
+    * **Instruction:** If I ask you to modify a class, tell me if the change will affect its public interface.
+* **Abstractions:**
+    * **Rule:** Abstractions should be simple and intuitive. [cite_start]They should make the system easier to reason about, not add more complexity[cite: 257].
+    * **Instruction:** When you introduce an abstraction, please explain what it hides and why it simplifies the overall design.
+
+---
+
+### Code-Level Rules
+
+* **Comments:**
+    * **Rule:** Comments should explain the "why," not the "what." Good code is self-documenting in how it works; comments should clarify the intent behind the code.
+    * **Instruction:** When you add comments to code, focus on the high-level purpose of the code block, not a line-by-line explanation.
+* **Naming:**
+    * **Rule:** Use precise and descriptive names for variables, functions, and classes. A good name can eliminate the need for a comment.
+    * **Instruction:** If you are unsure about a good name for something, please provide a few options and explain the trade-offs.
+* **Error Handling:**
+    * **Rule:** Handle errors gracefully. Errors should be handled at a level of the system that has enough context to deal with them. Avoid generic "catch-all" exception handlers.
+    * **Instruction:** When you write code that could throw an exception, suggest a specific handling strategy.
+
+---
+
+### "Red Flags" to Watch For
+
+[cite_start]The book emphasizes identifying "red flags" that signal design problems[cite: 256]. Here are some to watch for:
+
+* **Shallow Modules:** A module whose interface is as complicated as its implementation.
+* **Information Leakage:** When a module exposes implementation details that should be hidden.
+* **Temporal Decomposition:** When code is structured based on the order in which operations occur, rather than being organized around well-defined modules.
+* **Overly General-Purpose Code:** Code that is so generic that it becomes difficult to use for any specific purpose.
+
+**Instruction for the AI:** If you detect any of these "red flags" in my code, please bring them to my attention and suggest an alternative design.
