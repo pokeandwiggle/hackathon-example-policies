@@ -18,6 +18,8 @@ import torch
 
 from example_policies import data_constants as dc
 
+from ...data_ops.utils.message_parsers import CANONICAL_ARM_JOINTS
+from ..action_translator import ActionMode
 from ..debug_helpers import sensor_stream as dbg_sensors
 from .observation_builder import ObservationBuilder
 from .robot_client import RobotClient
@@ -25,8 +27,6 @@ from .robot_service import (
     robot_service_pb2,
     robot_service_pb2_grpc,
 )
-from ..action_translator import ActionMode
-from ...data_ops.utils.message_parsers import CANONICAL_ARM_JOINTS
 
 
 class RobotInterface:
@@ -63,6 +63,7 @@ class RobotInterface:
         if action_mode in (ActionMode.DELTA_TCP, ActionMode.ABS_TCP):
             target = _build_cart_target(numpy_action)
             self.client.send_cart_queue_target(target)
+            self.client.send_cart_direct_target
 
         elif action_mode in (ActionMode.DELTA_JOINT, ActionMode.ABS_JOINT):
             target = _build_joint_target(numpy_action)
