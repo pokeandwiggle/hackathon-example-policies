@@ -13,9 +13,8 @@
 # limitations under the License.
 
 import argparse
-from pprint import pprint
-
 from copy import deepcopy
+from pprint import pprint
 
 # First Import Numpy. Workaround for torch / lerobot bug
 import numpy

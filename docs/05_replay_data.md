@@ -2,7 +2,7 @@
 
 > [!NOTE]
 > This guide shows how to replay recorded data on the robot using the replay functionality.
-> 
+>
 > ```bash
 > python -m example_policies.robot_deploy.debug_helpers.replay_data ./my_dataset \
 >    --episode 2 \
@@ -15,7 +15,7 @@
 
 The data replay script allows you to execute previously recorded actions on the robot, which is useful for:
 - Testing robot behavior with known good data
-- Debugging action execution pipelines  
+- Debugging action execution pipelines
 - Validating data quality before training
 - Demonstrating recorded behaviors
 
@@ -34,7 +34,7 @@ python -m example_policies.robot_deploy.debug_helpers.replay_data <data_dir> [op
 ### Optional Arguments
 
 - `--server`: Robot service server address (default: localhost:50051)
-- `--episode`: Episode index to replay (default: 0) 
+- `--episode`: Episode index to replay (default: 0)
 - `--replay-frequency`: Playback frequency in Hz (default: 5.0)
 - `--continuous-replay`: Run continuously without user prompts (default: False)
 
@@ -67,4 +67,3 @@ python -m example_policies.robot_deploy.debug_helpers.replay_data ./my_dataset \
 - **Delta Actions Only**: Currently only supports delta TCP action mode
 - **Manual Start**: You'll be prompted to position the robot at the start pose
 - **Frequency**: Lower frequencies (1-5 Hz) are recommended to start with, increase later when you feel confident.
-

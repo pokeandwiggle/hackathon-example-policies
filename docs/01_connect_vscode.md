@@ -35,4 +35,3 @@ Next, configure VS Code to use the remote server as its kernel.
 6.  When prompted, enter the same credentials (`minga`/`minga`).
 
 Your VS Code instance is now connected to the remote JupyterHub server. Any code executed in the notebook will run on the server.
-

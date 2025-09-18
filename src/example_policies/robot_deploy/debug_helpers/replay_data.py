@@ -21,9 +21,10 @@ import grpc
 # Lerobot Environment Bug
 import numpy as np
 import torch
-from lerobot.datasets.lerobot_dataset import LeRobotDataset
+from lerobot.configs.default import DatasetConfig
+from lerobot.datasets.lerobot_dataset import LeRobotDataset, LeRobotDatasetMetadata
 
-from example_policies.robot_deploy.action_translator import ActionTranslator, ActionMode
+from example_policies.robot_deploy.action_translator import ActionMode, ActionTranslator
 from example_policies.robot_deploy.debug_helpers.utils import print_info
 from example_policies.robot_deploy.policy_loader import load_metadata
 from example_policies.robot_deploy.robot_io.robot_interface import RobotInterface
@@ -31,11 +32,6 @@ from example_policies.robot_deploy.robot_io.robot_service import (
     robot_service_pb2,
     robot_service_pb2_grpc,
 )
-
-from lerobot.configs.default import DatasetConfig
-from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata
-
-import numpy as np
 
 
 class FakeConfig:

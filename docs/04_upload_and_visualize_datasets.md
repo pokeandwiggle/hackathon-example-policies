@@ -122,4 +122,3 @@ python src/example_policies/data_ops/visualize.py \
 
 This will visualize the dataset in rerun.
 You can visualize the dataset online with online tool: https://huggingface.co/spaces/lerobot/visualize_dataset
-

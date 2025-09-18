@@ -12,10 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .robot_service import (
-    robot_service_pb2,
-    robot_service_pb2_grpc,
-)
+from .robot_service import robot_service_pb2, robot_service_pb2_grpc
 
 
 class RobotClient:

@@ -68,5 +68,3 @@ python src/example_policies/robot_deploy/deploy.py --checkpoint <path/to/checkpo
 
 -   **Documentation:** For advanced topics, check out the [`docs`](./docs) directory.
 -   **LeRobot:** This project is built on the powerful [LeRobot](https://github.com/huggingface/lerobot) library. Their documentation is an excellent resource.
-
-
