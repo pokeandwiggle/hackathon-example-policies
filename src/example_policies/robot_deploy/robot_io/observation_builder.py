@@ -87,7 +87,6 @@ class ObservationBuilder:
 
         full_state = np.concatenate(state_array).astype(np.float32)
 
-        # exit()
         assert full_state.shape == self.cfg.input_features["observation.state"].shape, (
             f"Observation Builder State shape mismatch: expected {self.cfg.input_features['observation.state'].shape}, "
             f"got {full_state.shape}"
