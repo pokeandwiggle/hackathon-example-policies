@@ -19,7 +19,7 @@ cfg = original_act_config(
     batch_size=16,
 )
 
-cfg.policy.pretrained_path = "outputs/checkpoints_vastai/080000"
+cfg.policy.pretrained_path = "outputs/checkpoints_vastai/080000/pretrained_model"
 
 
 train(cfg)
