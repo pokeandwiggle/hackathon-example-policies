@@ -114,8 +114,8 @@ def original_act_config(
     default_kwargs = {
         "vision_backbone": "resnet18",
         "pretrained_backbone_weights": "ResNet18_Weights.IMAGENET1K_V1",
-        "chunk_size": 50,
-        "n_action_steps": 25,
+        "chunk_size": 20,
+        "n_action_steps": 10,
         "latent_dim": 32,
         "n_decoder_layers": 1,
     }
