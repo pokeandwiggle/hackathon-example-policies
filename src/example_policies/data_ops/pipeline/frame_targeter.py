@@ -38,7 +38,6 @@ class FrameTargeter:
 
     def reset(self):
         self.pause_detection_counter = self.cfg.max_pause_frames
-        self.gripper_active_counter = self.cfg.grace_period_frames
         self.gripper_stationary_counter = self.cfg.max_pause_frames
         self._prior_gripper = None
 
@@ -89,7 +88,7 @@ class FrameTargeter:
         # Check for active gripper movement for speed boost logic
         if not is_gripper_still:
             targets = [DatasetType.NO_SPEED_BOOST]
-            if self.gripper_active_counter % self.cfg.boost_factor == 0:
+            if self.gripper_stationary_counter % self.cfg.boost_factor == 0:
                 targets.append(DatasetType.MAIN)
             return targets
 
