@@ -30,7 +30,7 @@ def main(server: str, action: torch.Tensor):
 
 
 if __name__ == "__main__":
-    server = "localhost:50051"
+    SERVER_ENDPOINT = "192.168.0.207:50051"
     tcp_numpy = np.array(
         [
             -0.22568389773368835,
@@ -52,4 +52,4 @@ if __name__ == "__main__":
         ]
     )
     tcp_torch = torch.tensor(tcp_numpy)[None, :]
-    main(server, tcp_torch)
+    main(SERVER_ENDPOINT, tcp_torch)
