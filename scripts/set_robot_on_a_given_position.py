@@ -31,7 +31,7 @@ def main(server: str, action: torch.Tensor):
 
 if __name__ == "__main__":
     SERVER_ENDPOINT = "192.168.0.207:50051"
-    tcp_numpy = np.array(
+    tcp_torch_step_1 = torch.tensor(
         [
             -0.22568389773368835,
             0.745937705039978,
@@ -50,6 +50,25 @@ if __name__ == "__main__":
             0,
             0,
         ]
-    )
-    tcp_torch = torch.tensor(tcp_numpy)[None, :]
-    main(SERVER_ENDPOINT, tcp_torch)
+    )[None, :]
+    tcp_torch_step_2 = torch.tensor(
+        [
+            -0.39821743965148926,
+            0.7588139772415161,
+            0.45840808749198914,
+            0.018458731472492218,
+            0.9588937163352966,
+            0.06460884213447571,
+            0.27569523453712463,
+            0.12317447364330292,
+            0.7276370525360107,
+            0.4175536334514618,
+            -0.04559018462896347,
+            -0.9448632001876831,
+            -0.0346456877887249,
+            0.322420209646225,
+            0,
+            0,
+        ]
+    )[None, :]
+    main(SERVER_ENDPOINT, tcp_torch_step_2)
