@@ -130,9 +130,9 @@ def actor_cli(cfg: TrainRLServerPipelineConfig):
     )
 
     logging.info("[ACTOR] Establishing connection with Learner")
-    if not establish_learner_connection(learner_client, shutdown_event):
-        logging.error("[ACTOR] Failed to establish connection with Learner")
-        return
+    # if not establish_learner_connection(learner_client, shutdown_event):
+    #     logging.error("[ACTOR] Failed to establish connection with Learner")
+    #     return
 
     if not use_threads(cfg):
         # If we use multithreading, we can reuse the channel
@@ -299,6 +299,7 @@ def act_with_policy(
 
         else:
             action = online_env.action_space.sample()
+            import pdb; pdb.set_trace()
 
             # action = action.unsqueeze(0) # TODO: Handle batch chunking/batching
 
@@ -374,6 +375,8 @@ def act_with_policy(
             episode_intervention = False
             episode_intervention_steps = 0
             episode_total_steps = 0
+            # wait for input to continue
+            input("Press Enter to continue when the robot is ready...")
             policy.reset()  # Reset policy state if needed
             obs, info = online_env.reset()
 

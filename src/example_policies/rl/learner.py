@@ -1198,18 +1198,18 @@ def initialize_offline_replay_buffer(
     """
     if not cfg.resume or cfg.initialize_offline_buffer:
         logging.info("make_dataset offline buffer")
-        # offline_dataset = make_dataset(cfg)
-        return ReplayBuffer(
-            capacity=cfg.policy.offline_buffer_capacity,
-            device=device,
-            state_keys=cfg.policy.input_features.keys(),
-            storage_device=storage_device,
-            optimize_memory=True,
-            n_steps=cfg.policy.chunk_size,
-            gamma=cfg.policy.discount,
-            force_full_n_steps=cfg.policy.force_full_n_steps,
-            use_terminal_for_next_state=cfg.policy.use_terminal_for_next_state,
-        )
+        offline_dataset = make_dataset(cfg)
+        # return ReplayBuffer(
+        #     capacity=cfg.policy.offline_buffer_capacity,
+        #     device=device,
+        #     state_keys=cfg.policy.input_features.keys(),
+        #     storage_device=storage_device,
+        #     optimize_memory=True,
+        #     n_steps=cfg.policy.chunk_size,
+        #     gamma=cfg.policy.discount,
+        #     force_full_n_steps=cfg.policy.force_full_n_steps,
+        #     use_terminal_for_next_state=cfg.policy.use_terminal_for_next_state,
+        # )
     else:
         logging.info("load offline dataset")
         dataset_offline_path = os.path.join(cfg.output_dir, "dataset_offline")

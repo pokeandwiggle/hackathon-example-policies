@@ -86,3 +86,10 @@ def load_policy(checkpoint_dir: pathlib.Path):
 
     setattr(cfg, "metadata", metadata)
     return policy, cfg
+
+def load_policy_config(checkpoint_dir: pathlib.Path) -> PreTrainedConfig:
+    checkpoint_dir = get_checkpoint_path(checkpoint_dir)
+    cfg = PreTrainedConfig.from_pretrained(checkpoint_dir)
+    metadata = load_metadata(checkpoint_dir)
+    setattr(cfg, "metadata", metadata)
+    return cfg
