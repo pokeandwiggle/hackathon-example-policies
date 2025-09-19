@@ -59,7 +59,8 @@ class RobotInterface:
 
         if action_mode in (ActionMode.DELTA_TCP, ActionMode.ABS_TCP):
             target = _build_cart_target(numpy_action)
-            self.client.send_cart_queue_target(target)
+            # self.client.send_cart_queue_target(target)
+            self.client.send_cart_direct_target(target)
 
         elif action_mode in (ActionMode.DELTA_JOINT, ActionMode.ABS_JOINT):
             target = _build_joint_target(numpy_action)
