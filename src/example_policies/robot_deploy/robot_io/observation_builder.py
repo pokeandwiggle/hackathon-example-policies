@@ -48,7 +48,7 @@ class ObservationBuilder:
         # Check if any state feature contains "joint_pos_"
         self.include_joint_pos = any("joint_pos_" in name for name in names)
         self.include_joint_vel = any("joint_vel_" in name for name in names)
-        self.include_joint_effort = any("joint_effort_" in name for name in names)
+        self.include_joint_effort = any("joint_eff_" in name for name in names)
 
         self.include_tcp = any("tcp_" in name for name in names)
 
