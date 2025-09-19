@@ -12,14 +12,14 @@ from example_policies.train import train
 lerobot_patches.apply_patches()
 
 # repo_id = "jccj/mh2_step_1_and_2"
-dataset_root_dir = "data/lerobot/step_1_and_2"
+dataset_root_dir = "data/lerobot/step_1_2_and_3"
 cfg = original_act_config(
     # repo_id=repo_id,
     dataset_root_dir=dataset_root_dir,
     batch_size=16,
 )
 
-cfg.policy.pretrained_path = "outputs/checkpoints_vastai/080000/pretrained_model"
+cfg.policy.pretrained_path = "outputs/checkpoints_vastai/100000/pretrained_model"
 
 
 train(cfg)
