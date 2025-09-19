@@ -5,8 +5,8 @@ from example_policies import lerobot_patches
 lerobot_patches.apply_patches()
 
 
-repo_id = "jccj/mh2_step_1_tcp_recovery"
+repo_id = "jccj/mh2_step_2_tcp"
 dataset = LeRobotDataset(
     repo_id=repo_id,
-    root="data/lerobot/step_1_tcp_recovery",
+    root="data/lerobot/step_2_tcp",
 ).push_to_hub()
