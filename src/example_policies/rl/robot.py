@@ -247,6 +247,11 @@ class RobotIO(Robot):
         # )
         # import pdb; pdb.set_trace()self.current_joint_pos = np.array([joint_action["gripper.pos"][0], joint_action["gripper.pos"][1]], dtype=np.float32)
 
+        # print action
+
+        action[6:] = np.clip(action[6:], 0, 2)
+        print(action[6:])
+        print(f"Current gripper pos:\n{self.current_joint_pos}")    
         self.current_joint_pos = np.array(
             [
                 self.current_joint_pos[0] + (action[6] - 1),
@@ -254,7 +259,9 @@ class RobotIO(Robot):
             ],
             dtype=np.float32,
         )
+        print(f"New gripper pos:\n{self.current_joint_pos}")
         self.current_joint_pos = np.clip(self.current_joint_pos, 0, 2)
+        print(f"New gripper pos:\n{self.current_joint_pos}")
 
         # TODO: add delta rotation
         action = torch.tensor(
