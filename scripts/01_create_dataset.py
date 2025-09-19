@@ -34,10 +34,10 @@ from example_policies.data_ops.config.pipeline_config import ActionLevel, Pipeli
 
 # --- Paths ---
 # TODO: Set the input directory containing your .mcap files.
-RAW_DATA_DIR = pathlib.Path("data/hf_step_1")
+RAW_DATA_DIR = pathlib.Path("data/step_1_flip_recovery_pre_clean")
 
 # TODO: Set your desired output directory name.
-OUTPUT_DIR = pathlib.Path("data/lerobot/step_1_tcp")
+OUTPUT_DIR = pathlib.Path("data/lerobot/step_1_tcp_recovery")
 
 # --- Configuration ---
 # TODO: A descriptive label for the task, used for VLA-style text conditioning.
