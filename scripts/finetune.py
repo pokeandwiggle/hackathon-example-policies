@@ -19,7 +19,9 @@ cfg = original_act_config(
     batch_size=16,
 )
 
-cfg.policy.pretrained_path = "outputs/checkpoints_vastai/100000/pretrained_model"
+cfg.policy.pretrained_path = (
+    "outputs/train/2025-09-18/23-01-44_act/checkpoints/last/pretrained_model/"
+)
 
 
 train(cfg)
