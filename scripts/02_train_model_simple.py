@@ -14,7 +14,7 @@ lerobot_patches.apply_patches()
 cfg = original_act_config(
     # repo_id=repo_id,
     batch_size=16,
-    dataset_root_dir="data/lerobot/step_2_tcp",
+    dataset_root_dir="data/lerobot/step_1_tcp_with_recovery",
 )
 
 # You can specify additional keywords by looking at the lerobot configuration code, e.g. `lerobot.policies.act.configuration_act`
