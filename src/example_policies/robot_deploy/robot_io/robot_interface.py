@@ -96,8 +96,8 @@ def _build_cart_target(np_action: np.ndarray) -> robot_service_pb2.CartesianTarg
     des_target_msg.gripper_widths["left"] = left_gripper
     des_target_msg.gripper_widths["right"] = right_gripper
 
-    des_target_msg.robot_stiffnesses["left"] = 1.0
-    des_target_msg.robot_stiffnesses["right"] = 1.0
+    des_target_msg.robot_stiffness_factors["left"] = 1.0
+    des_target_msg.robot_stiffness_factors["right"] = 1.0
 
     return des_target_msg
 
@@ -111,7 +111,7 @@ def _build_joint_target(np_action: np.ndarray) -> robot_service_pb2.JointTarget:
     des_target_msg.gripper_widths["left"] = np_action[dc.LEFT_GRIPPER_IDX]
     des_target_msg.gripper_widths["right"] = np_action[dc.RIGHT_GRIPPER_IDX]
 
-    des_target_msg.robot_stiffnesses["left"] = 1.0
-    des_target_msg.robot_stiffnesses["right"] = 1.0
+    des_target_msg.robot_stiffness_factors["left"] = 1.0
+    des_target_msg.robot_stiffness_factors["right"] = 1.0
 
     return des_target_msg
