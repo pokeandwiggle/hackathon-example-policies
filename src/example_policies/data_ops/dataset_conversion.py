@@ -11,17 +11,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-import argparse
+import dataclasses
+import enum
 import json
 import pathlib
 import time
+
+import draccus
 
 # Workaround for torch / lerobot bug
 import numpy as np
 from mcap.reader import NonSeekingReader
 
-from example_policies.data_ops.config import argparse_pipeline_config, pipeline_config
+from example_policies.data_ops.config import pipeline_config
 from example_policies.data_ops.pipeline.dataset_writer import DatasetWriter
 from example_policies.data_ops.pipeline.frame_buffer import FrameBuffer
 
@@ -136,31 +138,58 @@ def save_episode(dataset, episode_idx, pause_dataset=None):
         pause_dataset.save_episode(episode_idx)
 
 
+@dataclasses.dataclass
+class ScriptArgs:
+    """Arguments specific to this conversion script that are required."""
+
+    episodes_dir: pathlib.Path = pathlib.Path("./data")
+    output: pathlib.Path = pathlib.Path("./output")
+
+
+@dataclasses.dataclass
+class ConvertConfig(ScriptArgs, pipeline_config.PipelineConfig):
+    """Configuration for the dataset conversion script.
+
+    Inherits from ScriptArgs and PipelineConfig to include all necessary parameters.
+    """
+
+    def to_dict(self):
+        data = dataclasses.asdict(self)
+        # Convert all Path objects to strings
+        for key, value in data.items():
+            if isinstance(value, pathlib.Path):
+                data[key] = str(value)
+            if isinstance(value, enum.Enum):
+                data[key] = value.value
+        return data
+
+
 def main():
-    parser = argparse.ArgumentParser(
-        description="Convert ROS2 bags to LeRobot v2 dataset format with configurable features."
-    )
-    parser.add_argument(
-        "episodes_dir",
-        type=pathlib.Path,
-        help="Path to the directory with rosbag2 files.",
-    )
-    parser.add_argument(
-        "--output",
-        type=pathlib.Path,
-        required=True,
-        help="Path to save the dataset directory.",
-    )
+    """
+    Main function using draccus for configuration.
 
-    # Add Pipeline Config fields to argparse.
-    config, args = argparse_pipeline_config.parse_pipeline_config_from_args(parser)
+    This script uses draccus to parse command-line arguments based on the ConvertConfig dataclass.
+    Command-line arguments are automatically generated from the fields of ConvertConfig and its parent PipelineConfig.
+    Example usage:
+        python dataset_conversion.py --episodes-dir /path/to/episodes --output /path/to/output [other PipelineConfig options]
 
-    if not args.episodes_dir.is_dir():
-        raise FileNotFoundError(f"Input directory not found: {args.episodes_dir}")
+    Use --help to see all available options and their descriptions.
+    """
+    config = draccus.parse(config_class=ConvertConfig)
 
-    print(f"Converting with config: {config}")
+    # Validate input directory
+    if not config.episodes_dir.is_dir():
+        raise FileNotFoundError(f"Input directory not found: {config.episodes_dir}")
 
-    convert_episodes(args.episodes_dir, args.output, config)
+    print(f"Converting episodes from: {config.episodes_dir}")
+    print(f"Output directory: {config.output}")
+    print(f"Pipeline config summary:")
+    print(f"  - Action level: {config.action_level}")
+    print(f"  - Image resolution: {config.image_resolution}")
+    print(f"  - Target FPS: {config.target_fps}")
+    print(f"  - Task: {config.task_name}")
+
+    convert_episodes(config.episodes_dir, config.output, config)
 
 
 if __name__ == "__main__":
