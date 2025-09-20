@@ -111,7 +111,7 @@ def main():
         tgt = batch["action"].detach().float().view(-1) 
         if action_dim is None:
             action_dim = tgt.numel() # Only load the action dimension once 
-        action = policy.select_action(batch) # This is the output of the action chunk. Could  be more or less. 
+        action = policy.select_action(batch) # This is the output of the action chunk. Could be more or less. 
         pred = action.detach().float().view(-1)
 
         # collect
