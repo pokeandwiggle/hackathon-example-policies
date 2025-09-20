@@ -92,7 +92,8 @@ class PipelineConfig:
 
     include_rgb_images: bool = True
     include_depth_images: bool = False
-    image_resolution: tuple = field(default_factory=lambda: (640, 640))
+
+    image_resolution: tuple = field(default_factory=lambda: (256, 256))
 
     depth_scale_factor: float = 1000.0
 
