@@ -112,6 +112,7 @@ def main():
 
     policy, cfg = load_policy(args.checkpoint)
     policy.to(device)
+    deploy_policy(policy, cfg, 10, args.server)
 
 
 def deploy_policy(policy, cfg, hz: float, server: str, controller=None):
