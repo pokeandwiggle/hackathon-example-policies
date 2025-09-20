@@ -24,7 +24,10 @@ import torch
 
 from example_policies.robot_deploy.action_translator import ActionTranslator
 from example_policies.robot_deploy.policy_loader import load_policy
-from example_policies.robot_deploy.robot_io.robot_interface import RobotInterface
+from example_policies.robot_deploy.robot_io.robot_interface import (
+    RobotClient,
+    RobotInterface,
+)
 from example_policies.robot_deploy.robot_io.robot_service import (
     robot_service_pb2,
     robot_service_pb2_grpc,
@@ -34,8 +37,15 @@ from example_policies.robot_deploy.utils.action_mode import ActionMode
 
 
 def inference_loop(
-    policy, cfg, hz: float, service_stub: robot_service_pb2_grpc.RobotServiceStub
+    policy,
+    cfg,
+    hz: float,
+    service_stub: robot_service_pb2_grpc.RobotServiceStub,
+    controller=None,
 ):
+
+    if controller is None:
+        controller = RobotClient.CART_WAYPOINT
 
     robot_interface = RobotInterface(service_stub, cfg)
     model_to_action_trans = ActionTranslator(cfg)
@@ -65,7 +75,9 @@ def inference_loop(
             print(f"\n=== ABSOLUTE ROBOT COMMANDS ===")
             dbg_printer.print(step, observation, action, raw_action=False)
 
-            robot_interface.send_action(action, model_to_action_trans.action_mode)
+            robot_interface.send_action(
+                action, model_to_action_trans.action_mode, controller
+            )
             # policy._queues["action"].clear()
 
         # wait for execution to finish
@@ -100,15 +112,16 @@ def main():
 
     policy, cfg = load_policy(args.checkpoint)
     policy.to(device)
+    deploy_policy(policy, cfg, 10, args.server)
 
-    deploy_policy(policy, cfg, hz=1.5, server=args.server)
 
-
-def deploy_policy(policy, cfg, hz: float, server: str):
+def deploy_policy(policy, cfg, hz: float, server: str, controller=None):
+    if controller is None:
+        controller = RobotClient.CART_WAYPOINT
     channel = grpc.insecure_channel(server)
     stub = robot_service_pb2_grpc.RobotServiceStub(channel)
     try:
-        inference_loop(policy, cfg, hz, stub)
+        inference_loop(policy, cfg, hz, stub, controller)
     except Exception as e:
         print(f"Error occurred: {e}")
         raise e

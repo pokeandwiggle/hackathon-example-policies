@@ -18,6 +18,7 @@ from .robot_service import robot_service_pb2, robot_service_pb2_grpc
 class RobotClient:
     CART_QUEUE = "cartesian_target_queue"
     CART_DIRECT = "cartesian_target"
+    CART_WAYPOINT = "cartesian_waypoint"
     JOINT_DIRECT = "joint_target"
 
     def __init__(self, service_stub: robot_service_pb2_grpc.RobotServiceStub):
@@ -52,6 +53,22 @@ class RobotClient:
         queue_target_request = robot_service_pb2.EnqueueCartesianTargetsRequest()
         queue_target_request.cartesian_targets.append(cart_target)
         response = self.stub.EnqueueCartesianTargets(queue_target_request)
+        return response
+
+    def send_cart_waypoint(self, cart_target: robot_service_pb2.CartesianTarget):
+        ctrl_mode = RobotClient.CART_WAYPOINT
+
+        if self.control_mode != ctrl_mode:
+            prepare_request = robot_service_pb2.PrepareExecutionRequest()
+            prepare_request.execution_mode = (
+                robot_service_pb2.ExecutionMode.EXECUTION_MODE_CARTESIAN_WAYPOINT
+            )
+            response = self.stub.PrepareExecution(prepare_request)
+            self.control_mode = ctrl_mode
+
+        waypoint_request = robot_service_pb2.SetCartesianWaypointRequest()
+        waypoint_request.cartesian_waypoint.CopyFrom(cart_target)
+        response = self.stub.SetCartesianWaypoint(waypoint_request)
         return response
 
     def send_cart_direct_target(self, cart_target: robot_service_pb2.CartesianTarget):
