@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 
 # String Enum for action levels
 from enum import Enum
@@ -92,7 +92,8 @@ class PipelineConfig:
 
     include_rgb_images: bool = True
     include_depth_images: bool = False
-    image_resolution = (640, 640)
+    image_resolution: tuple = field(default_factory=lambda: (640, 640))
+
     depth_scale_factor: float = 1000.0
 
     action_level: ActionLevel = ActionLevel.DELTA_TCP
