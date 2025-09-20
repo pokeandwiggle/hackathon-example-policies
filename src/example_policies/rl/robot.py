@@ -194,8 +194,16 @@ class RobotIO(Robot):
             # current_observation = self.current_observation
             current_observation = {"observation.state": torch.from_numpy(action["current_observation"]["observation.state"]).unsqueeze(0).to("cuda:0").float()}
             # current_observation["observation.state"] = current_observation["observation.state"].expand_dims(0)
+
             if self.current_joint_pos is None:
-                self.current_joint_pos = np.ones(2, dtype=np.float32)
+                # self.current_joint_pos = np.ones(2, dtype=np.float32)
+                self.current_joint_pos = np.array(
+                    [
+                        np.clip(action["l_gripper"], 0, 2),
+                        np.clip(action["r_gripper"], 0, 2),
+                    ],
+                    dtype=np.float32,
+                )
             del action["current_observation"]
 
             if all(k in action for k in ["l_delta_x", "l_delta_y", "l_delta_z", "r_delta_x", "r_delta_y", "r_delta_z", "l_gripper", "r_gripper"]):
