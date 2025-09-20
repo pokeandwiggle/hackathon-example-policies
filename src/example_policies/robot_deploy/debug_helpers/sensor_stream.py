@@ -28,19 +28,6 @@ from example_policies.robot_deploy.robot_io.robot_service import (
 )
 
 
-def convert_image_for_display(img_bytes: bytes, is_depth: bool) -> np.ndarray:
-    """Converts image bytes from the service to a displayable OpenCV format (BGR, uint8)."""
-    # Open image from bytes using Pillow
-    # pil_img = Image.open(io.BytesIO(img_bytes))
-    # img_array = np.array(pil_img)
-
-    img_array = image_processor.process_image_bytes(img_bytes, 640, 640, is_depth)
-
-    display_image = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
-
-    return display_image
-
-
 def show_response(snapshot_response):
     images = {}
     cameras = snapshot_response.cameras
@@ -49,6 +36,7 @@ def show_response(snapshot_response):
         images.update(process_camera_image(cameras[cam_name], cam_name, "cpu"))
 
     for cam_name, img in images.items():
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         cv2.imshow(cam_name, img)
 
 

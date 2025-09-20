@@ -1,0 +1,38 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0  # Updated to latest
+    hooks:
+    -   id: trailing-whitespace
+    -   id: end-of-file-fixer
+    -   id: check-yaml
+    -   id: check-toml  # For pyproject.toml files
+    -   id: check-json
+    -   id: check-merge-conflict
+    -   id: debug-statements  # Catches pdb, breakpoint(), etc.
+
+-   repo: https://github.com/psf/black
+    rev: 24.8.0  # Updated to latest
+    hooks:
+    -   id: black
+    -   id: black-jupyter
+
+-   repo: https://github.com/pycqa/isort
+    rev: 5.13.2  # Updated to latest
+    hooks:
+    -   id: isort
+        args: ["--profile", "black"]
+
+# # Optional but highly recommended additions:
+# -   repo: https://github.com/pycqa/flake8
+#     rev: 7.1.1
+#     hooks:
+#     -   id: flake8
+#         args: [--max-line-length=88]  # Match Black's line length
+
+# -   repo: https://github.com/pre-commit/mirrors-mypy
+#     rev: v1.11.2
+#     hooks:
+#     -   id: mypy
+#         additional_dependencies: [types-requests]  # Add type stubs as needed

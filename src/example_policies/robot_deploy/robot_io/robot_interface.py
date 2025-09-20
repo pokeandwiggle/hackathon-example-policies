@@ -18,15 +18,12 @@ import torch
 
 from example_policies import data_constants as dc
 
+from ...data_ops.utils.message_parsers import CANONICAL_ARM_JOINTS
 from ..debug_helpers import sensor_stream as dbg_sensors
+from ..utils.action_mode import ActionMode
 from .observation_builder import ObservationBuilder
 from .robot_client import RobotClient
-from .robot_service import (
-    robot_service_pb2,
-    robot_service_pb2_grpc,
-)
-from ..action_translator import ActionMode
-from ...data_ops.utils.message_parsers import CANONICAL_ARM_JOINTS
+from .robot_service import robot_service_pb2, robot_service_pb2_grpc
 
 
 class RobotInterface:

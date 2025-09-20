@@ -31,17 +31,51 @@ class ExecutionMode(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     EXECUTION_MODE_CARTESIAN_TARGET_QUEUE: _ClassVar[ExecutionMode]
     EXECUTION_MODE_CARTESIAN_TARGET: _ClassVar[ExecutionMode]
     EXECUTION_MODE_JOINT_TARGET: _ClassVar[ExecutionMode]
+    EXECUTION_MODE_CARTESIAN_WAYPOINT: _ClassVar[ExecutionMode]
 
 EXECUTION_MODE_UNSPECIFIED: ExecutionMode
 EXECUTION_MODE_CARTESIAN_TARGET_QUEUE: ExecutionMode
 EXECUTION_MODE_CARTESIAN_TARGET: ExecutionMode
 EXECUTION_MODE_JOINT_TARGET: ExecutionMode
+EXECUTION_MODE_CARTESIAN_WAYPOINT: ExecutionMode
 
 class ResetDriversRequest(_message.Message):
     __slots__ = ()
     def __init__(self) -> None: ...
 
 class ResetDriversResponse(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class ResetRobotRequest(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class ResetRobotResponse(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class ResetVisionRequest(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class ResetVisionResponse(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class MoveHomeRequest(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class MoveHomeResponse(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class RecoverErrorsRequest(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class RecoverErrorsResponse(_message.Message):
     __slots__ = ()
     def __init__(self) -> None: ...
 
@@ -114,6 +148,30 @@ class SetJointTargetResponse(_message.Message):
     __slots__ = ()
     def __init__(self) -> None: ...
 
+class SetCartesianWaypointRequest(_message.Message):
+    __slots__ = ("cartesian_waypoint",)
+    CARTESIAN_WAYPOINT_FIELD_NUMBER: _ClassVar[int]
+    cartesian_waypoint: CartesianTarget
+    def __init__(
+        self, cartesian_waypoint: _Optional[_Union[CartesianTarget, _Mapping]] = ...
+    ) -> None: ...
+
+class SetCartesianWaypointResponse(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class StreamJointTargetsResponse(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class StreamCartesianTargetsResponse(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class StreamCartesianWaypointsResponse(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
 class CameraFrame(_message.Message):
     __slots__ = ("width", "height", "format", "data")
     WIDTH_FIELD_NUMBER: _ClassVar[int]
@@ -133,18 +191,15 @@ class CameraFrame(_message.Message):
     ) -> None: ...
 
 class RobotState(_message.Message):
-    __slots__ = ("pose", "velocity", "stiffness")
+    __slots__ = ("pose", "velocity")
     POSE_FIELD_NUMBER: _ClassVar[int]
     VELOCITY_FIELD_NUMBER: _ClassVar[int]
-    STIFFNESS_FIELD_NUMBER: _ClassVar[int]
     pose: Pose
     velocity: Twist
-    stiffness: float
     def __init__(
         self,
         pose: _Optional[_Union[Pose, _Mapping]] = ...,
         velocity: _Optional[_Union[Twist, _Mapping]] = ...,
-        stiffness: _Optional[float] = ...,
     ) -> None: ...
 
 class JointState(_message.Message):
@@ -275,7 +330,7 @@ class Twist(_message.Message):
     ) -> None: ...
 
 class CartesianTarget(_message.Message):
-    __slots__ = ("robot_poses", "gripper_widths", "robot_stiffnesses")
+    __slots__ = ("robot_poses", "gripper_widths", "robot_stiffness_factors")
 
     class RobotPosesEntry(_message.Message):
         __slots__ = ("key", "value")
@@ -299,7 +354,7 @@ class CartesianTarget(_message.Message):
             self, key: _Optional[str] = ..., value: _Optional[float] = ...
         ) -> None: ...
 
-    class RobotStiffnessesEntry(_message.Message):
+    class RobotStiffnessFactorsEntry(_message.Message):
         __slots__ = ("key", "value")
         KEY_FIELD_NUMBER: _ClassVar[int]
         VALUE_FIELD_NUMBER: _ClassVar[int]
@@ -311,19 +366,19 @@ class CartesianTarget(_message.Message):
 
     ROBOT_POSES_FIELD_NUMBER: _ClassVar[int]
     GRIPPER_WIDTHS_FIELD_NUMBER: _ClassVar[int]
-    ROBOT_STIFFNESSES_FIELD_NUMBER: _ClassVar[int]
+    ROBOT_STIFFNESS_FACTORS_FIELD_NUMBER: _ClassVar[int]
     robot_poses: _containers.MessageMap[str, Pose]
     gripper_widths: _containers.ScalarMap[str, float]
-    robot_stiffnesses: _containers.ScalarMap[str, float]
+    robot_stiffness_factors: _containers.ScalarMap[str, float]
     def __init__(
         self,
         robot_poses: _Optional[_Mapping[str, Pose]] = ...,
         gripper_widths: _Optional[_Mapping[str, float]] = ...,
-        robot_stiffnesses: _Optional[_Mapping[str, float]] = ...,
+        robot_stiffness_factors: _Optional[_Mapping[str, float]] = ...,
     ) -> None: ...
 
 class JointTarget(_message.Message):
-    __slots__ = ("joint_angles", "gripper_widths", "robot_stiffnesses")
+    __slots__ = ("joint_angles", "gripper_widths", "robot_stiffness_factors")
 
     class JointAnglesEntry(_message.Message):
         __slots__ = ("key", "value")
@@ -345,7 +400,7 @@ class JointTarget(_message.Message):
             self, key: _Optional[str] = ..., value: _Optional[float] = ...
         ) -> None: ...
 
-    class RobotStiffnessesEntry(_message.Message):
+    class RobotStiffnessFactorsEntry(_message.Message):
         __slots__ = ("key", "value")
         KEY_FIELD_NUMBER: _ClassVar[int]
         VALUE_FIELD_NUMBER: _ClassVar[int]
@@ -357,13 +412,13 @@ class JointTarget(_message.Message):
 
     JOINT_ANGLES_FIELD_NUMBER: _ClassVar[int]
     GRIPPER_WIDTHS_FIELD_NUMBER: _ClassVar[int]
-    ROBOT_STIFFNESSES_FIELD_NUMBER: _ClassVar[int]
+    ROBOT_STIFFNESS_FACTORS_FIELD_NUMBER: _ClassVar[int]
     joint_angles: _containers.ScalarMap[str, float]
     gripper_widths: _containers.ScalarMap[str, float]
-    robot_stiffnesses: _containers.ScalarMap[str, float]
+    robot_stiffness_factors: _containers.ScalarMap[str, float]
     def __init__(
         self,
         joint_angles: _Optional[_Mapping[str, float]] = ...,
         gripper_widths: _Optional[_Mapping[str, float]] = ...,
-        robot_stiffnesses: _Optional[_Mapping[str, float]] = ...,
+        robot_stiffness_factors: _Optional[_Mapping[str, float]] = ...,
     ) -> None: ...

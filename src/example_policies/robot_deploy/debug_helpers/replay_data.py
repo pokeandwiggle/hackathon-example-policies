@@ -21,21 +21,18 @@ import grpc
 # Lerobot Environment Bug
 import numpy as np
 import torch
-from lerobot.datasets.lerobot_dataset import LeRobotDataset
+from lerobot.configs.default import DatasetConfig
+from lerobot.datasets.lerobot_dataset import LeRobotDataset, LeRobotDatasetMetadata
 
-from example_policies.robot_deploy.action_translator import ActionTranslator, ActionMode
-from example_policies.robot_deploy.debug_helpers.utils import print_info
+from example_policies.robot_deploy.action_translator import ActionTranslator
 from example_policies.robot_deploy.policy_loader import load_metadata
 from example_policies.robot_deploy.robot_io.robot_interface import RobotInterface
 from example_policies.robot_deploy.robot_io.robot_service import (
     robot_service_pb2,
     robot_service_pb2_grpc,
 )
-
-from lerobot.configs.default import DatasetConfig
-from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata
-
-import numpy as np
+from example_policies.robot_deploy.utils import print_info
+from example_policies.robot_deploy.utils.action_mode import ActionMode
 
 
 class FakeConfig:
@@ -71,6 +68,7 @@ def inference_loop(
     meta_data = load_metadata(data_dir)
     # Wrap in dictionary to emulate policy config
     cfg = FakeConfig(meta_data)
+    dbg_printer = print_info.InfoPrinter(cfg)
 
     # We can then instantiate the dataset with these delta_timestamps configuration.
     dataset = LeRobotDataset(
@@ -107,7 +105,7 @@ def inference_loop(
         observation = robot_interface.get_observation("cpu")
         time.sleep(0.1)
 
-    print_info(step, observation, action)
+    dbg_printer.print(step, observation, action, raw_action=False)
 
     input("Press Enter to move robot to start...")
     robot_interface.send_action(torch.from_numpy(action), ActionMode.ABS_TCP)
@@ -140,7 +138,7 @@ def inference_loop(
                 )
 
             action = model_to_action_trans.translate(action, observation)
-            print_info(step, observation, action)
+            dbg_printer.print(step, observation, action, raw_action=False)
 
             robot_interface.send_action(action, model_to_action_trans.action_mode)
             # policy._queues["action"].clear()

@@ -23,14 +23,14 @@ import numpy as np
 import torch
 
 from example_policies.robot_deploy.action_translator import ActionTranslator
-from example_policies.robot_deploy.debug_helpers.utils import print_info
 from example_policies.robot_deploy.policy_loader import load_policy
 from example_policies.robot_deploy.robot_io.robot_interface import RobotInterface
 from example_policies.robot_deploy.robot_io.robot_service import (
     robot_service_pb2,
     robot_service_pb2_grpc,
 )
-from example_policies.robot_deploy.action_translator import ActionMode
+from example_policies.robot_deploy.utils import print_info
+from example_policies.robot_deploy.utils.action_mode import ActionMode
 
 
 def inference_loop(
@@ -39,6 +39,7 @@ def inference_loop(
 
     robot_interface = RobotInterface(service_stub, cfg)
     model_to_action_trans = ActionTranslator(cfg)
+    dbg_printer = print_info.InfoPrinter(cfg)
 
     step = 0
     done = False
@@ -57,12 +58,12 @@ def inference_loop(
             with torch.inference_mode():
                 action = policy.select_action(observation)
                 print(f"\n=== RAW MODEL PREDICTION ===")
-                print_info(step, observation, action)
+                dbg_printer.print(step, observation, action, raw_action=True)
                 print()
             action = model_to_action_trans.translate(action, observation)
 
             print(f"\n=== ABSOLUTE ROBOT COMMANDS ===")
-            print_info(step, observation, action)
+            dbg_printer.print(step, observation, action, raw_action=False)
 
             robot_interface.send_action(action, model_to_action_trans.action_mode)
             # policy._queues["action"].clear()
