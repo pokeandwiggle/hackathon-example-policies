@@ -65,8 +65,10 @@ class RobotInterface:
                 self.client.send_cart_direct_target(target)
             elif ctrl_mode == RobotClient.CART_WAYPOINT:
                 self.client.send_cart_waypoint(target)
-            else:
+            elif ctrl_mode == RobotClient.CART_QUEUE:
                 self.client.send_cart_queue_target(target)
+            else:
+                raise RuntimeError(f"Unknown ctrl_mode: {ctrl_mode}")
 
         elif action_mode in (ActionMode.DELTA_JOINT, ActionMode.ABS_JOINT):
             target = _build_joint_target(numpy_action)

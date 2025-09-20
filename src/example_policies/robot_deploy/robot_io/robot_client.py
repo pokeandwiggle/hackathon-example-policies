@@ -67,7 +67,7 @@ class RobotClient:
             self.control_mode = ctrl_mode
 
         waypoint_request = robot_service_pb2.SetCartesianWaypointRequest()
-        waypoint_request.cartesian_target.CopyFrom(cart_target)
+        waypoint_request.cartesian_waypoint.CopyFrom(cart_target)
         response = self.stub.SetCartesianWaypoint(waypoint_request)
         return response
 
