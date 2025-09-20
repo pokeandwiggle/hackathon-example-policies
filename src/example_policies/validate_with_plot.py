@@ -78,7 +78,7 @@ def main():
         dataset,
         num_workers=8,
         batch_size=1,
-        shuffle=False, #Not shuffeling but choosing sequential batches from the batch 
+        shuffle=False, #Not shuffling but choosing sequential batches from the batch 
         pin_memory=device != "cpu",
         drop_last=False,  
     )
