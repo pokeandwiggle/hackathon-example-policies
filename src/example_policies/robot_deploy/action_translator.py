@@ -20,6 +20,7 @@ from torch.nn import functional as F
 from example_policies import data_constants as dc
 
 from ..data_ops.utils.geometric import axis_angle_to_quat_torch, quat_mul_torch
+from .utils.action_mode import ActionMode
 
 _TCP_DELTA_SPECS = (
     {
@@ -37,41 +38,10 @@ _TCP_DELTA_SPECS = (
 )
 
 
-class ActionMode(Enum):
-    ABS_TCP = "abs_tcp"
-    DELTA_TCP = "delta_tcp"
-    ABS_JOINT = "abs_joint"
-    DELTA_JOINT = "delta_joint"
-
-
-def parse_action_mode(cfg):
-    action_shape = cfg.output_features["action"].shape[0]
-
-    # Fallback for early legacy models
-    if not getattr(cfg, "metadata", None):
-        action_mode = ActionMode.DELTA_TCP if action_shape == 14 else ActionMode.ABS_TCP
-        return action_mode
-
-    names: list[str] = cfg.metadata["features"]["action"]["names"]
-
-    if any("delta_tcp" in n for n in names):
-        action_mode = ActionMode.DELTA_TCP
-    elif any(n.startswith("tcp_") for n in names):
-        action_mode = ActionMode.ABS_TCP
-    elif any("delta_joint" in n for n in names):
-        action_mode = ActionMode.DELTA_JOINT
-    elif any(n.startswith("joint_") for n in names):
-        action_mode = ActionMode.ABS_JOINT
-    else:
-        # Fallback heuristic
-        action_mode = ActionMode.DELTA_TCP if action_shape == 14 else ActionMode.ABS_TCP
-    return action_mode
-
-
 class ActionTranslator:
     def __init__(self, cfg):
         self.last_action = None
-        self.action_mode: ActionMode | None = parse_action_mode(cfg)
+        self.action_mode: ActionMode | None = ActionMode.parse_action_mode(cfg)
         self._state_feature_names = []
         if getattr(cfg, "metadata", None):
             self._state_feature_names = cfg.metadata["features"]["observation.state"][
@@ -111,6 +81,8 @@ class ActionTranslator:
         action[:, dc.LEFT_GRIPPER_IDX] = 1.0 - action[:, dc.LEFT_GRIPPER_IDX]
         action[:, dc.RIGHT_GRIPPER_IDX] = 1.0 - action[:, dc.RIGHT_GRIPPER_IDX]
 
+        # Invert gripper action values to match the robot's open/close convention:
+        # incoming actions use "close=1", but robot expects "open=1"
         if self.action_mode == ActionMode.DELTA_TCP:
             return self._delta_tcp(action, observation)
         if self.action_mode == ActionMode.ABS_TCP:
