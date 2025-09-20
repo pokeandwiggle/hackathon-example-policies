@@ -307,7 +307,7 @@ class RobotEnv(gym.Env):
             }
 
         observation_spaces["observation.state"] = gym.spaces.Box(
-            low=0,
+            low=-10,
             high=10,
             shape=self.current_observation["observation.state"].shape,
             dtype=np.float32,
