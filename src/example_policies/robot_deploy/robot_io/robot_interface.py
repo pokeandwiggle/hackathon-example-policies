@@ -52,6 +52,7 @@ class RobotInterface:
         self,
         action: torch.Tensor,
         action_mode: ActionMode,
+        ctrl_mode: str = RobotClient.CART_QUEUE,
     ):
         """Sends a predicted action to the robot service."""
         numpy_action = action.squeeze(0).to("cpu").numpy()
@@ -59,7 +60,13 @@ class RobotInterface:
 
         if action_mode in (ActionMode.DELTA_TCP, ActionMode.ABS_TCP):
             target = _build_cart_target(numpy_action)
-            self.client.send_cart_queue_target(target)
+
+            if ctrl_mode == RobotClient.CART_DIRECT:
+                self.client.send_cart_direct_target(target)
+            elif ctrl_mode == RobotClient.CART_WAYPOINT:
+                self.client.send_cart_waypoint(target)
+            else:
+                self.client.send_cart_queue_target(target)
 
         elif action_mode in (ActionMode.DELTA_JOINT, ActionMode.ABS_JOINT):
             target = _build_joint_target(numpy_action)
