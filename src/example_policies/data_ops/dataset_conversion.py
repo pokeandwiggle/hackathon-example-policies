@@ -13,9 +13,12 @@
 # limitations under the License.
 
 import argparse
+import dataclasses
 import json
 import pathlib
 import time
+
+import draccus
 
 # Workaround for torch / lerobot bug
 import numpy as np
@@ -136,31 +139,50 @@ def save_episode(dataset, episode_idx, pause_dataset=None):
         pause_dataset.save_episode(episode_idx)
 
 
+@dataclasses.dataclass
+class ScriptArgs:
+    """Arguments specific to this conversion script that are required."""
+
+    episodes_dir: pathlib.Path = "./data"
+    output: pathlib.Path = "./output"
+
+
+@dataclasses.dataclass
+class ConvertConfig(ScriptArgs, pipeline_config.PipelineConfig):
+    """
+    Configuration for the conversion script.
+    Inherits required script args first, then the pipeline config.
+    """
+
+    pass  # This class now correctly combines the two sets of arguments.
+
+
 def main():
-    parser = argparse.ArgumentParser(
-        description="Convert ROS2 bags to LeRobot v2 dataset format with configurable features."
-    )
-    parser.add_argument(
-        "episodes_dir",
-        type=pathlib.Path,
-        help="Path to the directory with rosbag2 files.",
-    )
-    parser.add_argument(
-        "--output",
-        type=pathlib.Path,
-        required=True,
-        help="Path to save the dataset directory.",
-    )
+    """
+    Main function using draccus for configuration.
 
-    # Add Pipeline Config fields to argparse.
-    config, args = argparse_pipeline_config.parse_pipeline_config_from_args(parser)
+    This script uses draccus to parse command-line arguments based on the ConvertConfig dataclass.
+    Command-line arguments are automatically generated from the fields of ConvertConfig and its parent PipelineConfig.
+    Example usage:
+        python dataset_conversion.py --episodes-dir /path/to/episodes --output /path/to/output [other PipelineConfig options]
 
-    if not args.episodes_dir.is_dir():
-        raise FileNotFoundError(f"Input directory not found: {args.episodes_dir}")
+    Use --help to see all available options and their descriptions.
+    """
+    config = draccus.parse(config_class=ConvertConfig)
 
-    print(f"Converting with config: {config}")
+    # Validate input directory
+    if not config.episodes_dir.is_dir():
+        raise FileNotFoundError(f"Input directory not found: {config.episodes_dir}")
 
-    convert_episodes(args.episodes_dir, args.output, config)
+    print(f"Converting episodes from: {config.episodes_dir}")
+    print(f"Output directory: {config.output}")
+    print(f"Pipeline config summary:")
+    print(f"  - Action level: {config.action_level}")
+    print(f"  - Image resolution: {config.image_resolution}")
+    print(f"  - Target FPS: {config.target_fps}")
+    print(f"  - Task: {config.task_name}")
+
+    convert_episodes(config.episodes_dir, config.output, config)
 
 
 if __name__ == "__main__":
