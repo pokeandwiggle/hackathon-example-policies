@@ -60,12 +60,7 @@ def _format_tensor(tensor, precision: int = 3):
 
 def build_obs_indices(cfg, feature_filters: list[str]):
     """
-    indices = [
-        index
-        for index, name in enumerate(names)
-        if any(filter_term in name for filter_term in filter_list)
-    ]
-
+    Build a list of indices for observation features that match any of the given filter strings.
     Args:
         cfg: Configuration object containing metadata about observation features.
         feature_filters (list[str]): List of substrings to filter feature names.
