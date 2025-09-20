@@ -262,8 +262,8 @@ class RobotIO(Robot):
         # print action
 
         action[6:] = np.clip(action[6:], 0, 2)
-        print(action[6:])
-        print(f"Current gripper pos:\n{self.current_joint_pos}")    
+        print(f"action gripper: {action[6:]}")
+        print(f"Current gripper pos:\n{self.current_joint_pos}")
         self.current_joint_pos = np.array(
             [
                 self.current_joint_pos[0] + (action[6] - 1),
@@ -285,10 +285,9 @@ class RobotIO(Robot):
                     0,
                     0,
                     0,
-                    # action[3],
-                    # action[4],
-                    # action[5],
-                    0,0,0,
+                    action[3],
+                    action[4],
+                    action[5],
                     0,
                     0,
                     0,
