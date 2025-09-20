@@ -93,6 +93,10 @@ class RobotIO(Robot):
         self.state_feature_names = (
             robot_interface.observation_builder.state_feature_names
         )
+
+        # Store the bounds for end-effector position
+        self.end_effector_bounds = self.config.end_effector_bounds
+
         self.current_joint_pos = None
         # self.current_observation = None
 
@@ -299,13 +303,25 @@ class RobotIO(Robot):
         print(f"\n=== ABSOLUTE ROBOT COMMANDS ===")
         print_info(0, self.current_observation, action)
 
-        # clip to bounds
-        # if self.end_effector_bounds is not None:
-        #     desired_ee_pos[:3, 3] = np.clip(
-        #         desired_ee_pos[:3, 3],
-        #         self.end_effector_bounds["min"],
-        #         self.end_effector_bounds["max"],
-        #     )
+        # Absolute
+        action[0, 0:3] = torch.clamp(
+            action[0, 0:3],
+            torch.tensor(self.end_effector_bounds["l_min"], device=action.device),
+            torch.tensor(self.end_effector_bounds["l_max"], device=action.device),
+        )
+        action[0, 7:10] = torch.clamp(
+            action[0, 7:10],
+            torch.tensor(self.end_effector_bounds["r_min"], device=action.device),
+            torch.tensor(self.end_effector_bounds["r_max"], device=action.device),
+        )
+        print(f"\n=== ABSOLUTE ROBOT COMMANDS CLAMPED ===")
+        print_info(0, self.current_observation, action)
+
+        # l_pos_a = action[0, 0:3]
+        # l_quat_a = action[0, 3:7]
+        # r_pos_a = action[0, 7:10]
+        # r_quat_a = action[0, 10:14]
+        # grips = action[0, 14:16]
 
         self.robot_interface.send_action(action, self.model_to_action_trans.action_mode)
 
