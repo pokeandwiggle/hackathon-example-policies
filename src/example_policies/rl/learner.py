@@ -907,12 +907,12 @@ def save_training_checkpoint(
     # NOTE: Handle the case where the dataset repo id is not specified in the config
     # eg. RL training without demonstrations data
 
-    if replay_buffer is not None:
+    if replay_buffer is not None and len(replay_buffer) > 0:
         repo_id_buffer_save = cfg.env.task if dataset_repo_id is None else dataset_repo_id
         logging.info(f"Saving replay buffer to {dataset_dir} with repo id {repo_id_buffer_save}")
         replay_buffer.to_lerobot_dataset(repo_id=repo_id_buffer_save, fps=fps, root=dataset_dir)
 
-    if offline_replay_buffer is not None:
+    if offline_replay_buffer is not None and len(offline_replay_buffer) > 0:
         dataset_offline_dir = os.path.join(cfg.output_dir, "dataset_offline")
         logging.info(
             f"Saving offline replay buffer to {dataset_offline_dir} with repo id {cfg.dataset.repo_id}"
