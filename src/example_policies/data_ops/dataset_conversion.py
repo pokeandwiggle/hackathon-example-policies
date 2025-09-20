@@ -143,8 +143,8 @@ def save_episode(dataset, episode_idx, pause_dataset=None):
 class ScriptArgs:
     """Arguments specific to this conversion script that are required."""
 
-    episodes_dir: pathlib.Path = "./data"
-    output: pathlib.Path = "./output"
+    episodes_dir: pathlib.Path = pathlib.Path("./data")
+    output: pathlib.Path = pathlib.Path("./output")
 
 
 @dataclasses.dataclass
