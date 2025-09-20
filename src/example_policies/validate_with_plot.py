@@ -15,11 +15,11 @@
 import argparse
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import torch
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
-from example_policies.robot_deploy.policy_loader import load_policy
 
-import matplotlib.pyplot as plt 
+from example_policies.robot_deploy.policy_loader import load_policy
 
 
 def to_device_batch(batch: dict, device: torch.device, non_blocking: bool = True):
@@ -78,12 +78,11 @@ def main():
         dataset,
         num_workers=8,
         batch_size=1,
-        shuffle=False, #Not shuffling but choosing sequential batches from the batch 
+        shuffle=False,  # Not shuffling but choosing sequential batches from the batch
         pin_memory=device != "cpu",
-        drop_last=False,  
+        drop_last=False,
     )
 
-    
     ep = args.episode
     targets = []
     preds = []
@@ -104,28 +103,34 @@ def main():
             continue
         if b_ep > ep:
             break
-        found_any = True # We are in the correct episode which contains the true trajectory 
+        found_any = (
+            True  # We are in the correct episode which contains the true trajectory
+        )
 
-        batch = to_device_batch(batch, device, non_blocking=True) # Push all tensors of the batch to the GPU 
+        batch = to_device_batch(
+            batch, device, non_blocking=True
+        )  # Push all tensors of the batch to the GPU
 
-        tgt = batch["action"].detach().float().view(-1) 
+        tgt = batch["action"].detach().float().view(-1)
         if action_dim is None:
-            action_dim = tgt.numel() # Only load the action dimension once 
-        action = policy.select_action(batch) # This is the output of the action chunk. Could be more or less. 
+            action_dim = tgt.numel()  # Only load the action dimension once
+        action = policy.select_action(
+            batch
+        )  # This is the output of the action chunk. Could be more or less.
         pred = action.detach().float().view(-1)
 
         # collect
         targets.append(tgt.cpu())
         preds.append(pred.cpu())
 
-        # append the time 
+        # append the time
         t = float(batch["timestamp"].view(-1)[0].detach().cpu().item())
         times.append(t)
 
     # stack T x D
     targets = torch.stack(targets, dim=0)  # [T, D]
-    preds = torch.stack(preds, dim=0)      # [T, D]
-    times = torch.tensor(times)            # [T]
+    preds = torch.stack(preds, dim=0)  # [T, D]
+    times = torch.tensor(times)  # [T]
 
     T, D = targets.shape
     fig, axes = plt.subplots(D, 1, figsize=(8, 2.2 * D), sharex=True)
@@ -152,6 +157,7 @@ def main():
     fig.savefig(output_path, dpi=150)
     plt.close(fig)
     print(f"Saved continuous plot to {output_path}")
+
 
 if __name__ == "__main__":
     main()

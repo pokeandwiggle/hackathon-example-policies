@@ -11,9 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-import argparse
 import dataclasses
+import enum
 import json
 import pathlib
 import time
@@ -24,7 +23,7 @@ import draccus
 import numpy as np
 from mcap.reader import NonSeekingReader
 
-from example_policies.data_ops.config import argparse_pipeline_config, pipeline_config
+from example_policies.data_ops.config import pipeline_config
 from example_policies.data_ops.pipeline.dataset_writer import DatasetWriter
 from example_policies.data_ops.pipeline.frame_buffer import FrameBuffer
 
@@ -149,12 +148,20 @@ class ScriptArgs:
 
 @dataclasses.dataclass
 class ConvertConfig(ScriptArgs, pipeline_config.PipelineConfig):
-    """
-    Configuration for the conversion script.
-    Inherits required script args first, then the pipeline config.
+    """Configuration for the dataset conversion script.
+
+    Inherits from ScriptArgs and PipelineConfig to include all necessary parameters.
     """
 
-    pass  # This class now correctly combines the two sets of arguments.
+    def to_dict(self):
+        data = dataclasses.asdict(self)
+        # Convert all Path objects to strings
+        for key, value in data.items():
+            if isinstance(value, pathlib.Path):
+                data[key] = str(value)
+            if isinstance(value, enum.Enum):
+                data[key] = value.value
+        return data
 
 
 def main():
