@@ -104,7 +104,7 @@ def main():
             continue
         if b_ep > ep:
             break
-        found_any = True # We are in the correct batch which contains the true trajectory 
+        found_any = True # We are in the correct episode which contains the true trajectory 
 
         batch = to_device_batch(batch, device, non_blocking=True) # Push all tensors of the batch to the GPU 
 
