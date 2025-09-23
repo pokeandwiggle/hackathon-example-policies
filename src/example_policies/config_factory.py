@@ -246,3 +246,39 @@ def pi0_config(
     )
 
     return cfg
+
+
+def dit_flow(
+    dataset_root_dir: str,
+    batch_size: int = 64,
+    resume_path: str = None,
+    policy_kwargs: dict = None,
+):
+    # Diffusion Policy settings:
+    n_obs_steps: int = 2
+    horizon: int = 16
+    n_action_steps: int = 8
+
+    default_kwargs = {}
+
+    if policy_kwargs is not None:
+        default_kwargs.update(policy_kwargs)
+    policy_kwargs = default_kwargs
+
+    cfg = create_lerobot_config(
+        # Model selection: e.g., "act", "diffusion", "pi0", "smolvla"
+        model_name="ditflow",
+        # Path to the LeRobot dataset directory
+        dataset_root_dir=dataset_root_dir,
+        # Training hyperparameters
+        batch_size=batch_size,
+        lr=1e-4,
+        steps=30_000,
+        save_freq=5_000,
+        # Enable Weights & Biases for experiment tracking
+        enable_wandb=True,
+        resume_path=resume_path,
+        # Additional Policy Keywords
+        policy_kwargs=policy_kwargs,
+    )
+    return cfg

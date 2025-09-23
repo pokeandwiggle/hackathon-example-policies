@@ -12,4 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from . import so3_act, so3_diffusion
+from . import dit_flow, so3_act, so3_diffusion
