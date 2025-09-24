@@ -64,7 +64,7 @@ def main(
     # architecture, dataset, and key hyperparameters.
 
     # cfg, input_features = cf.create_predefined_model_config(...)
-    cfg = cf.dit_flow(
+    cfg = cf.beso_config(
         data_dir,
         batch_size,
         resume_path=resume_path,
