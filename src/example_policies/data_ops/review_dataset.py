@@ -2,7 +2,7 @@
 """
 Episode Video Reviewer for LeRobot Dataset using torchcodec/PyAV with OpenCV display
 
-Usage: python review_episodes.py [--start-episode N]
+Usage: python review_dataset.py [--start-episode N]
 
 Controls (when video windows are focused):
 - 'b' or 'B': Add current episode to blacklist and go to next
