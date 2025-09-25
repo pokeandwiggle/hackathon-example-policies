@@ -59,14 +59,18 @@ class FrameParser:
         state_frame["joint_data"] = joint_data
         state_frame["gripper_state"] = gripper_state
 
-        msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.ACTUAL_TCP_LEFT)
-        raw_pose = rmp.parse_pose(self.config, msg_data, schema_name)
-        state_frame["actual_tcp_left"] = positive_quat(raw_pose)
+        if self.config.include_tcp_poses or self.config.action_level in [
+            ActionLevel.TCP,
+            ActionLevel.TELEOP,
+            ActionLevel.DELTA_TCP,
+        ]:
+            msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.ACTUAL_TCP_LEFT)
+            raw_pose = rmp.parse_pose(self.config, msg_data, schema_name)
+            state_frame["actual_tcp_left"] = positive_quat(raw_pose)
 
-        msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.ACTUAL_TCP_RIGHT)
-        raw_pose = rmp.parse_pose(self.config, msg_data, schema_name)
-        state_frame["actual_tcp_right"] = positive_quat(raw_pose)
-
+            msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.ACTUAL_TCP_RIGHT)
+            raw_pose = rmp.parse_pose(self.config, msg_data, schema_name)
+            state_frame["actual_tcp_right"] = positive_quat(raw_pose)
         return state_frame
 
     def _parse_desired(self, frame_buffer) -> dict:

@@ -28,6 +28,7 @@ class FrameBuffer:
 
     def reset(self):
         """Reset all buffered states to None."""
+        self.buffer = {}
         for topic in self.listen_topics:
             self.buffer[topic] = None
 
@@ -39,8 +40,7 @@ class FrameBuffer:
         """Add a message to the buffer."""
 
         topic = RosTopicEnum(topic)
-        if topic in self.listen_topics:
-            self.buffer[topic] = (msg_data, RosSchemaEnum(schema_name))
+        self.buffer[topic] = (msg_data, RosSchemaEnum(schema_name))
 
     def get_msg(self, topic: RosTopicEnum) -> Any:
         return self.buffer[topic]
