@@ -14,7 +14,6 @@
 
 import argparse
 from copy import deepcopy
-from pprint import pprint
 
 # First Import Numpy. Workaround for torch / lerobot bug
 import numpy
@@ -23,31 +22,34 @@ from example_policies import config_factory as cf
 from example_policies.lerobot_patches import apply_patches
 
 
-def select_inputs(include_depth: bool = False):
-    selected_inputs = [
-        "observation.state",
-        "observation.images.rgb_left",
-        "observation.images.rgb_right",
-        "observation.images.rgb_static",
-    ]
-    if include_depth:
-        selected_inputs.append("observation.images.depth_left")
-        selected_inputs.append("observation.images.depth_right")
-    return selected_inputs
-
-
-def filter_depth(cfg, include_depth: bool = False):
-    # --- 2. Inspect Dataset and Select Model Inputs ---
+def configure_input_features(cfg, include_depth: bool, include_state: bool):
+    """Configure model input features based on selection flags."""
     print("Available dataset features:")
     for name, feature in cfg.policy.input_features.items():
         print(f"  - {name}: shape={feature.shape}")
 
-    selected_inputs = select_inputs(include_depth)
+    # Base RGB inputs
+    selected_inputs = [
+        "observation.images.rgb_left",
+        "observation.images.rgb_right",
+        "observation.images.rgb_static",
+    ]
 
+    if include_state:
+        selected_inputs.append("observation.state")
+
+    if include_depth:
+        selected_inputs.extend(
+            ["observation.images.depth_left", "observation.images.depth_right"]
+        )
+
+    # Filter input features
     input_features = deepcopy(cfg.policy.input_features)
-    cfg.policy.input_features = {
-        k: v for k, v in input_features.items() if k in selected_inputs
-    }
+    cfg.policy.input_features = (
+        {k: v for k, v in input_features.items() if k in selected_inputs}
+        if input_features
+        else selected_inputs
+    )
 
     return cfg
 
@@ -55,34 +57,27 @@ def filter_depth(cfg, include_depth: bool = False):
 def main(
     data_dir: str,
     include_depth: bool = False,
+    include_state: bool = True,
     batch_size: int = 32,
     resume_path: str = None,
     wandb_project: str = None,
 ):
-    # --- 1. Configure Training ---
-    # This section defines the core parameters for the training run, including the model
-    # architecture, dataset, and key hyperparameters.
-
-    # cfg, input_features = cf.create_predefined_model_config(...)
-    cfg = cf.beso_config(
+    """Main training function."""
+    # Configure training
+    cfg = cf.dit_flow(
         data_dir,
         batch_size,
         resume_path=resume_path,
     )
 
-    cfg.wandb.project = (
-        wandb_project if wandb_project is not None else "munich_hackathon"
-    )
-
-    # Reduce System Memory
-    # cfg.num_workers = 2
-
-    cfg = filter_depth(cfg, include_depth)
+    cfg.wandb.project = wandb_project or "munich_hackathon"
+    cfg = configure_input_features(cfg, include_depth, include_state)
 
     train(cfg)
 
 
 def train(cfg):
+    """Initialize logging and start training."""
     print("\nStarting training...")
     # import after monkey patching
     from lerobot.scripts.train import init_logging, train
@@ -92,28 +87,28 @@ def train(cfg):
 
 
 def _parse_args():
+    """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="Training script for LeRobot policies")
-    parser.add_argument(
-        "data_dir",
-        type=str,
-        help="Path to the data directory",
-    )
-    parser.add_argument(
-        "--include_depth", action="store_true", help="Include depth images in the input"
-    )
+
+    parser.add_argument("data_dir", type=str, help="Path to the data directory")
     parser.add_argument(
         "--batch_size", type=int, default=32, help="Batch size for training"
     )
-
+    parser.add_argument("--resume", type=str, help="Path to the checkpoint directory")
     parser.add_argument(
-        "--resume", type=str, default=None, help="Path to the checkpoint directory"
+        "--wandb_project", type=str, help="Weights & Biases project name"
     )
 
+    # Feature selection - optional with explicit true/false values
     parser.add_argument(
-        "--wandb_project",
-        type=str,
-        default=None,
-        help="Weights & Biases project name. If not set, defaults to 'munich_hackathon'.",
+        "--include_depth",
+        choices=["true", "false"],
+        help="Include depth images (true/false)",
+    )
+    parser.add_argument(
+        "--include_state",
+        choices=["true", "false"],
+        help="Include state information (true/false)",
     )
 
     return parser.parse_args()
@@ -124,7 +119,8 @@ if __name__ == "__main__":
     args = _parse_args()
     main(
         data_dir=args.data_dir,
-        include_depth=args.include_depth,
+        include_depth=args.include_depth == "true" if args.include_depth else False,
+        include_state=args.include_state == "true" if args.include_state else True,
         batch_size=args.batch_size,
         resume_path=args.resume,
         wandb_project=args.wandb_project,
