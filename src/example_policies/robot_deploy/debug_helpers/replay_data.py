@@ -45,6 +45,19 @@ class FakeConfig:
         )
         self.output_features["action"] = np.asarray(m["features"]["action"]["names"])
 
+    def get_tcp_from_state(self, state: np.ndarray) -> np.ndarray:
+        state_names = []
+        state_names.extend([f"tcp_left_pos_{i}" for i in "xyz"])
+        state_names.extend([f"tcp_left_quat_{i}" for i in "xyzw"])
+        state_names.extend([f"tcp_right_pos_{i}" for i in "xyz"])
+        state_names.extend([f"tcp_right_quat_{i}" for i in "xyzw"])
+
+        state_indices = [
+            np.where(self.input_features["observation.state"] == name)[0][0]
+            for name in state_names
+        ]
+        return state[:, state_indices]
+
 
 def inference_loop(
     data_dir: Path,
@@ -94,21 +107,25 @@ def inference_loop(
     iterator = iter(dataloader)
 
     batch = next(iterator)
-    state = batch["observation.state"]
-    action = np.concatenate([state[0, :14].cpu().numpy(), [0, 0]]).astype(np.float32)
-
-    # add batch axis
-    action = action[None, :]
 
     observation = None
     while not observation:
         observation = robot_interface.get_observation("cpu")
         time.sleep(0.1)
 
-    dbg_printer.print(step, observation, action, raw_action=False)
-
     input("Press Enter to move robot to start...")
-    robot_interface.send_action(torch.from_numpy(action), ActionMode.ABS_TCP)
+    robot_interface.move_home()
+
+    if model_to_action_trans.action_mode in (ActionMode.DELTA_TCP, ActionMode.ABS_TCP):
+        state = batch["observation.state"]
+        state = cfg.get_tcp_from_state(state[0].cpu().numpy())
+        # The robot expects the action to include gripper state as the last two elements.
+        DEFAULT_GRIPPER_STATE = [0, 0]  # [gripper_position, gripper_velocity]
+        action = np.concatenate([state, DEFAULT_GRIPPER_STATE]).astype(np.float32)
+        # add batch axis
+        action = action[None, :]
+        print("Moving robot to start position...")
+        robot_interface.send_action(torch.from_numpy(action), ActionMode.ABS_TCP)
 
     input("Press Enter to continue...")
 
@@ -126,16 +143,6 @@ def inference_loop(
 
             if ask_for_input:
                 input("Press Enter to send next action...")
-
-            model_to_action_trans.action_mode = ActionMode.DELTA_TCP
-
-            if model_to_action_trans.action_mode in (
-                ActionMode.ABS_TCP,
-                ActionMode.ABS_JOINT,
-            ):
-                raise NotImplementedError(
-                    "Only delta action mode is implemented for replay."
-                )
 
             action = model_to_action_trans.translate(action, observation)
             dbg_printer.print(step, observation, action, raw_action=False)
@@ -178,8 +185,8 @@ def main():
     parser.add_argument(
         "--replay-frequency",
         type=float,
-        default=5.0,
-        help="Frequency to replay the data (default: 5.0 Hz)",
+        default=10.0,
+        help="Frequency to replay the data (default: 10.0 Hz)",
     )
     parser.add_argument(
         "--continuous-replay",

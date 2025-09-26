@@ -106,3 +106,17 @@ class RobotClient:
         # Currently not safe
         response = self.stub.SetJointTarget(set_target_request)
         return response
+
+    def send_move_home(self):
+        """
+        Sends a request to move the robot to its home position and resets the control mode.
+
+        Returns:
+            The response from the MoveHome gRPC call.
+        """
+        # Reset control_mode because moving home is a special operation that does not use the previous control mode.
+        self.control_mode = None
+
+        move_home_request = robot_service_pb2.MoveHomeRequest()
+        response = self.stub.MoveHome(move_home_request)
+        return response
