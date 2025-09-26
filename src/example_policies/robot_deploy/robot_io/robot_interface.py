@@ -76,6 +76,10 @@ class RobotInterface:
         else:
             raise RuntimeError(f"Unknown action mode: {action_mode}")
 
+    def move_home(self):
+        """Sends a command to move the robot to its home position."""
+        self.client.send_move_home()
+
 
 def _build_des_pose_msg(action_slice: np.ndarray) -> robot_service_pb2.Pose:
     """Creates a RobotDesired message from an action slice."""
