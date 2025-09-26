@@ -29,14 +29,19 @@ from .robot_service import robot_service_pb2, robot_service_pb2_grpc
 class RobotInterface:
     """Handles communication and data conversion with the robot gRPC service."""
 
-    def __init__(self, service_stub: robot_service_pb2_grpc.RobotServiceStub, cfg):
+    def __init__(self, service_stub: robot_service_pb2_grpc.RobotServiceStub, cfg=None):
         self.client = RobotClient(service_stub)
-        self.observation_builder = ObservationBuilder(cfg)
+        if cfg is not None:
+            self.observation_builder = ObservationBuilder(cfg)
         self.robot_names = None
         self.last_command = None
 
     def get_observation(self, device, show=False):
         """Gets the current observation from the robot."""
+        assert (
+            self.observation_builder is not None
+        ), "ObservationBuilder not set. Please give RobotInterface a valid config"
+
         snapshot_response, self.robot_names = self.client.get_snapshot()
 
         if show:
