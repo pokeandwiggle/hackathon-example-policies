@@ -119,7 +119,9 @@ def inference_loop(
     if model_to_action_trans.action_mode in (ActionMode.DELTA_TCP, ActionMode.ABS_TCP):
         state = batch["observation.state"]
         state = cfg.get_tcp_from_state(state[0].cpu().numpy())
-        action = np.concatenate([state, [0, 0]]).astype(np.float32)
+        # The robot expects the action to include gripper state as the last two elements.
+        DEFAULT_GRIPPER_STATE = [0, 0]  # [gripper_position, gripper_velocity]
+        action = np.concatenate([state, DEFAULT_GRIPPER_STATE]).astype(np.float32)
         # add batch axis
         action = action[None, :]
         print("Moving robot to start position...")
