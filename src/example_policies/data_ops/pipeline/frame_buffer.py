@@ -70,7 +70,11 @@ def _build_required_attributes(config: PipelineConfig) -> List[RosTopicEnum]:
             [RosTopicEnum.DES_TELEOP_LEFT, RosTopicEnum.DES_TELEOP_RIGHT]
         )
 
-    if config.include_tcp_poses:
+    if config.include_tcp_poses or config.action_level in [
+        ActionLevel.TCP,
+        ActionLevel.DELTA_TCP,
+        ActionLevel.TELEOP,
+    ]:
         listen_topics.extend(
             [RosTopicEnum.ACTUAL_TCP_LEFT, RosTopicEnum.ACTUAL_TCP_RIGHT]
         )
