@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.scripts.visualize_dataset import visualize_dataset
 
@@ -20,23 +22,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Visualize a LeRobot dataset.")
     parser.add_argument(
-        "--local",
-        action="store_true",
-        help="If set, load the dataset from a local directory instead of the hub.",
-    )
-
-    parser.add_argument(
-        "--root",
+        "root_dir",
         type=str,
-        help="Path to the root directory of the dataset.",
-        required=False,
-    )
-
-    parser.add_argument(
-        "--repo-id",
-        type=str,
-        help="Hugging Face repo ID to load the dataset from. Example: 'username/dataset_name'",
-        required=False,
+        help="Path to the root directory of the dataset on disk, or a Hugging Face repo ID.",
     )
 
     # Episode Index. Defaults to 0 if not provided.
@@ -49,20 +37,15 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    if not args.local and not args.repo_id:
-        raise ValueError(
-            "Either --local or --repo-id (for online repositories) must be provided."
-        )
-
-    if args.local and not args.root:
-        raise ValueError("--root must be provided when --local is set.")
-
-    if args.local:
-        dataset = LeRobotDataset(
-            args.repo_id if args.repo_id else args.root, root=args.root
-        )
+    if os.path.isdir(args.root_dir):
+        # It's a local directory
+        dataset = LeRobotDataset(args.root_dir, root=args.root_dir)
     else:
-        dataset = LeRobotDataset(args.repo_id)
+        # It's not a local directory, assume it's a repo_id
+        print(
+            f"Warning: '{args.root_dir}' not found locally. Attempting to load from Hugging Face Hub."
+        )
+        dataset = LeRobotDataset(args.root_dir)
 
     print(f"Visualizing episode {args.episode_index}...")
     visualize_dataset(dataset, episode_index=args.episode_index)
