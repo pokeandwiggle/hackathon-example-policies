@@ -272,9 +272,9 @@ def dit_flow(
         dataset_root_dir=dataset_root_dir,
         # Training hyperparameters
         batch_size=batch_size,
-        lr=1e-4,
-        steps=30_000,
-        save_freq=5_000,
+        lr=2e-4,
+        steps=100_000,
+        save_freq=10_000,
         # Enable Weights & Biases for experiment tracking
         enable_wandb=True,
         resume_path=resume_path,

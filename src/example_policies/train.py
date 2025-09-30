@@ -55,7 +55,7 @@ def filter_depth(cfg, include_depth: bool = False):
 def main(
     data_dir: str,
     include_depth: bool = False,
-    batch_size: int = 32,
+    batch_size: int = 64,
     resume_path: str = None,
     wandb_project: str = None,
 ):
@@ -64,7 +64,7 @@ def main(
     # architecture, dataset, and key hyperparameters.
 
     # cfg, input_features = cf.create_predefined_model_config(...)
-    cfg = cf.beso_config(
+    cfg = cf.dit_flow(
         data_dir,
         batch_size,
         resume_path=resume_path,
@@ -102,7 +102,7 @@ def _parse_args():
         "--include_depth", action="store_true", help="Include depth images in the input"
     )
     parser.add_argument(
-        "--batch_size", type=int, default=32, help="Batch size for training"
+        "--batch_size", type=int, default=64, help="Batch size for training"
     )
 
     parser.add_argument(
