@@ -45,7 +45,7 @@ def quaternion_to_delta_axis_angle(q_actual, q_desired):
     # Create rotations and compute delta
     r_actual = R.from_quat(q_actual)
     r_desired = R.from_quat(q_desired)
-    r_delta = r_desired * r_actual.inv()
+    r_delta = r_actual.inv() * r_desired
 
     return r_delta.as_rotvec()
 
