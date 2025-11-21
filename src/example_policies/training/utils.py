@@ -20,6 +20,8 @@ from lerobot.configs.default import DatasetConfig
 from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata
 from lerobot.datasets.utils import dataset_to_policy_features
 
+from example_policies.utils.constants import BLACKLIST_FILE, EPISODES_FILE, META_DIR
+
 
 def create_dataset_config(data_dir: pathlib.Path):
     # get last folder name of dataset_root_dir_path. Nice Side Effect: Automatic Tag in WandB
@@ -38,8 +40,8 @@ def create_dataset_config(data_dir: pathlib.Path):
 
 
 def make_episode_white_list(dataset_root_dir: str | pathlib.Path):
-    blacklist_path = os.path.join(dataset_root_dir, "meta", "blacklist.json")
-    episodes_path = os.path.join(dataset_root_dir, "meta", "episodes.jsonl")
+    blacklist_path = os.path.join(dataset_root_dir, META_DIR, BLACKLIST_FILE)
+    episodes_path = os.path.join(dataset_root_dir, META_DIR, EPISODES_FILE)
 
     if not os.path.exists(blacklist_path):
         return None
@@ -60,3 +62,29 @@ def make_episode_white_list(dataset_root_dir: str | pathlib.Path):
         episode for episode in all_episodes if episode not in blacklisted_indices
     ]
     return whitelist
+
+
+def shorten_name(
+    full_name: str, max_word_length: int = 4, sep: str = "_", joint: str = ""
+) -> str:
+    """Shorten a full name by truncating each word to a maximum length.
+
+    Args:
+        full_name: The original full name string.
+        max_word_length: Maximum length for each word.
+        sep: Separator used to split and join words.
+        joint: String used to join the shortened words.
+
+    Returns:
+        Shortened name string.
+    """
+    # Remove special characters
+    full_name = full_name.translate(str.maketrans("", "", "[](),.- \\"))
+    words = full_name.split(sep)
+
+    shortened_words = [
+        word if len(word) <= max_word_length else word[:max_word_length]
+        for word in words
+    ]
+    shortened_name = joint.join(shortened_words)
+    return shortened_name
