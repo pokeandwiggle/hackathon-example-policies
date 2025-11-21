@@ -18,6 +18,9 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Dict
 
+from example_policies.utils.action_order import ActionMode
+from example_policies.utils.state_builder import GripperType, StateFeatureSpec
+
 
 class ActionLevel(Enum):
     JOINT = "joint"
@@ -25,12 +28,6 @@ class ActionLevel(Enum):
     TELEOP = "teleop"
     DELTA_TCP = "delta_tcp"
     DELTA_JOINT = "delta_joint"
-
-
-class GripperType(Enum):
-    PANDA = "panda"
-    ROBOTIQ = "robotiq"
-
 
 @dataclass
 class PipelineConfig:
@@ -69,6 +66,7 @@ class PipelineConfig:
         action_level: Enum selecting action representation (see above).
         left_gripper: GripperType for left arm (affects observation.state length).
         right_gripper: GripperType for right arm.
+        termination_horizon_seconds: Time window before episode end to start termination signal.
         task_name: Human-readable task descriptor for metadata.
         max_pause_seconds: Threshold to classify inactivity (combined with pause_velocity).
         pause_velocity: Norm velocity below which motion considered paused.
@@ -88,7 +86,7 @@ class PipelineConfig:
     include_joint_velocities: bool = False
     include_joint_efforts: bool = False
     include_tcp_poses: bool = True
-    include_last_command: bool = True
+    include_last_command: bool = False
 
     include_rgb_images: bool = True
     include_depth_images: bool = False
@@ -97,14 +95,17 @@ class PipelineConfig:
 
     depth_scale_factor: float = 1000.0
 
-    action_level: ActionLevel = ActionLevel.DELTA_TCP
+    action_level: ActionMode = ActionMode.DELTA_TCP
 
     # Gripper type
     left_gripper: GripperType = GripperType.PANDA
     right_gripper: GripperType = GripperType.PANDA
 
+    # Termination Signal Processing
+    termination_horizon_seconds: float = 0.5
+
     # Task name
-    task_name: str = "Push the box"
+    task_name: str = ""
 
     # Pauses
     max_pause_seconds: float = 0.2
@@ -122,7 +123,7 @@ class PipelineConfig:
     target_fps: int = 10
     subsample_offset: int = 0
 
-    min_episode_seconds: int = 15
+    min_episode_seconds: int = 8
 
     def __post_init__(self):
         self.include_joint_states = (
@@ -145,6 +146,29 @@ class PipelineConfig:
 
         self.max_pause_frames = self.max_pause_seconds * self.target_fps
         self.grace_period_frames = self.grace_period_seconds * self.target_fps
+        self.termination_horizon_frames = (
+            self.termination_horizon_seconds * self.target_fps
+        )
+
+    def is_tcp_action(self) -> bool:
+        """Check if action mode is TCP-based (absolute or delta)."""
+        return self.action_level in [
+            ActionMode.TCP,
+            ActionMode.DELTA_TCP,
+            ActionMode.TELEOP,
+        ]
+
+    def is_joint_action(self) -> bool:
+        """Check if action mode is joint-based (absolute or delta)."""
+        return self.action_level in [ActionMode.JOINT, ActionMode.DELTA_JOINT]
+
+    def requires_tcp_poses(self) -> bool:
+        """Check if TCP poses are required (either for observation or action)."""
+        return self.include_tcp_poses or self.is_tcp_action()
+
+    def requires_termination_signal(self) -> bool:
+        """Check if termination signal is needed based on horizon setting."""
+        return self.termination_horizon_frames > 0
 
     def to_dict(self):
         def convert_enums(obj):
@@ -164,48 +188,17 @@ def build_features(config: PipelineConfig) -> Dict[str, Any]:
     """Build features dictionary based on configuration."""
     features = {}
 
-    # Build observation state features
-    state_names = []
-
-    if config.include_joint_positions:
-        # left + right joint positions
-        state_names.extend([f"joint_pos_left_{i}" for i in range(7)])
-        state_names.extend([f"joint_pos_right_{i}" for i in range(7)])
-
-    if config.include_joint_velocities:
-        # left + right joint velocities
-        state_names.extend([f"joint_vel_left_{i}" for i in range(7)])
-        state_names.extend([f"joint_vel_right_{i}" for i in range(7)])
-
-    if config.include_joint_efforts:
-        state_names.extend([f"joint_eff_left_{i}" for i in range(7)])
-        state_names.extend([f"joint_eff_right_{i}" for i in range(7)])
-
-    if config.include_tcp_poses:
-        # left + right TCP poses
-        state_names.extend([f"tcp_left_pos_{i}" for i in "xyz"])
-        state_names.extend([f"tcp_left_quat_{i}" for i in "xyzw"])
-        state_names.extend([f"tcp_right_pos_{i}" for i in "xyz"])
-        state_names.extend([f"tcp_right_quat_{i}" for i in "xyzw"])
-
-    if config.left_gripper == GripperType.PANDA:
-        state_names.extend([f"gripper_left_{i}" for i in range(2)])
-    elif config.left_gripper == GripperType.ROBOTIQ:
-        state_names.extend([f"robotiq_left_{i}" for i in range(6)])
-    else:
-        raise NotImplementedError(f"Unsupported gripper type {config.left_gripper}")
-
-    if config.right_gripper == GripperType.PANDA:
-        state_names.extend([f"gripper_right_{i}" for i in range(2)])
-    elif config.right_gripper == GripperType.ROBOTIQ:
-        state_names.extend([f"robotiq_right_{i}" for i in range(6)])
-    else:
-        raise NotImplementedError(f"Unsupported gripper type {config.right_gripper}")
-
-    if config.include_last_command:
-        # left + right last command
-        state_names.extend([f"last_command_left_{i}" for i in range(7)])
-        state_names.extend([f"last_command_right_{i}" for i in range(7)])
+    # Build observation state features using shared state builder
+    state_spec = StateFeatureSpec(
+        include_joint_positions=config.include_joint_positions,
+        include_joint_velocities=config.include_joint_velocities,
+        include_joint_efforts=config.include_joint_efforts,
+        include_tcp_poses=config.include_tcp_poses,
+        left_gripper=config.left_gripper,
+        right_gripper=config.right_gripper,
+        include_last_command=config.include_last_command,
+    )
+    state_names = state_spec.get_feature_names()
 
     features["observation.state"] = {
         "dtype": "float32",
@@ -214,19 +207,19 @@ def build_features(config: PipelineConfig) -> Dict[str, Any]:
     }
 
     # Build action features (always TCP poses for now)
-    if config.action_level in [ActionLevel.TCP, ActionLevel.TELEOP]:
+    if config.action_level in [ActionMode.TCP, ActionMode.TELEOP]:
         names = [f"tcp_left_{i}" for i in "xyz"]
         names += [f"tcp_left_quat_{i}" for i in "xyzw"]
         names += [f"tcp_right_{i}" for i in "xyz"]
         names += [f"tcp_right_quat_{i}" for i in "xyzw"]
-    elif config.action_level == ActionLevel.DELTA_TCP:
+    elif config.action_level == ActionMode.DELTA_TCP:
         names = [f"delta_tcp_left_{i}" for i in "xyz"]
         names += [f"delta_tcp_left_rot_{i}" for i in "xyz"]
         names += [f"delta_tcp_right_{i}" for i in "xyz"]
         names += [f"delta_tcp_right_rot_{i}" for i in "xyz"]
-    elif config.action_level in [ActionLevel.JOINT, ActionLevel.DELTA_JOINT]:
+    elif config.action_level in [ActionMode.JOINT, ActionMode.DELTA_JOINT]:
         prefix = ""
-        if config.action_level == ActionLevel.DELTA_JOINT:
+        if config.action_level == ActionMode.DELTA_JOINT:
             prefix = "delta_"
         names = [f"{prefix}joint_left_{i}" for i in range(7)]
         names += [f"{prefix}joint_right_{i}" for i in range(7)]
@@ -234,6 +227,10 @@ def build_features(config: PipelineConfig) -> Dict[str, Any]:
         raise NotImplementedError(f"Unsupported action level {config.action_level}")
     names += ["gripper_left"]
     names += ["gripper_right"]
+
+    if config.requires_termination_signal():
+        names += ["termination_signal"]
+
     features["action"] = {"dtype": "float32", "shape": (len(names),), "names": names}
 
     # Build image features
@@ -279,6 +276,6 @@ def create_config_from_args(args) -> PipelineConfig:
         include_tcp_poses=args.include_tcp_poses,
         include_rgb_images=args.include_rgb_images,
         include_depth_images=args.include_depth_images,
-        action_level=ActionLevel(args.action_level),
+        action_level=ActionMode(args.action_level),
         task_name=args.task_name,
     )
