@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # Copyright 2025 Poke & Wiggle GmbH. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,151 +13,119 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+"""Advanced dataset conversion with full pipeline configuration control.
+
+This script provides complete control over all pipeline configuration parameters
+for converting MCAP episodes to LeRobot dataset format.
+
+For simplified conversion with predefined configurations, use simple_conversion.py.
+"""
+
 import dataclasses
 import enum
-import json
 import pathlib
-import time
 
 import draccus
-
-# Workaround for torch / lerobot bug
-import numpy as np
 from mcap.reader import NonSeekingReader
 
 from example_policies.data_ops.config import pipeline_config
-from example_policies.data_ops.pipeline.dataset_writer import DatasetWriter
-from example_policies.data_ops.pipeline.frame_buffer import FrameBuffer
+from example_policies.data_ops.pipeline.episode_converter import EpisodeConverter
+from example_policies.data_ops.pipeline.post_lerobot_ops import PostLerobotPipeline
+from example_policies.data_ops.utils.conversion_utils import (
+    get_selected_episodes,
+    save_metadata,
+    validate_input_dir,
+)
 
 
 def convert_episodes(
-    episode_dir: pathlib.Path,
+    episode_paths: list[pathlib.Path],
     output_dir: pathlib.Path,
     config: pipeline_config.PipelineConfig,
-):
-    """Convert the episodes to the LeRobot dataset format."""
+) -> dict:
+    """Convert episodes to the LeRobot dataset format.
+
+    Args:
+        episode_paths: List of paths to .mcap episode files
+        output_dir: Output directory for converted dataset
+        config: Pipeline configuration
+
+    Returns:
+        Dict with keys: episode_mapping, blacklist, episodes_saved, total_time
+    """
     features = pipeline_config.build_features(config)
-    frame_buffer = FrameBuffer(config)
-
-    dataset_manager = DatasetWriter(output_dir, features, config)
-
-    episode_paths = list(episode_dir.rglob("*.mcap"))
-    # Sort by creation date (oldest first)
-    episode_paths.sort(key=lambda p: p.stat().st_ctime)
-
-    now = time.time()
-
-    actual_episode_counter = 0
-    episode_counter_path_dict = {}
-
-    global_start = time.time()
-    frame_start = global_start
-    global_frames = 0
-
-    blacklist = []
+    converter = EpisodeConverter(output_dir, config, features)
+    post_pipeline = PostLerobotPipeline(config)
 
     for ep_idx, episode_path in enumerate(episode_paths):
         print(f"Processing {episode_path}...")
 
         try:
-            # Use MCAP reader for .mcap files
+            converter.reset_episode_state()
+
             with open(episode_path, "rb") as f:
                 reader = NonSeekingReader(f, record_size_limit=None)
-                seen_frames = config.subsample_offset
-                saved_frames = 0
 
-                # Iterate through messages with automatic deserialization
                 for schema, channel, message in reader.iter_messages(
-                    topics=frame_buffer.get_topic_names()
+                    topics=converter.frame_buffer.get_topic_names()
                 ):
-                    topic = channel.topic
-                    msg_data = message.data
-                    schema_name = schema.name
+                    converter.process_message(channel.topic, schema.name, message.data)
 
-                    frame_buffer.add_msg(topic, schema_name, msg_data)
+            converter.finalize_episode(ep_idx, episode_path)
 
-                    if not frame_buffer.is_complete():
-                        continue
-
-                    if seen_frames % config.capture_frequency != 0:
-                        frame_buffer.reset()
-                        seen_frames += 1
-                        continue
-
-                    seen_frames += 1
-                    global_frames += 1
-
-                    perform_save = dataset_manager.add_frame(frame_buffer)
-                    frame_buffer.reset()
-
-                    if not perform_save:
-                        continue
-                    saved_frames += 1
-
-                    # Print status every second
-                    if saved_frames % config.capture_frequency == 0:
-                        frame_end = time.time()
-                        print(
-                            f"  - Seen / Saved: {seen_frames} / {saved_frames} in {frame_end - frame_start:.2f}s |  Total Time: {frame_end - global_start:.2f}s | FPS: {global_frames / (frame_end - global_start):.2f} ",
-                            end="\r",
-                        )
-                        frame_start = frame_end
-                print()
-                if saved_frames > 0:
-                    print(f"Saving {episode_path} processed with {seen_frames} frames.")
-                    perform_save = dataset_manager.save_episode(ep_idx)
-                    if perform_save:
-                        episode_counter_path_dict[actual_episode_counter] = str(
-                            episode_path
-                        )
-
-                        if saved_frames < config.min_episode_frames:
-                            print(
-                                f"Episode too short ({saved_frames} frames), Adding to Blacklist."
-                            )
-                            blacklist.append(actual_episode_counter)
-                        actual_episode_counter += 1
         except Exception as e:
             print(
                 f"Skipping faulty file: {episode_path} due to {type(e).__name__}: {e}"
             )
             continue
 
-    with open(output_dir / "meta" / "episode_mapping.json", "w", encoding="utf-8") as f:
-        json.dump(episode_counter_path_dict, f, indent=2)
+    save_metadata(
+        output_dir,
+        converter.episode_mapping,
+        converter.blacklist,
+        config,
+    )
 
-    with open(output_dir / "meta" / "pipeline_config.json", "w", encoding="utf-8") as f:
-        json.dump(config.to_dict(), f, indent=2)
+    post_pipeline.process_lerobot(output_dir)
 
-    with open(output_dir / "meta" / "blacklist.json", "w", encoding="utf-8") as f:
-        json.dump(blacklist, f, indent=2)
+    return {
+        "episode_mapping": converter.episode_mapping,
+        "blacklist": converter.blacklist,
+        "episodes_saved": len(converter.episode_mapping),
+        "total_time": converter.get_total_time(),
+    }
 
 
-def save_episode(dataset, episode_idx, pause_dataset=None):
-    """Save the current episode to the dataset."""
-    dataset.save_episode(episode_idx)
-    if pause_dataset:
-        pause_dataset.save_episode(episode_idx)
+def print_conversion_result(result: dict) -> None:
+    """Print conversion statistics.
+
+    Args:
+        result: Dict with episode_mapping, blacklist, episodes_saved, total_time
+    """
+    print("\nConversion complete!")
+    print(f"  - Episodes saved: {result['episodes_saved']}")
+    print(f"  - Blacklisted episodes: {len(result['blacklist'])}")
+    print(f"  - Total time: {result['total_time']:.2f}s")
 
 
 @dataclasses.dataclass
 class ScriptArgs:
-    """Arguments specific to this conversion script that are required."""
+    """Arguments for advanced conversion script."""
 
     episodes_dir: pathlib.Path = pathlib.Path("./data")
     output: pathlib.Path = pathlib.Path("./output")
 
 
 @dataclasses.dataclass
-class ConvertConfig(ScriptArgs, pipeline_config.PipelineConfig):
-    """Configuration for the dataset conversion script.
+class AdvancedConfig(ScriptArgs, pipeline_config.PipelineConfig):
+    """Configuration for advanced conversion.
 
-    Inherits from ScriptArgs and PipelineConfig to include all necessary parameters.
+    Inherits from ScriptArgs and PipelineConfig to include all parameters.
     """
 
     def to_dict(self):
         data = dataclasses.asdict(self)
-        # Convert all Path objects to strings
         for key, value in data.items():
             if isinstance(value, pathlib.Path):
                 data[key] = str(value)
@@ -166,30 +136,29 @@ class ConvertConfig(ScriptArgs, pipeline_config.PipelineConfig):
 
 def main():
     """
-    Main function using draccus for configuration.
+    Advanced conversion mode with full pipeline configuration control.
 
-    This script uses draccus to parse command-line arguments based on the ConvertConfig dataclass.
-    Command-line arguments are automatically generated from the fields of ConvertConfig and its parent PipelineConfig.
     Example usage:
-        python dataset_conversion.py --episodes-dir /path/to/episodes --output /path/to/output [other PipelineConfig options]
+        python dataset_conversion.py --episodes-dir /path/to/episodes --output /path/to/output \\
+            --action-level DELTA_TCP --target-fps 15 --include-joint-efforts
 
     Use --help to see all available options and their descriptions.
     """
-    config = draccus.parse(config_class=ConvertConfig)
+    config = draccus.parse(config_class=AdvancedConfig)
 
-    # Validate input directory
-    if not config.episodes_dir.is_dir():
-        raise FileNotFoundError(f"Input directory not found: {config.episodes_dir}")
+    validate_input_dir(config.episodes_dir)
 
     print(f"Converting episodes from: {config.episodes_dir}")
     print(f"Output directory: {config.output}")
-    print(f"Pipeline config summary:")
+    print("Pipeline config summary:")
     print(f"  - Action level: {config.action_level}")
     print(f"  - Image resolution: {config.image_resolution}")
     print(f"  - Target FPS: {config.target_fps}")
     print(f"  - Task: {config.task_name}")
 
-    convert_episodes(config.episodes_dir, config.output, config)
+    episode_paths = get_selected_episodes(config.episodes_dir, success_only=True)
+    result = convert_episodes(episode_paths, config.output, config)
+    print_conversion_result(result)
 
 
 if __name__ == "__main__":

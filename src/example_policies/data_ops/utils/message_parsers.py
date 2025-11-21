@@ -15,8 +15,32 @@
 from typing import List, Optional
 
 import numpy as np
-from rosbags.serde import deserialize_cdr
-from rosbags.typesys import Stores, get_types_from_msg, register_types
+from rosbags.typesys import Stores, get_types_from_msg, get_typestore
+
+# Create a typestore for ROS 2 Humble
+_typestore = get_typestore(Stores.ROS2_HUMBLE)
+
+
+def register_types(typemap):
+    """
+    Compatibility wrapper for older rosbags API.
+
+    In old versions this lived in rosbags.typesys and used a global
+    typestore. We mimic that by registering everything on our
+    ROS2_HUMBLE typestore.
+    """
+    _typestore.register(typemap)
+
+
+def deserialize_cdr(rawdata, typename, typestore=None):
+    """
+    Compatibility wrapper for older rosbags.serde.deserialize_cdr.
+
+    Newer rosbags exposes deserialization as a method on the typestore.
+    """
+    ts = typestore or _typestore
+    return ts.deserialize_cdr(rawdata, typename)
+
 
 from ..config.pipeline_config import GripperType, PipelineConfig
 from ..config.rosbag_topics import RosSchemaEnum
