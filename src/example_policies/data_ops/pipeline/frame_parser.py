@@ -14,7 +14,8 @@
 
 import numpy as np
 
-from ..config.pipeline_config import ActionLevel, PipelineConfig
+from ..config.pipeline_config import PipelineConfig
+from ...utils.action_order import ActionMode
 from ..config.rosbag_topics import RosTopicEnum
 from ..utils import message_parsers as rmp
 from ..utils.geometric import positive_quat
@@ -60,9 +61,9 @@ class FrameParser:
         state_frame["gripper_state"] = gripper_state
 
         if self.config.include_tcp_poses or self.config.action_level in [
-            ActionLevel.TCP,
-            ActionLevel.TELEOP,
-            ActionLevel.DELTA_TCP,
+            ActionMode.TCP,
+            ActionMode.TELEOP,
+            ActionMode.DELTA_TCP,
         ]:
             msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.ACTUAL_TCP_LEFT)
             raw_pose = rmp.parse_pose(self.config, msg_data, schema_name)
@@ -86,9 +87,9 @@ class FrameParser:
         )
 
         if self.config.action_level in [
-            ActionLevel.TCP,
-            ActionLevel.TELEOP,
-            ActionLevel.DELTA_TCP,
+            ActionMode.TCP,
+            ActionMode.TELEOP,
+            ActionMode.DELTA_TCP,
         ]:
             msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DES_TCP_LEFT)
             raw_pose = rmp.parse_desired_tcp(self.config, msg_data, schema_name)
@@ -98,7 +99,7 @@ class FrameParser:
             raw_pose = rmp.parse_desired_tcp(self.config, msg_data, schema_name)
             desired_frame["des_tcp_right"] = positive_quat(raw_pose)
 
-        elif self.config.action_level in [ActionLevel.JOINT, ActionLevel.DELTA_JOINT]:
+        elif self.config.action_level in [ActionMode.JOINT, ActionMode.DELTA_JOINT]:
             msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DES_JOINT_LEFT)
             desired_frame["des_joint_left"] = rmp.parse_joint_waypoint(
                 self.config, msg_data, schema_name, "left"

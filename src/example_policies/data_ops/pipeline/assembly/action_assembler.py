@@ -16,23 +16,24 @@ import dataclasses
 
 import numpy as np
 
-from ...config.pipeline_config import ActionLevel, PipelineConfig
+from ...config.pipeline_config import PipelineConfig
+from ....utils.action_order import ActionMode
 from ...utils import delta_ops
 
 # Absolute (non-delta) action sources
 ABS_SPECS = {
-    ActionLevel.TCP: ("des_tcp_left", "des_tcp_right"),
-    ActionLevel.TELEOP: ("des_tcp_left", "des_tcp_right"),
-    ActionLevel.JOINT: ("des_joint_left", "des_joint_right"),
+    ActionMode.TCP: ("des_tcp_left", "des_tcp_right"),
+    ActionMode.TELEOP: ("des_tcp_left", "des_tcp_right"),
+    ActionMode.JOINT: ("des_joint_left", "des_joint_right"),
 }
 # Delta specs: (left_key, right_key, delta_fn)
 DELTA_SPECS = {
-    ActionLevel.DELTA_TCP: (
+    ActionMode.DELTA_TCP: (
         "des_tcp_left",
         "des_tcp_right",
         delta_ops.pos_quat_delta,
     ),
-    ActionLevel.DELTA_JOINT: (
+    ActionMode.DELTA_JOINT: (
         "des_joint_left",
         "des_joint_right",
         delta_ops.joint_delta,

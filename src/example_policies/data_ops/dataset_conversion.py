@@ -87,7 +87,11 @@ def convert_episodes(
         config,
     )
 
-    post_pipeline.process_lerobot(output_dir)
+    # Only run post-processing if episodes were successfully converted
+    if len(converter.episode_mapping) > 0:
+        post_pipeline.process_lerobot(output_dir)
+    else:
+        print("\nNo episodes were successfully converted.")
 
     return {
         "episode_mapping": converter.episode_mapping,

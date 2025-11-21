@@ -14,7 +14,8 @@
 
 from typing import Any, List
 
-from ..config.pipeline_config import ActionLevel, PipelineConfig
+from ..config.pipeline_config import PipelineConfig
+from ...utils.action_order import ActionMode
 from ..config.rosbag_topics import RosSchemaEnum, RosTopicEnum
 
 
@@ -59,21 +60,21 @@ def _build_required_attributes(config: PipelineConfig) -> List[RosTopicEnum]:
         [RosTopicEnum.DES_GRIPPER_LEFT, RosTopicEnum.DES_GRIPPER_RIGHT]
     )
 
-    if config.action_level in [ActionLevel.TCP, ActionLevel.DELTA_TCP]:
+    if config.action_level in [ActionMode.TCP, ActionMode.DELTA_TCP]:
         listen_topics.extend([RosTopicEnum.DES_TCP_LEFT, RosTopicEnum.DES_TCP_RIGHT])
-    elif config.action_level in [ActionLevel.JOINT, ActionLevel.DELTA_JOINT]:
+    elif config.action_level in [ActionMode.JOINT, ActionMode.DELTA_JOINT]:
         listen_topics.extend(
             [RosTopicEnum.DES_JOINT_LEFT, RosTopicEnum.DES_JOINT_RIGHT]
         )
-    elif config.action_level == ActionLevel.TELEOP:
+    elif config.action_level == ActionMode.TELEOP:
         listen_topics.extend(
             [RosTopicEnum.DES_TELEOP_LEFT, RosTopicEnum.DES_TELEOP_RIGHT]
         )
 
     if config.include_tcp_poses or config.action_level in [
-        ActionLevel.TCP,
-        ActionLevel.DELTA_TCP,
-        ActionLevel.TELEOP,
+        ActionMode.TCP,
+        ActionMode.DELTA_TCP,
+        ActionMode.TELEOP,
     ]:
         listen_topics.extend(
             [RosTopicEnum.ACTUAL_TCP_LEFT, RosTopicEnum.ACTUAL_TCP_RIGHT]
