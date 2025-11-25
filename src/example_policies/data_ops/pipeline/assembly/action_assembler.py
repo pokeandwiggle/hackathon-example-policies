@@ -92,4 +92,8 @@ class ActionAssembler:
         else:
             raise NotImplementedError(f"Unsupported action level: {action_level}")
 
+        # Add termination signal slot (set to 0.0, will be modified in post-processing)
+        if self.config.requires_termination_signal():
+            action_vec = np.append(action_vec, 0.0).astype(np.float32)
+
         return {"action": action_vec}, new_last
