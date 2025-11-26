@@ -13,9 +13,7 @@ Controls (when video windows are focused):
 
 import argparse
 import json
-import os
 import sys
-import time
 from pathlib import Path
 
 import cv2
@@ -76,7 +74,6 @@ class VideoReader:
     def _init_torchcodec(self):
         """Initialize with torchcodec"""
         try:
-            import torch
             from torchcodec.decoders import VideoDecoder
 
             decoder = VideoDecoder(self.video_path)
@@ -420,7 +417,7 @@ class EpisodeReviewer:
                     print(f"    {status} (frame {current_frame}/{min_frames})")
 
             # End of video - wait for user input
-            print(f"    Videos finished. Press any key to continue...")
+            print("    Videos finished. Press any key to continue...")
             key = cv2.waitKey(0) & 0xFF
             if key == ord("q") or key == 27:
                 return "q"
@@ -472,7 +469,7 @@ class EpisodeReviewer:
                                 f"  ✓ Episode {self.current_episode} added to blacklist"
                             )
                         else:
-                            print(f"  ✗ Failed to save blacklist")
+                            print("  ✗ Failed to save blacklist")
                     else:
                         print(f"  Episode {self.current_episode} already in blacklist")
                     self.current_episode += 1

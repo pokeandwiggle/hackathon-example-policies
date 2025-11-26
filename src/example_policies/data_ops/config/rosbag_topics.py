@@ -42,47 +42,34 @@ class RosTopicEnum(Enum):
     ANNOTATION = "/annotation"
 
     # Left camera topics
-    DEPTH_LEFT_INFO = "/cam_left/aligned_depth_to_color/camera_info"
-    DEPTH_LEFT_IMAGE = "/cam_left/aligned_depth_to_color/image_compressed"
-    DEPTH_LEFT_EXTRINSICS = "/cam_left/extrinsics/depth_to_color"
-    RGB_LEFT_INFO = "/cam_left/color/camera_info"
-    RGB_LEFT_IMAGE = "/cam_left/color/image_rect_compressed"
-
-    # Right camera topics
-    DEPTH_RIGHT_INFO = "/cam_right/aligned_depth_to_color/camera_info"
-    DEPTH_RIGHT_IMAGE = "/cam_right/aligned_depth_to_color/image_compressed"
-    DEPTH_RIGHT_EXTRINSICS = "/cam_right/extrinsics/depth_to_color"
-    RGB_RIGHT_INFO = "/cam_right/color/camera_info"
-    RGB_RIGHT_IMAGE = "/cam_right/color/image_rect_compressed"
+    RGB_LEFT_IMAGE = "/wrist_camera_left/D405/color/image_rect_raw/compressed"
+    RGB_RIGHT_IMAGE = "/wrist_camera_right/D405/color/image_rect_raw/compressed"
 
     # Static camera topics
-    RGB_STATIC_INFO = "/cam_static/color/camera_info"
-    RGB_STATIC_IMAGE = "/cam_static/color/image_rect_compressed"
+    RGB_STATIC_IMAGE = "/zed/zed_node/left/image_rect_color/compressed"
 
     # Desired Gripper Action
-    DES_GRIPPER_LEFT = "/desired_gripper_values_left"
-    DES_GRIPPER_RIGHT = "/desired_gripper_values_right"
-
-    # Desired Teleop Pose
-    DES_TELEOP_LEFT = "/desired_pose_left"
-    DES_TELEOP_RIGHT = "/desired_pose_right"
+    DES_GRIPPER_LEFT = "/robotiq_gripper/left/f_30hz/robotiq_2f_gripper/binary_command"
+    DES_GRIPPER_RIGHT = (
+        "/robotiq_gripper/right/f_30hz/robotiq_2f_gripper/binary_command"
+    )
 
     # Desired TCP Action
-    DES_TCP_LEFT = "/desired_pose_twist_left"
-    DES_TCP_RIGHT = "/desired_pose_twist_right"
-
-    # Desired Joint Action
-    DES_JOINT_LEFT = "/left_desired_joint_waypoint"
-    DES_JOINT_RIGHT = "/right_desired_joint_waypoint"
+    DES_TCP_LEFT = "/franka_robot/left/f_30hz/teleop/twist_stamped"
+    DES_TCP_RIGHT = "/franka_robot/right/f_30hz/teleop/twist_stamped"
 
     # Actual States
-    ACTUAL_JOINT_STATE = "/joint_states"
-    ACTUAL_TCP_LEFT = "/panda_left/tcp"
-    ACTUAL_TCP_RIGHT = "/panda_right/tcp"
+    ACTUAL_JOINT_LEFT = "/left/franka_robot_state_broadcaster/measured_joint_states"
+    ACTUAL_TCP_LEFT = "/left/franka_robot_state_broadcaster/current_pose"
+    ACTUAL_JOINT_RIGHT = "/right/franka_robot_state_broadcaster/measured_joint_states"
+    ACTUAL_TCP_RIGHT = "/right/franka_robot_state_broadcaster/current_pose"
 
-    # VR
-    VR_CAMERA_POSE = "/vr_camera"
-    VR_CAMERA_SCALE = "/vr_camera_scale"
+    LEFT_GRIPPER_DIST = (
+        "/robotiq_gripper/left/f_30hz/robotiq_2f_gripper/finger_distance_mm"
+    )
+    RIGHT_GRIPPER_DIST = (
+        "/robotiq_gripper/right/f_30hz/robotiq_2f_gripper/finger_distance_mm"
+    )
 
     @classmethod
     def _missing_(cls, value: object) -> Any:

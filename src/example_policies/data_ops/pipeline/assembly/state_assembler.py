@@ -29,7 +29,10 @@ class StateAssembler:
         pass
 
     def assemble(self, parsed_frame: dict, last_action: LastCommand) -> dict:
+        """Assemble observation state from available parsed frame data."""
         state_components = []
+        
+        # Joint state components (optional)
         if self.config.include_joint_positions:
             state_components.append(parsed_frame["joint_data"]["position"])
         if self.config.include_joint_velocities:
@@ -37,12 +40,14 @@ class StateAssembler:
         if self.config.include_joint_efforts:
             state_components.append(parsed_frame["joint_data"]["effort"])
 
-        if self.config.include_tcp_poses:
-            state_components.append(parsed_frame["actual_tcp_left"])
-            state_components.append(parsed_frame["actual_tcp_right"])
+        # TCP poses (always included in current setup)
+        state_components.append(parsed_frame["actual_tcp_left"])
+        state_components.append(parsed_frame["actual_tcp_right"])
 
+        # Gripper state (always included)
         state_components.append(parsed_frame["gripper_state"])
 
+        # Last command for temporal context (optional)
         if self.config.include_last_command:
             state_components.append(
                 np.concatenate([last_action.left, last_action.right])

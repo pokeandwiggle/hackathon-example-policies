@@ -19,7 +19,6 @@ from pathlib import Path
 import grpc
 
 # Lerobot Environment Bug
-import numpy as np
 import torch
 
 from example_policies.robot_deploy.action_translator import ActionTranslator
@@ -29,11 +28,9 @@ from example_policies.robot_deploy.robot_io.robot_interface import (
     RobotInterface,
 )
 from example_policies.robot_deploy.robot_io.robot_service import (
-    robot_service_pb2,
     robot_service_pb2_grpc,
 )
 from example_policies.robot_deploy.utils import print_info
-from example_policies.robot_deploy.utils.action_mode import ActionMode
 
 
 def inference_loop(
@@ -67,12 +64,12 @@ def inference_loop(
             # Predict the next action with respect to the current observation
             with torch.inference_mode():
                 action = policy.select_action(observation)
-                print(f"\n=== RAW MODEL PREDICTION ===")
+                print("\n=== RAW MODEL PREDICTION ===")
                 dbg_printer.print(step, observation, action, raw_action=True)
                 print()
             action = model_to_action_trans.translate(action, observation)
 
-            print(f"\n=== ABSOLUTE ROBOT COMMANDS ===")
+            print("\n=== ABSOLUTE ROBOT COMMANDS ===")
             dbg_printer.print(step, observation, action, raw_action=False)
 
             robot_interface.send_action(
