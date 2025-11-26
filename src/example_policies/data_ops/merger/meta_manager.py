@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 import pathlib
-from typing import Dict, List
+from typing import List
 
 from . import constants as c
 

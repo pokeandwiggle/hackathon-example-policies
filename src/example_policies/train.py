@@ -14,10 +14,8 @@
 
 import argparse
 from copy import deepcopy
-from pprint import pprint
 
 # First Import Numpy. Workaround for torch / lerobot bug
-import numpy
 
 from example_policies import config_factory as cf
 from example_policies.lerobot_patches import apply_patches

@@ -13,13 +13,10 @@
 # limitations under the License.
 
 import argparse
-import io
 import time
 
 import cv2
 import grpc
-import numpy as np
-from PIL import Image
 
 from example_policies.data_ops.utils import image_processor
 from example_policies.robot_deploy.robot_io.robot_service import (

@@ -16,10 +16,8 @@
 
 import argparse
 from pathlib import Path
-from typing import Any, Dict
 
 # Workaround for torch environment bug
-import numpy
 import torch
 import wandb
 from lerobot.configs.types import FeatureType
