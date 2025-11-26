@@ -14,8 +14,8 @@
 
 from typing import Any, List
 
-from ..config.pipeline_config import PipelineConfig
 from ...utils.action_order import ActionMode
+from ..config.pipeline_config import PipelineConfig
 from ..config.rosbag_topics import RosSchemaEnum, RosTopicEnum
 
 
@@ -54,40 +54,53 @@ class FrameBuffer:
 def _build_required_attributes(config: PipelineConfig) -> List[RosTopicEnum]:
     """Build list of required attributes based on configuration."""
     listen_topics = []
-    listen_topics.append(RosTopicEnum.ACTUAL_JOINT_STATE)
+    
+    # Joint states from both robots (required)
+    listen_topics.extend([
+        RosTopicEnum.ACTUAL_JOINT_LEFT, 
+        RosTopicEnum.ACTUAL_JOINT_RIGHT
+    ])
+    
+    # Static camera (always included)
     listen_topics.append(RosTopicEnum.RGB_STATIC_IMAGE)
-    listen_topics.extend(
-        [RosTopicEnum.DES_GRIPPER_LEFT, RosTopicEnum.DES_GRIPPER_RIGHT]
-    )
+    
+    # Gripper commands (required)
+    listen_topics.extend([
+        RosTopicEnum.DES_GRIPPER_LEFT, 
+        RosTopicEnum.DES_GRIPPER_RIGHT
+    ])
 
-    if config.action_level in [ActionMode.TCP, ActionMode.DELTA_TCP]:
-        listen_topics.extend([RosTopicEnum.DES_TCP_LEFT, RosTopicEnum.DES_TCP_RIGHT])
+    # TCP poses (required for current setup)
+    listen_topics.extend([
+        RosTopicEnum.ACTUAL_TCP_LEFT, 
+        RosTopicEnum.ACTUAL_TCP_RIGHT
+    ])
+
+    # Only TCP control modes are supported with current ROS topics
+    if config.action_level in [ActionMode.TCP, ActionMode.DELTA_TCP, ActionMode.TELEOP]:
+        listen_topics.extend([
+            RosTopicEnum.DES_TCP_LEFT, 
+            RosTopicEnum.DES_TCP_RIGHT
+        ])
     elif config.action_level in [ActionMode.JOINT, ActionMode.DELTA_JOINT]:
-        listen_topics.extend(
-            [RosTopicEnum.DES_JOINT_LEFT, RosTopicEnum.DES_JOINT_RIGHT]
-        )
-    elif config.action_level == ActionMode.TELEOP:
-        listen_topics.extend(
-            [RosTopicEnum.DES_TELEOP_LEFT, RosTopicEnum.DES_TELEOP_RIGHT]
+        # Joint control not supported with current ROS topic setup
+        raise NotImplementedError(
+            f"Action level {config.action_level} not supported. "
+            "Only TCP, DELTA_TCP, and TELEOP modes are available with current ROS topics."
         )
 
-    if config.include_tcp_poses or config.action_level in [
-        ActionMode.TCP,
-        ActionMode.DELTA_TCP,
-        ActionMode.TELEOP,
-    ]:
-        listen_topics.extend(
-            [RosTopicEnum.ACTUAL_TCP_LEFT, RosTopicEnum.ACTUAL_TCP_RIGHT]
-        )
-
+    # Optional RGB cameras
     if config.include_rgb_images:
-        listen_topics.extend(
-            [RosTopicEnum.RGB_LEFT_IMAGE, RosTopicEnum.RGB_RIGHT_IMAGE]
-        )
+        listen_topics.extend([
+            RosTopicEnum.RGB_LEFT_IMAGE, 
+            RosTopicEnum.RGB_RIGHT_IMAGE
+        ])
 
+    # Depth images not available in current ROS topic setup
     if config.include_depth_images:
-        listen_topics.extend(
-            [RosTopicEnum.DEPTH_LEFT_IMAGE, RosTopicEnum.DEPTH_RIGHT_IMAGE]
+        raise NotImplementedError(
+            "Depth images not supported with current ROS topics. "
+            "Only RGB cameras are available."
         )
 
     return listen_topics
