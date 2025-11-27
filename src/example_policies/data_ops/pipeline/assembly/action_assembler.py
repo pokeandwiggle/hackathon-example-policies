@@ -75,13 +75,9 @@ class ActionAssembler:
             left_abs = parsed_frame[left_key]
             right_abs = parsed_frame[right_key]
 
-            # Initialize history with first absolute pose
-            if last_abs_command is None:
-                last_abs_command = LastCommand(left=left_abs, right=right_abs)
-
             # Compute step-to-step deltas (previous -> current)
-            left_delta = delta_fn(last_abs_command.left, left_abs)
-            right_delta = delta_fn(last_abs_command.right, right_abs)
+            left_delta = left_abs
+            right_delta = right_abs
 
             action_vec = np.concatenate(
                 [left_delta, right_delta, [grip_l, grip_r]], dtype=np.float32

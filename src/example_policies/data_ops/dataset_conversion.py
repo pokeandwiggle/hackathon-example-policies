@@ -61,24 +61,18 @@ def convert_episodes(
     for ep_idx, episode_path in enumerate(episode_paths):
         print(f"Processing {episode_path}...")
 
-        try:
-            converter.reset_episode_state()
+        converter.reset_episode_state()
 
-            with open(episode_path, "rb") as f:
-                reader = NonSeekingReader(f, record_size_limit=None)
+        with open(episode_path, "rb") as f:
+            reader = NonSeekingReader(f, record_size_limit=None)
 
-                for schema, channel, message in reader.iter_messages(
-                    topics=converter.frame_buffer.get_topic_names()
-                ):
-                    converter.process_message(channel.topic, schema.name, message.data)
+            for schema, channel, message in reader.iter_messages(
+                topics=converter.frame_buffer.get_topic_names()
+            ):
+                converter.process_message(channel.topic, schema.name, message.data)
 
-            converter.finalize_episode(ep_idx, episode_path)
+        converter.finalize_episode(ep_idx, episode_path)
 
-        except Exception as e:
-            print(
-                f"Skipping faulty file: {episode_path} due to {type(e).__name__}: {e}"
-            )
-            continue
 
     save_metadata(
         output_dir,

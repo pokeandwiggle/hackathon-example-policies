@@ -62,7 +62,7 @@ def _build_required_attributes(config: PipelineConfig) -> List[RosTopicEnum]:
     ])
     
     # Static camera (always included)
-    listen_topics.append(RosTopicEnum.RGB_STATIC_IMAGE)
+    #listen_topics.append(RosTopicEnum.RGB_STATIC_IMAGE)
     
     # Gripper commands (required)
     listen_topics.extend([

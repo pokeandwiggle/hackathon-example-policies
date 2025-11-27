@@ -38,14 +38,14 @@ class FrameParser:
         msg_data_left, schema_name_left = frame_buffer.get_msg(
             RosTopicEnum.ACTUAL_JOINT_LEFT
         )
-        _, joint_velocity_left, gripper_states_left = rmp.parse_joints(
+        _, joint_velocity_left = rmp.parse_joints(
             self.config, msg_data_left, schema_name_left
         )
 
         msg_data_right, schema_name_right = frame_buffer.get_msg(
             RosTopicEnum.ACTUAL_JOINT_RIGHT
         )
-        _, joint_velocity_right, gripper_states_right = rmp.parse_joints(
+        _, joint_velocity_right = rmp.parse_joints(
             self.config, msg_data_right, schema_name_right
         )
 
@@ -53,7 +53,7 @@ class FrameParser:
         import numpy as np
 
         joint_velocity = np.concatenate([joint_velocity_left, joint_velocity_right])
-        gripper_states = np.concatenate([gripper_states_left, gripper_states_right])
+        gripper_states = np.concatenate([[0, 0],[0, 0]])
 
         return joint_velocity, gripper_states
 
@@ -76,15 +76,25 @@ class FrameParser:
         msg_data_left, schema_name_left = frame_buffer.get_msg(
             RosTopicEnum.ACTUAL_JOINT_LEFT
         )
-        joint_data_left, _, gripper_state_left = rmp.parse_joints(
+        joint_data_left, _ = rmp.parse_joints(
             self.config, msg_data_left, schema_name_left
         )
 
         msg_data_right, schema_name_right = frame_buffer.get_msg(
             RosTopicEnum.ACTUAL_JOINT_RIGHT
         )
-        joint_data_right, _, gripper_state_right = rmp.parse_joints(
+        joint_data_right, _ = rmp.parse_joints(
             self.config, msg_data_right, schema_name_right
+        )
+
+        gripper_state_left_msg = frame_buffer.get_msg(RosTopicEnum.DES_GRIPPER_LEFT)
+        gripper_state_left = rmp.parse_gripper_state(
+            self.config, gripper_state_left_msg[0], gripper_state_left_msg[1]
+        )
+
+        gripper_state_right_msg = frame_buffer.get_msg(RosTopicEnum.DES_GRIPPER_RIGHT)
+        gripper_state_right = rmp.parse_gripper_state(
+            self.config, gripper_state_right_msg[0], gripper_state_right_msg[1]
         )
 
         # Combine joint data from both robots
@@ -135,11 +145,11 @@ class FrameParser:
         ]:
             msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DES_TCP_LEFT)
             raw_pose = rmp.parse_desired_tcp(self.config, msg_data, schema_name)
-            desired_frame["des_tcp_left"] = positive_quat(raw_pose)
+            desired_frame["des_tcp_left"] = raw_pose
 
             msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DES_TCP_RIGHT)
             raw_pose = rmp.parse_desired_tcp(self.config, msg_data, schema_name)
-            desired_frame["des_tcp_right"] = positive_quat(raw_pose)
+            desired_frame["des_tcp_right"] = raw_pose
         else:
             raise NotImplementedError(
                 f"Action level {self.config.action_level} not supported. "
@@ -153,10 +163,10 @@ class FrameParser:
         images = {}
         
         # Static camera (always included)
-        msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.RGB_STATIC_IMAGE)
-        images["observation.images.rgb_static"] = rmp.parse_image(
-            self.config, msg_data, schema_name
-        )
+        # msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.RGB_STATIC_IMAGE)
+        # images["observation.images.rgb_static"] = rmp.parse_image(
+        #     self.config, msg_data, schema_name
+        # )
 
         # Optional wrist RGB cameras
         if self.config.include_rgb_images:

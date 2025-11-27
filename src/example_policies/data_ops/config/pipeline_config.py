@@ -202,9 +202,9 @@ def build_features(config: PipelineConfig) -> Dict[str, Any]:
     # Build action features (always TCP poses for now)
     if config.action_level in [ActionMode.TCP, ActionMode.TELEOP]:
         names = [f"tcp_left_{i}" for i in "xyz"]
-        names += [f"tcp_left_quat_{i}" for i in "xyzw"]
+        names += [f"tcp_left_quat_{i}" for i in "xyz"]
         names += [f"tcp_right_{i}" for i in "xyz"]
-        names += [f"tcp_right_quat_{i}" for i in "xyzw"]
+        names += [f"tcp_right_quat_{i}" for i in "xyz"]
     elif config.action_level == ActionMode.DELTA_TCP:
         names = [f"delta_tcp_left_{i}" for i in "xyz"]
         names += [f"delta_tcp_left_rot_{i}" for i in "xyz"]
@@ -227,11 +227,11 @@ def build_features(config: PipelineConfig) -> Dict[str, Any]:
     features["action"] = {"dtype": "float32", "shape": (len(names),), "names": names}
 
     # Build image features
-    features["observation.images.rgb_static"] = {
-        "dtype": "video",
-        "shape": list(config.static_cam_shape),
-        "names": ["height", "width", "channel"],
-    }
+    # features["observation.images.rgb_static"] = {
+    #     "dtype": "video",
+    #     "shape": list(config.static_cam_shape),
+    #     "names": ["height", "width", "channel"],
+    # }
 
     if config.include_rgb_images:
         features["observation.images.rgb_left"] = {

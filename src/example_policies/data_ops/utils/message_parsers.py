@@ -118,13 +118,14 @@ def parse_joints(cfg: PipelineConfig, msg_data, schema_name: RosSchemaEnum):
     """
     assert schema_name == RosSchemaEnum.JOINT, f"Unexpected joint schema: {schema_name}"
     joint_msg = deserialize_cdr(msg_data, schema_name.value)
-    reorder_indices = _joint_reorder_indices(cfg, joint_msg.name)
+    # reorder_indices = _joint_reorder_indices(cfg, joint_msg.name)
 
-    positions = np.array(joint_msg.position, dtype=np.float32)[reorder_indices]
-    velocities = np.array(joint_msg.velocity, dtype=np.float32)[reorder_indices]
-    efforts = np.array(joint_msg.effort, dtype=np.float32)[reorder_indices]
+    positions = np.array(joint_msg.position, dtype=np.float32)#[reorder_indices]
+    velocities = np.array(joint_msg.velocity, dtype=np.float32)#[reorder_indices]
+    efforts = np.array(joint_msg.effort, dtype=np.float32)#[reorder_indices]
 
-    gripper_state = positions[ARM_JOINT_COUNT:]
+    # gripper_state = positions[ARM_JOINT_COUNT:]
+    
     joint_velocity_full = velocities  # Full Velocity Vector for Pause Detection
 
     joint_data = {}
@@ -136,7 +137,7 @@ def parse_joints(cfg: PipelineConfig, msg_data, schema_name: RosSchemaEnum):
         if cfg.include_joint_efforts:
             joint_data["effort"] = efforts[:ARM_JOINT_COUNT]
 
-    return joint_data, joint_velocity_full, gripper_state
+    return joint_data, joint_velocity_full
 
 
 def parse_image(
@@ -177,7 +178,12 @@ def parse_desired_tcp(
 def parse_array(
     cfg: PipelineConfig, msg_data, schema_name: RosSchemaEnum
 ) -> np.ndarray:
-    assert schema_name == RosSchemaEnum.ARRAY, f"Unexpected array schema: {schema_name}"
+    assert schema_name in [RosSchemaEnum.ARRAY, RosSchemaEnum.FLOAT32], f"Unexpected array schema: {schema_name}"
+    
+    if schema_name == RosSchemaEnum.FLOAT32:
+        float_msg = deserialize_cdr(msg_data, schema_name.value)
+        return np.array([float_msg.data], dtype=np.float32)
+    
     array_msg = deserialize_cdr(msg_data, schema_name.value)
     return np.array(array_msg.data, dtype=np.float64)
 
@@ -211,6 +217,7 @@ def parse_pose(cfg: PipelineConfig, msg_data, schema_name: RosSchemaEnum) -> np.
     pose_msg = deserialize_cdr(msg_data, schema_name.value)
 
     if schema_name == RosSchemaEnum.POSE:
+        pose_msg = pose_msg.pose
         coord_pos = pose_msg.position
         coord_ori = pose_msg.orientation
     elif schema_name == RosSchemaEnum.TRANSFORM:
@@ -221,6 +228,31 @@ def parse_pose(cfg: PipelineConfig, msg_data, schema_name: RosSchemaEnum) -> np.
 
     return _create_pose_array(coord_pos, coord_ori)
 
+def parse_desired_tcp(cfg: PipelineConfig, msg_data, schema_name: RosSchemaEnum) -> np.ndarray:
+    assert schema_name in [
+        RosSchemaEnum.TWIST_STAMPED,
+    ], f"Unexpected pose schema: {schema_name}"
+
+    twist_msg = deserialize_cdr(msg_data, schema_name.value)
+    linear = twist_msg.twist.linear
+    angular = twist_msg.twist.angular
+    pose_array = np.array(
+        [
+            linear.x,
+            linear.y,
+            linear.z,
+            angular.x,
+            angular.y,
+            angular.z,
+        ],
+        dtype=np.float32,
+    )
+    return pose_array
+
+def parse_gripper_state(cfg: PipelineConfig, msg_data, schema_name: RosSchemaEnum) -> np.ndarray:
+    assert schema_name == RosSchemaEnum.FLOAT32, f"Unexpected array schema: {schema_name}"
+    float_msg = deserialize_cdr(msg_data, schema_name.value)
+    return np.array([float_msg.data], dtype=np.float32)
 
 def _create_pose_array(coord_pos, coord_ori) -> np.ndarray:
     pose_array = np.array(

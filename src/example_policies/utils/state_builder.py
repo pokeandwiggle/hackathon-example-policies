@@ -93,7 +93,7 @@ class StateFeatureSpec:
 
         # Left gripper (2 or 6 elements depending on type)
         if self.left_gripper == GripperType.PANDA:
-            state_names.extend([f"gripper_left_{i}" for i in range(2)])
+            state_names.extend([f"gripper_left_{i}" for i in range(1)])
         elif self.left_gripper == GripperType.ROBOTIQ:
             state_names.extend([f"robotiq_left_{i}" for i in range(6)])
         else:
@@ -101,7 +101,7 @@ class StateFeatureSpec:
 
         # Right gripper (2 or 6 elements depending on type)
         if self.right_gripper == GripperType.PANDA:
-            state_names.extend([f"gripper_right_{i}" for i in range(2)])
+            state_names.extend([f"gripper_right_{i}" for i in range(1)])
         elif self.right_gripper == GripperType.ROBOTIQ:
             state_names.extend([f"robotiq_right_{i}" for i in range(6)])
         else:

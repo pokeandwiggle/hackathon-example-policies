@@ -23,6 +23,8 @@ class RosSchemaEnum(Enum):
     POSE = "geometry_msgs/msg/PoseStamped"
     ARRAY = "std_msgs/msg/Float64MultiArray"
 
+    FLOAT32 = "std_msgs/msg/Float32"
+
     JOINT_WAYPOINT = "trajectory_msgs/msg/JointTrajectory"
 
     # Currently unused topics
@@ -31,6 +33,8 @@ class RosSchemaEnum(Enum):
     REALSENSE_EXTRINSICS = "realsense2_camera_msgs/msg/Extrinsics"
 
     POSE_TWIST = "teleop_controller_msgs/msg/PoseTwist"
+
+    TWIST_STAMPED = "geometry_msgs/msg/TwistStamped"
 
     @classmethod
     def _missing_(cls, value: object) -> Any:
@@ -49,9 +53,9 @@ class RosTopicEnum(Enum):
     RGB_STATIC_IMAGE = "/zed/zed_node/left/image_rect_color/compressed"
 
     # Desired Gripper Action
-    DES_GRIPPER_LEFT = "/robotiq_gripper/left/f_30hz/robotiq_2f_gripper/binary_command"
+    DES_GRIPPER_LEFT = "/robotiq_gripper/left/f_30hz/robotiq_2f_gripper/confidence_command"
     DES_GRIPPER_RIGHT = (
-        "/robotiq_gripper/right/f_30hz/robotiq_2f_gripper/binary_command"
+        "/robotiq_gripper/right/f_30hz/robotiq_2f_gripper/confidence_command"
     )
 
     # Desired TCP Action
