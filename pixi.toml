@@ -1,0 +1,51 @@
+[workspace]
+name = "simpub_ws"
+description = "Development environment for RoboStack ROS packages"
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["linux-64"]
+
+
+[target.unix.activation]
+# For activation scripts, we use bash for Unix-like systems
+scripts = ["install/setup.bash"]
+
+[feature.build.target.unix.tasks]
+build = "colcon build --symlink-install --cmake-args -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DPython_FIND_VIRTUALENV=ONLY -DPython3_FIND_VIRTUALENV=ONLY"
+
+# Dependencies used by all environments
+[dependencies]
+python = "*"
+# Build tools
+compilers = "*"
+cmake = "*"
+pkg-config = "*"
+make = "*"
+ninja = "*"
+# ROS specific tools
+rosdep = "*"
+colcon-common-extensions = "*"
+rerun-sdk = "=0.22.1"
+
+[target.linux.dependencies]
+libgl-devel = "*"
+
+# Define all the different ROS environments
+# Each environment corresponds to a different ROS distribution
+# and can be activated using the `pixi run/shell -e <environment>` command.
+[environments]
+humble = { features = ["humble", "build"] }
+
+[pypi-dependencies]
+rich = ">=14.2.0, <15"
+scipy = ">=1.16.3, <2"
+example_policies = { path = ".", editable = true }
+lerobot = { git = "https://github.com/LiXiling/lerobot"}
+
+### ROS Humble ####
+[feature.humble]
+channels = ["https://prefix.dev/robostack-humble"]
+
+[feature.humble.dependencies]
+ros-humble-desktop = "*"
+ros-humble-rosbag2-storage-mcap = "*"
+

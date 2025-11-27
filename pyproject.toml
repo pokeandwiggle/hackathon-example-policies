@@ -25,19 +25,15 @@ readme = "README.md"
 dependencies = [
     "grpcio>=1.74.0",
     "grpcio-tools>=1.74.0",
-    #"lerobot",
+    "ipykernel>=7.1.0",
+    "jupyter>=1.1.1",
     "mcap>=1.3.0",
-    "opencv-python>=4.12.0.88",
+    # "opencv-python==4.11.0",
     "rosbags>=0.10.11",
     "scipy>=1.15.3",
     "torch>=2.8.0",
-    "torchcodec>=0.6.0",
     "torchvision>=0.23.0",
 ]
-
-[tool.uv.sources]
-lerobot = { git = "https://github.com/LiXiling/lerobot.git" }
-
 
 [dependency-groups]
 dev = [

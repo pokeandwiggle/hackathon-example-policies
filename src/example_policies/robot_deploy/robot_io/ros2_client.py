@@ -9,7 +9,7 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 
 # ROS2 message types
 from sensor_msgs.msg import CompressedImage, JointState
-from std_msgs.msg import Float64, Float64MultiArray
+from std_msgs.msg import Float32, Float64, Float64MultiArray
 
 from ...data_ops.config.rosbag_topics import RosTopicEnum
 
@@ -107,15 +107,15 @@ class ROS2RobotClient(Node):
             self.reliable_qos,
         )
 
-        # Gripper state subscribers
+        # Gripper state subscribers (finger_distance_mm topics use Float32)
         self.gripper_left_dist_sub = self.create_subscription(
-            Float64MultiArray,
+            Float32,
             RosTopicEnum.LEFT_GRIPPER_DIST.value,
             lambda msg: self._update_state_cache("gripper_left_dist", msg),
             self.reliable_qos,
         )
         self.gripper_right_dist_sub = self.create_subscription(
-            Float64MultiArray,
+            Float32,
             RosTopicEnum.RIGHT_GRIPPER_DIST.value,
             lambda msg: self._update_state_cache("gripper_right_dist", msg),
             self.reliable_qos,
@@ -217,6 +217,23 @@ class ROS2RobotClient(Node):
                     self.robots = self._create_robot_dict(cache)
                     self.joints = cache.get("joints", {})
                     self.cameras = cache.get("cameras", {})
+                    # Add gripper distances (Float32 values from finger_distance_mm topics)
+                    self.gripper_left_dist = self._get_gripper_distance(
+                        cache, "gripper_left_dist"
+                    )
+                    self.gripper_right_dist = self._get_gripper_distance(
+                        cache, "gripper_right_dist"
+                    )
+
+                def _get_gripper_distance(self, cache, key):
+                    """Extract gripper distance value from cached Float32 message."""
+                    gripper_data = cache.get(key)
+                    if gripper_data and "data" in gripper_data:
+                        msg = gripper_data["data"]
+                        # Handle Float32 message from finger_distance_mm topic
+                        if hasattr(msg, "data"):
+                            return float(msg.data)
+                    return 0.0
 
                 def _create_robot_dict(self, cache):
                     robots = {}

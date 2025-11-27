@@ -66,7 +66,7 @@ class ObservationBuilder:
 
     def get_observation(self, snapshot_response, last_command, device):
         observation = {}
-        if not snapshot_response.robots:
+        if not snapshot_response or not snapshot_response.robots:
             print("No robots found in snapshot")
             return None
         robot_names = ["left", "right"]
@@ -99,17 +99,31 @@ class ObservationBuilder:
         images = self.process_all_cameras(snapshot_response, device)
         observation.update(images)
 
+        # Validate that all required observation keys are present
+        missing_keys = [key for key in self.cfg.input_features.keys() if key not in observation]
+        if missing_keys:
+            print(f"Warning: Missing required observation keys: {missing_keys}")
+            print(f"Available cameras: {list(snapshot_response.cameras.keys())}")
+            return None
+
         return observation
 
     def process_all_cameras(self, snapshot_response, device):
         images = {}
 
         cameras = snapshot_response.cameras
-        # ['cam_right_color_optical_frame', 'cam_right_depth_optical_frame', 'cam_static_optical_frame', 'cam_left_depth_optical_frame', 'cam_left_color_optical_frame']
+        # Expected camera names from ROS2 client:
+        # - cam_left_color_optical_frame
+        # - cam_right_color_optical_frame
+        # - cam_static_optical_frame (optional, may not be available)
+
+        if not cameras:
+            print("Warning: No cameras available in snapshot")
+
         for cam_name in list(cameras.keys()):
-            images.update(
-                self._process_camera_image(cameras[cam_name], cam_name, device)
-            )
+            processed = self._process_camera_image(cameras[cam_name], cam_name, device)
+            if processed:
+                images.update(processed)
         return images
 
     def _get_joint_state(self, snapshot) -> np.ndarray:
@@ -153,18 +167,18 @@ class ObservationBuilder:
         return np.array(tcp_poses, dtype=np.float32).flatten()
 
     def _get_gripper_state(self, snapshot) -> np.ndarray:
-        """Extracts gripper joint positions from the snapshot."""
-        # The order here must match the training data's state representation
-        gripper_joint_names = [
-            "panda_left_finger_joint1",
-            "panda_left_finger_joint2",
-            "panda_right_finger_joint1",
-            "panda_right_finger_joint2",
+        """Extracts gripper distances from the snapshot.
+
+        Note: We use gripper distance topics (finger_distance_mm) instead of joint positions.
+        This matches the training data which uses DES_GRIPPER_LEFT/RIGHT topics.
+        """
+        # Get gripper distances from snapshot (should be stored by ROS2 client)
+        # The order is [left_gripper, right_gripper] to match training data
+        gripper_distances = [
+            snapshot.gripper_left_dist,
+            snapshot.gripper_right_dist,
         ]
-        gripper_positions = [
-            snapshot.joints[name].position for name in gripper_joint_names
-        ]
-        return np.array(gripper_positions, dtype=np.float32)
+        return np.array(gripper_distances, dtype=np.float32)
 
     def _get_last_command(self, tcp_state: np.ndarray, last_command) -> np.ndarray:
         cmd = []

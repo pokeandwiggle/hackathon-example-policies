@@ -34,6 +34,7 @@ from example_policies.data_ops.pipeline.episode_converter import EpisodeConverte
 from example_policies.data_ops.pipeline.post_lerobot_ops import PostLerobotPipeline
 from example_policies.data_ops.utils.conversion_utils import (
     get_selected_episodes,
+    get_sorted_episodes,
     save_metadata,
     validate_input_dir,
 )
@@ -69,6 +70,7 @@ def convert_episodes(
             for schema, channel, message in reader.iter_messages(
                 topics=converter.frame_buffer.get_topic_names()
             ):
+                print(channel)
                 converter.process_message(channel.topic, schema.name, message.data)
 
         converter.finalize_episode(ep_idx, episode_path)
@@ -154,7 +156,8 @@ def main():
     print(f"  - Target FPS: {config.target_fps}")
     print(f"  - Task: {config.task_name}")
 
-    episode_paths = get_selected_episodes(config.episodes_dir, success_only=True)
+    episode_paths = get_sorted_episodes(config.episodes_dir)
+    print(episode_paths)
     result = convert_episodes(episode_paths, config.output, config)
     print_conversion_result(result)
 
