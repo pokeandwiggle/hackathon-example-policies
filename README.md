@@ -16,6 +16,11 @@ This starter kit provides all the essential tools to get you from raw recoding d
 
 First, make sure you are logged into jupyterhub and are in a terminal window.
 
+Create a symblic link to the dataset directory by running:
+```
+ln -s /data data
+```
+
 Then, clone this repo:
 
 ```
@@ -26,11 +31,6 @@ To install the required packages, simply run:
 
 ```sh
 pip install -e .
-```
-
-Create a symblic link to the dataset directory by running:
-```
-ln -s /data data
 ```
 
 If you have a Weights&Biases account for logging your policy training, log in using:
