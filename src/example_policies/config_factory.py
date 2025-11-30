@@ -18,9 +18,52 @@ from pprint import pprint
 
 from lerobot.configs.policies import PreTrainedConfig
 from lerobot.configs.train import TrainPipelineConfig
+from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata
 
 from .robot_deploy.policy_loader import get_checkpoint_path
 from .training.utils import create_dataset_config
+
+
+def get_dataset_info(dataset_root_dir: str) -> dict:
+    """Get information about a LeRobot dataset.
+    
+    Args:
+        dataset_root_dir: Root directory of the dataset.
+        
+    Returns:
+        Dictionary containing:
+            - total_frames: Total number of frames in the dataset
+            - total_episodes: Total number of episodes
+            - fps: Frames per second
+    """
+    data_dir = pathlib.Path(dataset_root_dir)
+    fake_repo_id = data_dir.name
+    
+    metadata = LeRobotDatasetMetadata(
+        repo_id=fake_repo_id,
+        root=data_dir,
+    )
+    
+    return {
+        "total_frames": metadata.total_frames,
+        "total_episodes": metadata.total_episodes,
+        "fps": metadata.fps,
+    }
+
+
+def epochs_to_steps(epochs: int, dataset_size: int, batch_size: int) -> int:
+    """Convert number of epochs to training steps.
+    
+    Args:
+        epochs: Number of epochs to train.
+        dataset_size: Total number of samples in the dataset.
+        batch_size: Batch size for training.
+        
+    Returns:
+        Number of training steps.
+    """
+    steps_per_epoch = dataset_size // batch_size
+    return epochs * steps_per_epoch
 
 
 def create_lerobot_config(
@@ -29,11 +72,12 @@ def create_lerobot_config(
     pretrained_config: PreTrainedConfig | None = None,
     batch_size: int = 8,
     lr: float = None,
-    steps: int = 100_000,
+    steps: int = None,
+    epochs: int = None,
     enable_wandb: bool = True,
     resume_path: str = None,
     policy_kwargs: dict | None = None,
-    save_freq: int = 10_000,
+    save_freq_epochs: int = 100,
 ):
     """Create a Training Configuration for LeRobot Predefined Models
 
@@ -42,16 +86,56 @@ def create_lerobot_config(
         dataset_root_dir (str): Root directory of the custom dataset.
         batch_size (int, optional): Batch size for training. Defaults to 8.
         lr (float, optional): Learning rate for the optimizer. Defaults to None.
-        steps (int, optional): Number of training steps. Defaults to 100000.
+        steps (int, optional): Number of training steps. Defaults to None.
+        epochs (int, optional): Number of training epochs. If provided, overrides steps. Defaults to None.
         enable_wandb (bool, optional): Whether to enable Weights & Biases logging. Defaults to True.
+        resume_path (str, optional): Path to checkpoint to resume from. Defaults to None.
+        policy_kwargs (dict, optional): Additional policy configuration. Defaults to None.
+        save_freq_epochs (int, optional): Save checkpoint every N epochs. Defaults to 100.
 
     Returns:
-        _type_: _description_
+        TrainPipelineConfig: The training configuration.
+        
+    Note:
+        Either `steps` or `epochs` must be provided. If both are provided, `epochs` takes precedence.
     """
     if policy_kwargs is None:
         policy_kwargs = {}
 
     dataset_cfg, features = create_dataset_config(pathlib.Path(dataset_root_dir))
+    
+    # Get dataset info for epoch calculations
+    dataset_info = get_dataset_info(dataset_root_dir)
+    dataset_size = dataset_info["total_frames"]
+    steps_per_epoch = dataset_size // batch_size
+    
+    # Calculate save_freq in steps from epochs
+    save_freq = save_freq_epochs * steps_per_epoch
+    
+    # Calculate steps from epochs if provided
+    if epochs is not None:
+        training_steps = epochs_to_steps(epochs, dataset_size, batch_size)
+        print(f"\n📊 Training by epochs:")
+        print(f"   - Dataset size: {dataset_size} frames")
+        print(f"   - Batch size: {batch_size}")
+        print(f"   - Epochs: {epochs}")
+        print(f"   - Calculated steps: {training_steps}")
+        print(f"   - Save every: {save_freq_epochs} epochs ({save_freq} steps)")
+    elif steps is not None:
+        training_steps = steps
+        print(f"\n📊 Training by steps:")
+        print(f"   - Steps: {training_steps}")
+        print(f"   - Save every: {save_freq_epochs} epochs ({save_freq} steps)")
+    else:
+        # Default to 200 epochs
+        default_epochs = 200
+        training_steps = epochs_to_steps(default_epochs, dataset_size, batch_size)
+        print(f"\n📊 Training with default epochs:")
+        print(f"   - Dataset size: {dataset_size} frames")
+        print(f"   - Batch size: {batch_size}")
+        print(f"   - Epochs: {default_epochs} (default)")
+        print(f"   - Calculated steps: {training_steps}")
+        print(f"   - Save every: {save_freq_epochs} epochs ({save_freq} steps)")
 
     if pretrained_config is None:
         pretrained_config = PreTrainedConfig.get_choice_class(model_name)(
@@ -62,7 +146,7 @@ def create_lerobot_config(
         policy=pretrained_config,
         dataset=dataset_cfg,
         batch_size=batch_size,
-        steps=steps,
+        steps=training_steps,
         save_freq=save_freq,
     )
     cfg.wandb.enable = enable_wandb
@@ -90,6 +174,7 @@ def create_lerobot_config(
 def act_config(
     dataset_root_dir: str,
     batch_size: int = 24,
+    epochs: int = 200,
     resume_path: str = None,
     policy_kwargs: dict = None,
 ):
@@ -115,8 +200,8 @@ def act_config(
         # Training hyperparameters
         batch_size=batch_size,
         lr=2e-5,
-        steps=800_000,
-        save_freq=10_000,
+        epochs=epochs,
+        save_freq_epochs=100,
         # Enable Weights & Biases for experiment tracking
         enable_wandb=True,
         resume_path=resume_path,
@@ -128,6 +213,7 @@ def act_config(
 def smolvla_config(
     dataset_root_dir: str,
     batch_size: int = 24,
+    epochs: int = 200,
     resume_path: str = None,
     policy_kwargs: dict = None,
     pretrained_actions: bool = False,
@@ -154,8 +240,8 @@ def smolvla_config(
         # Training hyperparameters
         batch_size=batch_size,
         lr=1e-4,
-        steps=100_000,
-        save_freq=10_000,
+        epochs=epochs,
+        save_freq_epochs=100,
         # Enable Weights & Biases for experiment tracking
         enable_wandb=True,
         resume_path=resume_path,
@@ -167,6 +253,7 @@ def smolvla_config(
 def diffusion_config(
     dataset_root_dir: str,
     batch_size: int = 96,
+    epochs: int = 200,
     resume_path: str = None,
     policy_kwargs: dict = None,
 ):
@@ -204,8 +291,8 @@ def diffusion_config(
         # Training hyperparameters
         batch_size=batch_size,
         lr=1e-4,
-        steps=400_000,
-        save_freq=8_000,
+        epochs=epochs,
+        save_freq_epochs=100,
         # Enable Weights & Biases for experiment tracking
         enable_wandb=True,
         resume_path=resume_path,
@@ -218,6 +305,7 @@ def diffusion_config(
 def pi0_config(
     dataset_root_dir: str,
     batch_size: int = 1,
+    epochs: int = 200,
     resume_path: str = None,
     pretrained_actions: bool = False,
 ):
@@ -233,8 +321,8 @@ def pi0_config(
         # Training hyperparameters
         batch_size=batch_size,
         lr=2.5e-5,
-        steps=100_000,
-        save_freq=10_000,
+        epochs=epochs,
+        save_freq_epochs=100,
         # Enable Weights & Biases for experiment tracking
         enable_wandb=True,
         resume_path=resume_path,
@@ -251,6 +339,7 @@ def pi0_config(
 def dit_flow(
     dataset_root_dir: str,
     batch_size: int = 64,
+    epochs: int = 200,
     resume_path: str = None,
     policy_kwargs: dict = None,
 ):
@@ -273,8 +362,8 @@ def dit_flow(
         # Training hyperparameters
         batch_size=batch_size,
         lr=2e-4,
-        steps=100_000,
-        save_freq=10_000,
+        epochs=epochs,
+        save_freq_epochs=100,
         # Enable Weights & Biases for experiment tracking
         enable_wandb=True,
         resume_path=resume_path,
@@ -287,6 +376,7 @@ def dit_flow(
 def beso_config(
     dataset_root_dir: str,
     batch_size: int = 96,
+    epochs: int = 200,
     resume_path: str = None,
     policy_kwargs: dict = None,
 ):
@@ -324,8 +414,8 @@ def beso_config(
         # Training hyperparameters
         batch_size=batch_size,
         lr=1e-4,
-        steps=400_000,
-        save_freq=8_000,
+        epochs=epochs,
+        save_freq_epochs=100,
         # Enable Weights & Biases for experiment tracking
         enable_wandb=True,
         resume_path=resume_path,
