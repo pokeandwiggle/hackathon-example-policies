@@ -259,11 +259,11 @@ def diffusion_config(
 ):
     # Diffusion Policy settings:
     n_obs_steps: int = 2
-    horizon: int = 32
-    n_action_steps: int = 16
+    horizon: int = 16
+    n_action_steps: int = 8
 
     default_kwargs = {
-        "vision_backbone": "resnet34",
+        "vision_backbone": "resnet18",
         # "pretrained_backbone_weights": "ResNet34_Weights.IMAGENET1K_V1",
         "crop_shape": (224, 224),
         "use_separate_rgb_encoder_per_camera": True,
@@ -336,7 +336,7 @@ def pi0_config(
     return cfg
 
 
-def dit_flow(
+def dit_flow_config(
     dataset_root_dir: str,
     batch_size: int = 64,
     epochs: int = 200,
