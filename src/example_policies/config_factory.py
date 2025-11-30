@@ -74,7 +74,7 @@ def create_lerobot_config(
     lr: float = None,
     steps: int = None,
     epochs: int = None,
-    enable_wandb: bool = True,
+    enable_wandb: bool = False,
     resume_path: str = None,
     policy_kwargs: dict | None = None,
     save_freq_epochs: int = 100,
@@ -88,7 +88,7 @@ def create_lerobot_config(
         lr (float, optional): Learning rate for the optimizer. Defaults to None.
         steps (int, optional): Number of training steps. Defaults to None.
         epochs (int, optional): Number of training epochs. If provided, overrides steps. Defaults to None.
-        enable_wandb (bool, optional): Whether to enable Weights & Biases logging. Defaults to True.
+        enable_wandb (bool, optional): Whether to enable Weights & Biases logging. Defaults to False.
         resume_path (str, optional): Path to checkpoint to resume from. Defaults to None.
         policy_kwargs (dict, optional): Additional policy configuration. Defaults to None.
         save_freq_epochs (int, optional): Save checkpoint every N epochs. Defaults to 100.
@@ -177,6 +177,7 @@ def act_config(
     epochs: int = 200,
     resume_path: str = None,
     policy_kwargs: dict = None,
+    enable_wandb: bool = False,
 ):
 
     default_kwargs = {
@@ -203,7 +204,7 @@ def act_config(
         epochs=epochs,
         save_freq_epochs=100,
         # Enable Weights & Biases for experiment tracking
-        enable_wandb=True,
+        enable_wandb=enable_wandb,
         resume_path=resume_path,
         policy_kwargs=policy_kwargs,
     )
@@ -217,6 +218,7 @@ def smolvla_config(
     resume_path: str = None,
     policy_kwargs: dict = None,
     pretrained_actions: bool = False,
+    enable_wandb: bool = False,
 ):
     default_kwargs = {
         "chunk_size": 20,
@@ -243,7 +245,7 @@ def smolvla_config(
         epochs=epochs,
         save_freq_epochs=100,
         # Enable Weights & Biases for experiment tracking
-        enable_wandb=True,
+        enable_wandb=enable_wandb,
         resume_path=resume_path,
         policy_kwargs=policy_kwargs,
     )
@@ -256,6 +258,7 @@ def diffusion_config(
     epochs: int = 200,
     resume_path: str = None,
     policy_kwargs: dict = None,
+    enable_wandb: bool = False,
 ):
     # Diffusion Policy settings:
     n_obs_steps: int = 2
@@ -294,7 +297,7 @@ def diffusion_config(
         epochs=epochs,
         save_freq_epochs=100,
         # Enable Weights & Biases for experiment tracking
-        enable_wandb=True,
+        enable_wandb=enable_wandb,
         resume_path=resume_path,
         # Additional Policy Keywords
         policy_kwargs=policy_kwargs,
@@ -308,6 +311,7 @@ def pi0_config(
     epochs: int = 200,
     resume_path: str = None,
     pretrained_actions: bool = False,
+    enable_wandb: bool = False,
 ):
     policy = None
     if pretrained_actions:
@@ -324,7 +328,7 @@ def pi0_config(
         epochs=epochs,
         save_freq_epochs=100,
         # Enable Weights & Biases for experiment tracking
-        enable_wandb=True,
+        enable_wandb=enable_wandb,
         resume_path=resume_path,
         # Additional Policy Keywords
         policy_kwargs={
@@ -342,6 +346,7 @@ def dit_flow_config(
     epochs: int = 200,
     resume_path: str = None,
     policy_kwargs: dict = None,
+    enable_wandb: bool = False,
 ):
     # Diffusion Policy settings:
     n_obs_steps: int = 2
@@ -365,7 +370,7 @@ def dit_flow_config(
         epochs=epochs,
         save_freq_epochs=100,
         # Enable Weights & Biases for experiment tracking
-        enable_wandb=True,
+        enable_wandb=enable_wandb,
         resume_path=resume_path,
         # Additional Policy Keywords
         policy_kwargs=policy_kwargs,
@@ -379,6 +384,7 @@ def beso_config(
     epochs: int = 200,
     resume_path: str = None,
     policy_kwargs: dict = None,
+    enable_wandb: bool = False,
 ):
     # Diffusion Policy settings:
     n_obs_steps: int = 2
@@ -417,7 +423,7 @@ def beso_config(
         epochs=epochs,
         save_freq_epochs=100,
         # Enable Weights & Biases for experiment tracking
-        enable_wandb=True,
+        enable_wandb=enable_wandb,
         resume_path=resume_path,
         # Additional Policy Keywords
         policy_kwargs=policy_kwargs,
