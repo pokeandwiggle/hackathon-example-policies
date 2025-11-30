@@ -78,6 +78,7 @@ def create_lerobot_config(
     resume_path: str = None,
     policy_kwargs: dict | None = None,
     save_freq_epochs: int = 100,
+    num_workers: int = 0,
 ):
     """Create a Training Configuration for LeRobot Predefined Models
 
@@ -92,6 +93,7 @@ def create_lerobot_config(
         resume_path (str, optional): Path to checkpoint to resume from. Defaults to None.
         policy_kwargs (dict, optional): Additional policy configuration. Defaults to None.
         save_freq_epochs (int, optional): Save checkpoint every N epochs. Defaults to 100.
+        num_workers (int, optional): Number of dataloader workers. Defaults to 0 (main process only, safer for Jupyter).
 
     Returns:
         TrainPipelineConfig: The training configuration.
@@ -148,6 +150,7 @@ def create_lerobot_config(
         batch_size=batch_size,
         steps=training_steps,
         save_freq=save_freq,
+        num_workers=num_workers,
     )
     cfg.wandb.enable = enable_wandb
     cfg.wandb.disable_artifact = True
