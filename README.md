@@ -1,8 +1,8 @@
-<p align="center">
+<!-- <p align="center">
   <img alt="Repo Banner" src="docs/assets/banner.png" width="100%">
-</p>
+</p> -->
 
-# Munich Humanoid Manipulation Hackathon 2025: Starter Kit
+# Poke&Wiggle Policy Starter Kit
 
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache%202.0-blue.svg"></a>
@@ -17,7 +17,7 @@ This starter kit provides all the essential tools to get you from dataset to a d
 We recommend using [`uv`](https://github.com/astral-sh/uv) for managing your environment. To install the required packages, simply run:
 
 ```sh
-pip install -e .
+uv pip install -e .
 ```
 
 ## 🗺️ What's in this repo?
@@ -39,7 +39,7 @@ Follow these steps to train and deploy a baseline policy.
 First, convert your recorded ROS2 MCAP files into the LeRobot Dataset Format. This format is optimized for training.
 
 ```bash
-python src/example_policies/data_ops/data_conversion.py <path/to/mcap_files_dir> <path/to/output_dataset_dir>
+python src/example_policies/data_ops/data_conversion.py --episodes-dir <path/to/mcap_files_dir> --output <path/to/output_dataset_dir>
 ```
 
 ### 2. Train a Policy
