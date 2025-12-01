@@ -64,7 +64,6 @@ def inference_loop(
 
     while not done:
         start_time = time.time()
-        print(policy.config.input_features)
         observation = robot_interface.get_observation(cfg.device, show=False)
 
         if observation:
@@ -77,7 +76,7 @@ def inference_loop(
             action = model_to_action_trans.translate(action, observation)
 
             # print(f"\n=== ABSOLUTE ROBOT COMMANDS ===")
-            # dbg_printer.print(step, observation, action, raw_action=False)
+            dbg_printer.print(step, observation, action, raw_action=False)
 
             robot_interface.send_action(
                 action, model_to_action_trans.action_mode, controller
@@ -87,7 +86,7 @@ def inference_loop(
         # wait for execution to finish
         elapsed_time = time.time() - start_time
         sleep_duration = period - elapsed_time
-        print(sleep_duration)
+        # print(sleep_duration)
         # wait for input
         # input("Press Enter to continue...")
         time.sleep(max(0.0, sleep_duration))
