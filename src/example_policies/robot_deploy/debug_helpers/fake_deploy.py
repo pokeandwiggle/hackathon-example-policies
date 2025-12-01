@@ -122,14 +122,14 @@ def inference_loop(
             if ask_for_input:
                 input("Press Enter to send next action...")
 
+            print(observation["observation.state"])
+
             # Predict the next action using the policy with dataset observation
             with torch.inference_mode():
                 action = policy.select_action(observation)
 
             # Translate action to robot coordinates
             action = model_to_action_trans.translate(action, observation)
-            for i in range(action.shape[1]):
-                print(action[0, i].item())
             break
 
             print(f"\n=== POLICY OUTPUT FOR DATASET OBSERVATION ===")

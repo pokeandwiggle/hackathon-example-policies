@@ -68,12 +68,11 @@ def inference_loop(
 
         if observation:
             # Predict the next action with respect to the current observation
+            print(observation["observation.state"])
             with torch.inference_mode():
                 action = policy.select_action(observation)
 
             action = model_to_action_trans.translate(action, observation)
-            for i in range(action.shape[1]):
-                print(action[0, i].item())
             break
 
             # print(f"\n=== ABSOLUTE ROBOT COMMANDS ===")
