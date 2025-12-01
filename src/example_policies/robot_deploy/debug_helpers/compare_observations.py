@@ -78,51 +78,51 @@ def compare_observations(
     # Compare observations
     print("COMPARISON")
 
-    # Compare state observations
-    if "observation.state" in dataset_obs and "observation.state" in robot_obs:
-        print("[bold cyan]State Comparison:[/bold cyan]")
-        dataset_state = dataset_obs["observation.state"].cpu().numpy().squeeze()
-        robot_state = robot_obs["observation.state"].cpu().numpy().squeeze()
-
-        state_names = cfg.input_features["observation.state"]
-        print(state_names)
-
-        # Create comparison table
-        table = Table(title="State Values Comparison")
-        table.add_column("Feature", style="cyan")
-        table.add_column("Dataset", style="green")
-        table.add_column("Robot", style="yellow")
-        table.add_column("Difference", style="red")
-        table.add_column("Abs Diff", style="magenta")
-
-        for i, name in enumerate(state_names):
-            dataset_val = dataset_state[i]
-            robot_val = robot_state[i]
-            diff = robot_val - dataset_val
-            abs_diff = abs(diff)
-
-            table.add_row(
-                name,
-                f"{dataset_val:.6f}",
-                f"{robot_val:.6f}",
-                f"{diff:.6f}",
-                f"{abs_diff:.6f}",
-            )
-
-        print(table)
-
-        # Summary statistics
-        print("\n[bold cyan]State Statistics:[/bold cyan]")
-        print(
-            f"  Mean Absolute Difference: {np.mean(np.abs(robot_state - dataset_state)):.6f}"
-        )
-        print(
-            f"  Max Absolute Difference:  {np.max(np.abs(robot_state - dataset_state)):.6f}"
-        )
-        print(
-            f"  RMS Difference:           {np.sqrt(np.mean((robot_state - dataset_state) ** 2)):.6f}"
-        )
-        print()
+    # # Compare state observations
+    # if "observation.state" in dataset_obs and "observation.state" in robot_obs:
+    #     print("[bold cyan]State Comparison:[/bold cyan]")
+    #     dataset_state = dataset_obs["observation.state"].cpu().numpy().squeeze()
+    #     robot_state = robot_obs["observation.state"].cpu().numpy().squeeze()
+    #
+    #     state_names = cfg.input_features["observation.state"]
+    #     print(state_names)
+    #
+    #     # Create comparison table
+    #     table = Table(title="State Values Comparison")
+    #     table.add_column("Feature", style="cyan")
+    #     table.add_column("Dataset", style="green")
+    #     table.add_column("Robot", style="yellow")
+    #     table.add_column("Difference", style="red")
+    #     table.add_column("Abs Diff", style="magenta")
+    #
+    #     for i, name in enumerate(state_names):
+    #         dataset_val = dataset_state[i]
+    #         robot_val = robot_state[i]
+    #         diff = robot_val - dataset_val
+    #         abs_diff = abs(diff)
+    #
+    #         table.add_row(
+    #             name,
+    #             f"{dataset_val:.6f}",
+    #             f"{robot_val:.6f}",
+    #             f"{diff:.6f}",
+    #             f"{abs_diff:.6f}",
+    #         )
+    #
+    #     print(table)
+    #
+    #     # Summary statistics
+    #     print("\n[bold cyan]State Statistics:[/bold cyan]")
+    #     print(
+    #         f"  Mean Absolute Difference: {np.mean(np.abs(robot_state - dataset_state)):.6f}"
+    #     )
+    #     print(
+    #         f"  Max Absolute Difference:  {np.max(np.abs(robot_state - dataset_state)):.6f}"
+    #     )
+    #     print(
+    #         f"  RMS Difference:           {np.sqrt(np.mean((robot_state - dataset_state) ** 2)):.6f}"
+    #     )
+    #     print()
 
     # Compare image observations
     image_keys = [key for key in dataset_obs.keys() if "image" in key.lower()]
