@@ -85,14 +85,10 @@ def inference_loop(
                 model_to_action_trans.action_mode,
                 controller,
             )
-            # policy._queues["action"].clear()
 
         # wait for execution to finish
         elapsed_time = time.time() - start_time
         sleep_duration = period - elapsed_time
-        # print(sleep_duration)
-        # wait for input
-        # input("Press Enter to continue...")
         time.sleep(max(0.0, sleep_duration))
 
         step += 1
