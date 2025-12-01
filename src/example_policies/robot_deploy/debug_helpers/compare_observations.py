@@ -143,6 +143,7 @@ def compare_observations(
     if image_keys:
         print("[bold cyan]Image Observations Comparison:[/bold cyan]")
         for img_key in image_keys:
+            print(f"\nComparing image key: [yellow]{img_key}[/yellow]")
             if img_key in dataset_obs and img_key in robot_obs:
                 dataset_img = dataset_obs[img_key].cpu().numpy()
                 robot_img = robot_obs[img_key].cpu().numpy()
