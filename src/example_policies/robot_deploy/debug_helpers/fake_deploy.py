@@ -128,6 +128,8 @@ def inference_loop(
 
             # Translate action to robot coordinates
             action = model_to_action_trans.translate(action, observation)
+            print(action)
+            break
 
             print(f"\n=== POLICY OUTPUT FOR DATASET OBSERVATION ===")
             dbg_printer.print(step, observation, action, raw_action=False)
