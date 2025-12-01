@@ -97,7 +97,6 @@ class ObservationBuilder:
         )
 
         images = self.process_all_cameras(snapshot_response, device)
-        print(f"Processed {len(images)} images from cameras.")
         observation.update(images)
 
         return observation
@@ -185,6 +184,7 @@ class ObservationBuilder:
 
         obs_key = f"observation.images.{modality}_{side}"
         if obs_key not in cfg.input_features:
+            print(f"WARN: Observation key {obs_key} not in model input features.")
             return {}
 
         # Lerobot Model Config Shape is Channel Height Width for some reason
