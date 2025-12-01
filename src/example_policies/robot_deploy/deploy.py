@@ -21,8 +21,6 @@ import grpc
 # Lerobot Environment Bug
 import numpy as np
 import torch
-from IPython.display import display, clear_output
-from matplotlib import pyplot as plt
 from rich import print
 
 from example_policies.robot_deploy.action_translator import ActionTranslator
@@ -45,7 +43,6 @@ def inference_loop(
     hz: float,
     service_stub: robot_service_pb2_grpc.RobotServiceStub,
     controller=None,
-    show_image: bool = False,
 ):
     if controller is None:
         controller = RobotClient.CART_WAYPOINT
@@ -65,8 +62,6 @@ def inference_loop(
     print("Starting inference loop...")
     period = 1.0 / hz
 
-    fig, ax = plt.subplots()
-
     while not done:
         start_time = time.time()
         observation = robot_interface.get_observation(cfg.device, show=False)
@@ -81,14 +76,7 @@ def inference_loop(
             action = model_to_action_trans.translate(action, observation)
 
             # print(f"\n=== ABSOLUTE ROBOT COMMANDS ===")
-
-            img = observation["observation.images.rgb_left"][0].cpu().numpy()
-            clear_output(wait=True)
-            ax.clear()
-            ax.imshow(img)
-            ax.axis("off")
-            display(fig)
-            # dbg_printer.print(step, observation, action, raw_action=False)
+            dbg_printer.print(step, observation, action, raw_action=False)
 
             robot_interface.send_action(
                 action, model_to_action_trans.action_mode, controller
