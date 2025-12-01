@@ -88,6 +88,7 @@ def inference_loop(
         repo_id=fake_repo_id,
         root=data_dir,
         episodes=[ep_index],
+        video_backend="pyav",
     )
 
     robot_interface = RobotInterface(service_stub, cfg)
