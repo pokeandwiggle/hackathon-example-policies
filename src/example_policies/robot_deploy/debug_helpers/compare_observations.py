@@ -23,26 +23,15 @@ from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from rich import print
 from rich.table import Table
 
-from example_policies.robot_deploy.policy_loader import load_metadata
+from example_policies.robot_deploy.policy_loader import load_policy
 from example_policies.robot_deploy.robot_io.robot_interface import RobotInterface
 from example_policies.robot_deploy.robot_io.robot_service import (
     robot_service_pb2_grpc,
 )
 
 
-class FakeConfig:
-    def __init__(self, m) -> None:
-        self.metadata = m
-        self.output_features = {}
-        self.input_features = {}
-        self.input_features["observation.state"] = np.asarray(
-            m["features"]["observation.state"]["names"]
-        )
-        self.output_features["action"] = np.asarray(m["features"]["action"]["names"])
-        self.device = "cpu"
-
-
 def compare_observations(
+    cfg,
     data_dir: Path,
     service_stub: robot_service_pb2_grpc.RobotServiceStub,
     ep_index: int = 0,
@@ -51,6 +40,7 @@ def compare_observations(
     """Compare dataset observation with current robot observation.
 
     Args:
+        cfg: Policy configuration.
         data_dir (Path): Path to the dataset directory.
         service_stub: gRPC service stub.
         ep_index (int): Episode index to load.
@@ -60,10 +50,6 @@ def compare_observations(
     print(f"Episode: {ep_index}, Frame: {frame_index}\n")
 
     fake_repo_id = data_dir.name
-
-    # Load metadata and create config
-    meta_data = load_metadata(data_dir)
-    cfg = FakeConfig(meta_data)
 
     # Load dataset
     dataset = LeRobotDataset(
@@ -225,6 +211,12 @@ def main():
         description="Compare dataset observation with current robot observation"
     )
     parser.add_argument(
+        "--checkpoint",
+        type=Path,
+        required=True,
+        help="Path to the policy checkpoint directory.",
+    )
+    parser.add_argument(
         "data_dir",
         type=Path,
         help="Path to the dataset directory",
@@ -249,11 +241,15 @@ def main():
 
     args = parser.parse_args()
 
+    # Load policy to get config
+    policy, cfg = load_policy(args.checkpoint)
+
     channel = grpc.insecure_channel(args.server)
     stub = robot_service_pb2_grpc.RobotServiceStub(channel)
 
     try:
         compare_observations(
+            cfg,
             args.data_dir,
             stub,
             args.episode,
