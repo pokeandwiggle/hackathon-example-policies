@@ -72,7 +72,8 @@ def inference_loop(
                 action = policy.select_action(observation)
 
             action = model_to_action_trans.translate(action, observation)
-            print(action)
+            for i in range(action.shape[1]):
+                print(action[0, i].item())
             break
 
             # print(f"\n=== ABSOLUTE ROBOT COMMANDS ===")
