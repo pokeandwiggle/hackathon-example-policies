@@ -199,4 +199,4 @@ class ObservationBuilder:
         image = torch.from_numpy(img_array)
         image = image.permute(2, 0, 1)
         image = image.to(device)
-        return {obs_key: image.unsqueeze(0)}
+        return {obs_key: image}
