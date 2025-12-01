@@ -18,6 +18,11 @@ import torch
 from torch.nn import functional as F
 
 from example_policies import data_constants as dc
+from example_policies.utils.action_order import (
+    DUAL_ABS_LEFT_POS_IDXS,
+    DUAL_ABS_LEFT_QUAT_IDXS,
+    DUAL_ABS_RIGHT_QUAT_IDXS,
+)
 
 from ..data_ops.utils.geometric import axis_angle_to_quat_torch, quat_mul_torch
 from .utils.action_mode import ActionMode
@@ -86,7 +91,14 @@ class ActionTranslator:
         if self.action_mode == ActionMode.DELTA_TCP:
             return self._delta_tcp(action, observation)
         if self.action_mode == ActionMode.ABS_TCP:
-            return self._absolute_tcp(action)
+            # return self._absolute_tcp(action)
+            last_action = observation["observation.state"][:, self.state_info_idxs]
+            # only update position, keep last orientation
+            action[:, DUAL_ABS_LEFT_QUAT_IDXS] = last_action[:, DUAL_ABS_LEFT_QUAT_IDXS]
+            action[:, DUAL_ABS_RIGHT_QUAT_IDXS] = last_action[
+                :, DUAL_ABS_RIGHT_QUAT_IDXS
+            ]
+            return action
         if self.action_mode == ActionMode.DELTA_JOINT:
             return self._delta_joint(action, observation)
         if self.action_mode == ActionMode.ABS_JOINT:
