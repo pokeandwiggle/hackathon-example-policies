@@ -122,7 +122,8 @@ def inference_loop(
             if ask_for_input:
                 input("Press Enter to send next action...")
 
-            print(observation["observation.state"])
+            for i, obs in enumerate(observation["observation.state"]):
+                print(f"Obs {i}: {obs.cpu().numpy()}")
 
             # Predict the next action using the policy with dataset observation
             with torch.inference_mode():
