@@ -68,13 +68,29 @@ def inference_loop(
             # Predict the next action with respect to the current observation
             with torch.inference_mode():
                 action = policy.select_action(observation)
-                print(f"\n=== RAW MODEL PREDICTION ===")
-                dbg_printer.print(step, observation, action, raw_action=True)
+                # print(f"\n=== RAW MODEL PREDICTION ===")
+                # dbg_printer.print(step, observation, action, raw_action=True)
+                # print()
+
+                # Debug: Compare observation vs action values
+                print("\n=== OBSERVATION vs ACTION COMPARISON ===")
+                obs_state = observation["observation.state"][0]
+                print(f"Observation TCP left pos:  {obs_state[:3]}")
+                print(f"Observation TCP left quat: {obs_state[3:7]}")
+                print(f"Observation TCP right pos:  {obs_state[7:10]}")
+                print(f"Observation TCP right quat: {obs_state[10:14]}")
+                print(f"\nAction TCP left pos:  {action[0, :3]}")
+                print(f"Action TCP left quat: {action[0, 3:7]}")
+                print(f"Action TCP right pos:  {action[0, 7:10]}")
+                print(f"Action TCP right quat: {action[0, 10:14]}")
+                print(f"Action grippers: left={action[0, 14]:.3f}, right={action[0, 15]:.3f}")
                 print()
+
             action = model_to_action_trans.translate(action, observation)
 
-            print(f"\n=== ABSOLUTE ROBOT COMMANDS ===")
-            dbg_printer.print(step, observation, action, raw_action=False)
+            # print(f"\n=== ABSOLUTE ROBOT COMMANDS ===")
+            # dbg_printer.print(step, observation, action, raw_action=False)
+            print(f"Left Pos action (after translate): {action[:3]}")
 
             robot_interface.send_action(
                 action, model_to_action_trans.action_mode, controller
