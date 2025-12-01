@@ -90,9 +90,7 @@ def compare_observations(
     print("[green]Observations loaded successfully![/green]\n")
 
     # Compare observations
-    print("[bold magenta]=" * 60)
-    print("OBSERVATION COMPARISON")
-    print("=" * 60 + "[/bold magenta]\n")
+    print("COMPARISON")
 
     # Compare state observations
     if "observation.state" in dataset_obs and "observation.state" in robot_obs:
@@ -128,9 +126,15 @@ def compare_observations(
 
         # Summary statistics
         print("\n[bold cyan]State Statistics:[/bold cyan]")
-        print(f"  Mean Absolute Difference: {np.mean(np.abs(robot_state - dataset_state)):.6f}")
-        print(f"  Max Absolute Difference:  {np.max(np.abs(robot_state - dataset_state)):.6f}")
-        print(f"  RMS Difference:           {np.sqrt(np.mean((robot_state - dataset_state)**2)):.6f}")
+        print(
+            f"  Mean Absolute Difference: {np.mean(np.abs(robot_state - dataset_state)):.6f}"
+        )
+        print(
+            f"  Max Absolute Difference:  {np.max(np.abs(robot_state - dataset_state)):.6f}"
+        )
+        print(
+            f"  RMS Difference:           {np.sqrt(np.mean((robot_state - dataset_state) ** 2)):.6f}"
+        )
         print()
 
     # Compare image observations
@@ -151,8 +155,12 @@ def compare_observations(
                     diff = robot_img - dataset_img
                     print(f"    Mean pixel difference:     {np.mean(np.abs(diff)):.4f}")
                     print(f"    Max pixel difference:      {np.max(np.abs(diff)):.4f}")
-                    print(f"    RMS pixel difference:      {np.sqrt(np.mean(diff**2)):.4f}")
-                    print(f"    Correlation coefficient:   {np.corrcoef(dataset_img.flatten(), robot_img.flatten())[0, 1]:.4f}")
+                    print(
+                        f"    RMS pixel difference:      {np.sqrt(np.mean(diff**2)):.4f}"
+                    )
+                    print(
+                        f"    Correlation coefficient:   {np.corrcoef(dataset_img.flatten(), robot_img.flatten())[0, 1]:.4f}"
+                    )
                 else:
                     print("    [red]ERROR: Shape mismatch![/red]")
 
@@ -197,14 +205,18 @@ def compare_observations(
         print(table)
 
     # Summary
-    print("\n[bold magenta]" + "=" * 60)
     print("SUMMARY")
-    print("=" * 60 + "[/bold magenta]")
     print(f"Dataset keys:      {sorted(dataset_obs.keys())}")
     print(f"Robot keys:        {sorted(robot_obs.keys())}")
-    print(f"Common keys:       {sorted(set(dataset_obs.keys()) & set(robot_obs.keys()))}")
-    print(f"Dataset-only keys: {sorted(set(dataset_obs.keys()) - set(robot_obs.keys()))}")
-    print(f"Robot-only keys:   {sorted(set(robot_obs.keys()) - set(dataset_obs.keys()))}")
+    print(
+        f"Common keys:       {sorted(set(dataset_obs.keys()) & set(robot_obs.keys()))}"
+    )
+    print(
+        f"Dataset-only keys: {sorted(set(dataset_obs.keys()) - set(robot_obs.keys()))}"
+    )
+    print(
+        f"Robot-only keys:   {sorted(set(robot_obs.keys()) - set(dataset_obs.keys()))}"
+    )
 
 
 def main():
