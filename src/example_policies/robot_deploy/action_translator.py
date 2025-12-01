@@ -87,20 +87,22 @@ class ActionTranslator:
         # action[:, dc.LEFT_GRIPPER_IDX] = 1.0 - action[:, dc.LEFT_GRIPPER_IDX]
         # action[:, dc.RIGHT_GRIPPER_IDX] = 1.0 - action[:, dc.RIGHT_GRIPPER_IDX]
 
+        if self.last_action is None:
+            self.last_action = self._init_last_action_from_observation(
+                observation, action.device
+            )
+
+        abs_pose = self.last_action.clone()
+
         # Invert gripper action values to match the robot's open/close convention:
         # incoming actions use "close=1", but robot expects "open=1"
         if self.action_mode == ActionMode.DELTA_TCP:
             return self._delta_tcp(action, observation)
         if self.action_mode == ActionMode.ABS_TCP:
             # return self._absolute_tcp(action)
-            last_action = observation["observation.state"][:, self.state_info_idxs]
             # only update position, keep last orientation
-            action[:, DUAL_ABS_LEFT_POS_IDXS] = last_action[:, DUAL_ABS_LEFT_POS_IDXS]
-            action[:, DUAL_ABS_RIGHT_POS_IDXS] = last_action[:, DUAL_ABS_RIGHT_POS_IDXS]
-            # action[:, DUAL_ABS_LEFT_QUAT_IDXS] = last_action[:, DUAL_ABS_LEFT_QUAT_IDXS]
-            # action[:, DUAL_ABS_RIGHT_QUAT_IDXS] = last_action[
-            #     :, DUAL_ABS_RIGHT_QUAT_IDXS
-            # ]
+            action[:, DUAL_ABS_LEFT_POS_IDXS] = abs_pose[:, DUAL_ABS_LEFT_POS_IDXS]
+            action[:, DUAL_ABS_RIGHT_POS_IDXS] = abs_pose[:, DUAL_ABS_RIGHT_POS_IDXS]
             return action
         if self.action_mode == ActionMode.DELTA_JOINT:
             return self._delta_joint(action, observation)
