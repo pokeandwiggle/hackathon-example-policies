@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # Copyright 2025 Nur Muhammad Mahi Shafiullah,
 # and The HuggingFace Inc. team. All rights reserved.
 #
@@ -14,6 +12,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+# From https://github.com/huggingface/lerobot/pull/680
+
 from dataclasses import dataclass, field
 
 from lerobot.configs.policies import PreTrainedConfig
@@ -130,9 +131,7 @@ class DiTFlowConfig(PreTrainedConfig):
     activation: str = "gelu"
 
     # Noise scheduler.
-    training_noise_sampling: str = (
-        "uniform"  # "uniform" or "beta", from pi0 https://www.physicalintelligence.company/download/pi0.pdf
-    )
+    training_noise_sampling: str = "uniform"  # "uniform" or "beta", from pi0 https://www.physicalintelligence.company/download/pi0.pdf
     clip_sample: bool = True
     clip_sample_range: float = 1.0
 

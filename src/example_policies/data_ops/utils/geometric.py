@@ -125,3 +125,16 @@ def quat_mul_torch(q1: torch.Tensor, q2: torch.Tensor) -> torch.Tensor:
         ],
         dim=-1,
     )
+
+
+def add_delta_quaternion(q: torch.Tensor, delta_q: torch.Tensor) -> torch.Tensor:
+    """Add delta quaternion to quaternion q.
+
+    Args:
+        q (torch.Tensor): Quaternion (...,4) in xyzw format.
+        delta_q (torch.Tensor): Delta quaternion (...,4) in xyzw format.
+
+    Returns:
+        torch.Tensor: Resulting quaternion (...,4) in xyzw format.
+    """
+    return quat_mul_torch(q, delta_q)

@@ -11,3 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+from example_policies.robot_deploy.robot_io.robot_service import (
+    robot_service_pb2,
+    robot_service_pb2_grpc,
+)
+
+__all__ = ["robot_service_pb2", "robot_service_pb2_grpc"]

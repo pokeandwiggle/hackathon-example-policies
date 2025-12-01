@@ -8,6 +8,8 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+# From https://github.com/huggingface/lerobot/pull/680
+
 import copy
 from collections import deque
 
@@ -390,7 +392,6 @@ class DiTFlowPolicy(PreTrainedPolicy):
 
     @torch.no_grad()
     def select_action(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
-
         batch = self.normalize_inputs(batch)
         if self.config.image_features:
             batch = dict(
@@ -638,4 +639,5 @@ class DiTFlowModel(nn.Module):
             in_episode_bound = ~batch["action_is_pad"]
             loss = loss * in_episode_bound.unsqueeze(-1)
 
+        # Compute mean MSE loss
         return loss.mean()

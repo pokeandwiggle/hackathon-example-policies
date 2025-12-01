@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # Copyright 2025 Poke & Wiggle GmbH. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,13 +15,10 @@
 # limitations under the License.
 
 import argparse
-import io
 import time
 
 import cv2
 import grpc
-import numpy as np
-from PIL import Image
 
 from example_policies.data_ops.utils import image_processor
 from example_policies.robot_deploy.robot_io.robot_service import (
@@ -90,8 +89,10 @@ def main(service_stub: robot_service_pb2_grpc.RobotServiceStub):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Robot stream visualization client")
     parser.add_argument(
+        "-s",
         "--server",
         default="localhost:50051",
+        metavar="ADDR",
         help="Robot service server address (default: localhost:50051)",
     )
     args = parser.parse_args()

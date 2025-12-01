@@ -18,6 +18,7 @@ import pathlib
 from lerobot.policies.pretrained import PreTrainedConfig
 
 from example_policies.lerobot_patches import apply_patches
+from example_policies.utils.constants import INFO_FILE, META_DIR
 
 
 def get_checkpoint_path(checkpoint_path: pathlib.Path | str) -> pathlib.Path:
@@ -66,7 +67,7 @@ def load_dataset_info(dir_path: pathlib.Path) -> dict:
     Returns:
         dict: Dataset Info
     """
-    meta_json = dir_path / "meta" / "info.json"
+    meta_json = dir_path / META_DIR / INFO_FILE
     with open(meta_json, "r", encoding="utf-8") as f:
         metadata = json.load(f)
     return metadata

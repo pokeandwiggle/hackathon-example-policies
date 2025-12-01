@@ -16,9 +16,18 @@ from __future__ import annotations
 
 import json
 import pathlib
-from typing import Dict, List
+from typing import List
 
-from . import constants as c
+from example_policies.utils.constants import (
+    BLACKLIST_FILE,
+    EPISODE_MAPPING_FILE,
+    EPISODES_FILE,
+    INFO_FILE,
+    META_DIR,
+    PIPELINE_CONFIG_FILE,
+    STATS_FILE,
+    TASKS_FILE,
+)
 
 
 class MetaManager:
@@ -33,33 +42,32 @@ class MetaManager:
         self.info: dict = {}
 
     def load_from_files(self, dataset_dir: pathlib.Path):
-        meta_path = dataset_dir / c.META_DIR
+        meta_path = dataset_dir / META_DIR
         if not meta_path.exists():
             raise FileNotFoundError(f"Meta directory {meta_path} does not exist.")
 
-        self.blacklist = load_json(meta_path / c.BLACKLIST_FILE)
-        self.episode_mapping = load_json(meta_path / c.EPISODE_MAPPING_FILE)
-        self.stats = load_jsonl(meta_path / c.STATS_FILE)
-        self.episodes = load_jsonl(meta_path / c.EPISODES_FILE)
-        self.pipeline_config = load_json(meta_path / c.PIPELINE_CONFIG_FILE)
-        self.tasks = load_jsonl(meta_path / c.TASKS_FILE)
+        self.blacklist = load_json(meta_path / BLACKLIST_FILE)
+        self.episode_mapping = load_json(meta_path / EPISODE_MAPPING_FILE)
+        self.stats = load_jsonl(meta_path / STATS_FILE)
+        self.episodes = load_jsonl(meta_path / EPISODES_FILE)
+        self.pipeline_config = load_json(meta_path / PIPELINE_CONFIG_FILE)
+        self.tasks = load_jsonl(meta_path / TASKS_FILE)
 
-        self.info = load_json(meta_path / c.INFO_FILE)
+        self.info = load_json(meta_path / INFO_FILE)
 
     def save(self, dataset_dir: pathlib.Path):
-        meta_path = dataset_dir / c.META_DIR
+        meta_path = dataset_dir / META_DIR
         meta_path.mkdir(parents=True, exist_ok=True)
 
-        write_json(self.blacklist, meta_path / c.BLACKLIST_FILE)
-        write_json(self.episode_mapping, meta_path / c.EPISODE_MAPPING_FILE)
-        write_jsonl(self.stats, meta_path / c.STATS_FILE)
-        write_jsonl(self.episodes, meta_path / c.EPISODES_FILE)
-        write_json(self.pipeline_config, meta_path / c.PIPELINE_CONFIG_FILE)
-        write_jsonl(self.tasks, meta_path / c.TASKS_FILE)
-        write_json(self.info, meta_path / c.INFO_FILE)
+        write_json(self.blacklist, meta_path / BLACKLIST_FILE)
+        write_json(self.episode_mapping, meta_path / EPISODE_MAPPING_FILE)
+        write_jsonl(self.stats, meta_path / STATS_FILE)
+        write_jsonl(self.episodes, meta_path / EPISODES_FILE)
+        write_json(self.pipeline_config, meta_path / PIPELINE_CONFIG_FILE)
+        write_jsonl(self.tasks, meta_path / TASKS_FILE)
+        write_json(self.info, meta_path / INFO_FILE)
 
     def add_meta(self, dataset_meta: MetaManager, episode_offset: int, task_map: dict):
-
         self._extend_blacklist(dataset_meta, episode_offset)
         self._extend_episode_mapping(dataset_meta, episode_offset)
         self._extend_stats(dataset_meta, episode_offset)

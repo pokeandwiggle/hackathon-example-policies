@@ -17,7 +17,7 @@ from typing import Dict
 
 import pandas as pd
 
-from . import constants as c
+from ...utils.constants import EPISODE_DIR, VIDEO_DIR
 from .meta_manager import MetaManager
 
 
@@ -47,10 +47,10 @@ class LerobotPseudoDataset:
             self.id_2_task[idx] = name
 
     def read_video_paths(self):
-        video_path = self.root / c.VIDEO_DIR
+        video_path = self.root / VIDEO_DIR
         self.video_paths = [p for p in video_path.iterdir() if p.is_dir()]
 
     def read_episode_parquet(self, ep_idx: int):
         return pd.read_parquet(
-            self.root / c.EPISODE_DIR / f"episode_{ep_idx:06d}.parquet"
+            self.root / EPISODE_DIR / f"episode_{ep_idx:06d}.parquet"
         )

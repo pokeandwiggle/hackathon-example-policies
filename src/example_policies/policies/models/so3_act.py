@@ -17,8 +17,7 @@ import torch.nn.functional as F
 from lerobot.policies.act.configuration_act import ACTConfig, PreTrainedConfig
 from lerobot.policies.act.modeling_act import ACT, ACTION, OBS_IMAGES, ACTPolicy
 
-from example_policies import data_constants as dc
-
+from ...utils.action_order import DUAL_ABS_LEFT_QUAT_IDXS, DUAL_ABS_RIGHT_QUAT_IDXS
 from ..factory import register_policy
 from ..losses.pose_loss import IntegratedDeltaPoseLoss, PoseLoss
 
@@ -91,8 +90,8 @@ class SO3ACT(ACT):
         action, vae_tuple = super().forward(batch)
         action_normalized = action.clone()
 
-        LEFT_QUAT_IDXS = dc.DUAL_LEFT_QUAT_IDXS
-        RIGHT_QUAT_IDXS = dc.DUAL_RIGHT_QUAT_IDXS
+        LEFT_QUAT_IDXS = DUAL_ABS_LEFT_QUAT_IDXS
+        RIGHT_QUAT_IDXS = DUAL_ABS_RIGHT_QUAT_IDXS
 
         # normalize to unit quaternions
         left_quat_pred = action[:, :, LEFT_QUAT_IDXS]

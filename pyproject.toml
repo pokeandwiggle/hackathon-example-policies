@@ -26,6 +26,7 @@ dependencies = [
     "grpcio>=1.74.0",
     "grpcio-tools>=1.74.0",
     "lerobot[smolvla]",
+    "matplotlib>=3.10.6",
     "mcap>=1.3.0",
     "opencv-python>=4.12.0.88",
     "rosbags>=0.10.11",
@@ -41,7 +42,5 @@ lerobot = { git = "https://github.com/LiXiling/lerobot.git" }
 
 [dependency-groups]
 dev = [
-    "black>=25.1.0",
-    "isort>=6.0.1",
-    "pre-commit>=4.3.0",
+    "pytest>=8.4.2",
 ]

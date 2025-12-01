@@ -35,7 +35,7 @@ def to_device_batch(batch: dict, device: torch.device, non_blocking: bool = True
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Validate policy with action plot")
+    parser = argparse.ArgumentParser(description="Validate policy with action plot for all episodes")
     parser.add_argument(
         "-c",
         "--checkpoint",
@@ -53,20 +53,19 @@ def parse_args():
         help="Path to the dataset directory",
     )
     parser.add_argument(
-        "-e",
-        "--episode",
-        type=int,
-        default=0,
-        metavar="N",
-        help="Episode index to compare (default: 0)",
-    )
-    parser.add_argument(
         "-o",
         "--output",
         type=Path,
         default=None,
         metavar="PATH",
-        help="Output path for the figure (default: actions_episode<E>.png)",
+        help="Output path for the figure (default: actions_all_episodes.png)",
+    )
+    parser.add_argument(
+        "--max-episodes",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Maximum number of episodes to plot (default: all)",
     )
     args = parser.parse_args()
     return args
@@ -95,25 +94,28 @@ def main():
         drop_last=False,
     )
 
-    ep = args.episode
-    targets = []
-    preds = []
-    times = []
+    # Dictionary to store data for each episode
+    episodes_data = {}
     action_dim = None
 
-    def _fmt(v: torch.Tensor, w=9, p=3):
-        return f"{float(v):{w}.{p}f}"
-
+    # Collect data for all episodes
     for batch in dataloader:
         b_ep = batch.get("episode_index")
         if b_ep is None:
             raise KeyError("Expected key 'episode_index' in batch.")
         b_ep = int(b_ep.view(-1)[0].item())
 
-        if b_ep < ep:
-            continue
-        if b_ep > ep:
+        # Skip if we've reached max episodes
+        if args.max_episodes is not None and b_ep >= args.max_episodes:
             break
+
+        # Initialize episode data structure if needed
+        if b_ep not in episodes_data:
+            episodes_data[b_ep] = {
+                "targets": [],
+                "preds": [],
+                "times": [],
+            }
 
         batch = to_device_batch(
             batch, device, non_blocking=True
@@ -127,44 +129,69 @@ def main():
         )  # This is the output of the action chunk. Could be more or less.
         pred = action.detach().float().view(-1)
 
-        # collect
-        targets.append(tgt.cpu())
-        preds.append(pred.cpu())
+        # collect for this episode
+        episodes_data[b_ep]["targets"].append(tgt.cpu())
+        episodes_data[b_ep]["preds"].append(pred.cpu())
 
         # append the time
         t = float(batch["timestamp"].view(-1)[0].detach().cpu().item())
-        times.append(t)
+        episodes_data[b_ep]["times"].append(t)
 
-    # stack T x D
-    targets = torch.stack(targets, dim=0)  # [T, D]
-    preds = torch.stack(preds, dim=0)  # [T, D]
-    times = torch.tensor(times)  # [T]
+    # Stack data for each episode
+    for ep_idx in episodes_data:
+        episodes_data[ep_idx]["targets"] = torch.stack(episodes_data[ep_idx]["targets"], dim=0)  # [T, D]
+        episodes_data[ep_idx]["preds"] = torch.stack(episodes_data[ep_idx]["preds"], dim=0)  # [T, D]
+        episodes_data[ep_idx]["times"] = torch.tensor(episodes_data[ep_idx]["times"])  # [T]
 
-    T, D = targets.shape
-    fig, axes = plt.subplots(D, 1, figsize=(8, 2.2 * D), sharex=True)
+    num_episodes = len(episodes_data)
+    if num_episodes == 0:
+        print("No episodes found in dataset.")
+        return
+
+    # Get action dimension from first episode
+    first_ep = list(episodes_data.keys())[0]
+    D = episodes_data[first_ep]["targets"].shape[1]
+
+    # Create plots
+    fig, axes = plt.subplots(D, 1, figsize=(10, 2.2 * D), sharex=True)
     if D == 1:
         axes = [axes]
 
-    for d in range(D):
-        ax = axes[d]
-        ax.plot(times, targets[:, d].numpy(), label="Target")
-        ax.plot(times, preds[:, d].numpy(), label="Pred")
-        ax.set_ylabel(f"dim {d}")
-        ax.grid(True, linestyle="--", alpha=0.3)
-        if d == 0:
-            ax.set_title(f"Episode {ep}: action targets vs. predictions")
-    axes[-1].set_xlabel("time (s)" if "timestamp" in batch else "step")
+    # Plot each episode
+    for ep_idx in sorted(episodes_data.keys()):
+        ep_data = episodes_data[ep_idx]
+        times = ep_data["times"].numpy()
+        targets = ep_data["targets"].numpy()
+        preds = ep_data["preds"].numpy()
 
-    # single legend outside if many dims
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper right")
+        for d in range(D):
+            ax = axes[d]
+            # Plot target and prediction for this episode
+            ax.plot(times, targets[:, d], alpha=0.7, label=f"Ep {ep_idx} Target", linestyle='-')
+            ax.plot(times, preds[:, d], alpha=0.7, label=f"Ep {ep_idx} Pred", linestyle='--')
+            ax.set_ylabel(f"dim {d}")
+            ax.grid(True, linestyle="--", alpha=0.3)
+            if d == 0:
+                ax.set_title(f"All Episodes ({num_episodes} total): action targets vs. predictions")
+
+    axes[-1].set_xlabel("time (s)")
+
+    # Add legend (may be crowded with many episodes)
+    if num_episodes <= 5:
+        for d in range(D):
+            axes[d].legend(loc="best", fontsize='small')
+    else:
+        # For many episodes, add a simplified legend
+        handles, labels = axes[0].get_legend_handles_labels()
+        # Only show first few in legend to avoid clutter
+        fig.legend(handles[:6], labels[:6], loc="upper right", fontsize='small')
 
     plt.tight_layout(rect=[0, 0, 0.98, 0.98])
 
-    output_path = args.output or Path(f"./actions_episode{args.episode}.png")
+    output_path = args.output or Path("./actions_all_episodes.png")
     fig.savefig(output_path, dpi=150)
     plt.close(fig)
-    print(f"Saved continuous plot to {output_path}")
+    print(f"Saved plot with {num_episodes} episodes to {output_path}")
 
 
 if __name__ == "__main__":

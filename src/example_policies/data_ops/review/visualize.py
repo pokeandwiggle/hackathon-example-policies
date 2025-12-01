@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # Copyright 2025 Poke & Wiggle GmbH. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,19 +22,19 @@ from lerobot.scripts.visualize_dataset import visualize_dataset
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Visualize a LeRobot dataset.")
+    parser = argparse.ArgumentParser(description="Visualize a LeRobot dataset")
     parser.add_argument(
         "root_dir",
         type=str,
-        help="Path to the root directory of the dataset on disk, or a Hugging Face repo ID.",
+        help="Path to the dataset directory or Hugging Face repo ID",
     )
-
-    # Episode Index. Defaults to 0 if not provided.
     parser.add_argument(
+        "-e",
         "--episode-index",
         type=int,
         default=0,
-        help="Episode to visualize.",
+        metavar="N",
+        help="Episode to visualize (default: 0)",
     )
 
     args = parser.parse_args()

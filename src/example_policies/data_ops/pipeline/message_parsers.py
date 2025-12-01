@@ -12,62 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Optional
 
 import numpy as np
-from rosbags.typesys import Stores, get_types_from_msg, get_typestore
+from rosbags.serde import deserialize_cdr
+from rosbags.typesys import get_types_from_msg, register_types
 
-# Create a typestore for ROS 2 Humble
-_typestore = get_typestore(Stores.ROS2_HUMBLE)
-
-
-def register_types(typemap):
-    """
-    Compatibility wrapper for older rosbags API.
-
-    In old versions this lived in rosbags.typesys and used a global
-    typestore. We mimic that by registering everything on our
-    ROS2_HUMBLE typestore.
-    """
-    _typestore.register(typemap)
-
-
-def deserialize_cdr(rawdata, typename, typestore=None):
-    """
-    Compatibility wrapper for older rosbags.serde.deserialize_cdr.
-
-    Newer rosbags exposes deserialization as a method on the typestore.
-    """
-    ts = typestore or _typestore
-    return ts.deserialize_cdr(rawdata, typename)
-
-
-from ..config.pipeline_config import GripperType, PipelineConfig
+from ...utils.state_order import (
+    ARM_JOINT_COUNT,
+    LEFT_ARM,
+    RIGHT_ARM,
+    _joint_reorder_indices,
+)
+from ..config.pipeline_config import PipelineConfig
 from ..config.rosbag_topics import RosSchemaEnum
 from ..utils import geometric
-from .image_processor import process_image_bytes
-
-# --- Constants for Joint Parsing (defined once for performance) ---
-_LEFT_ARM = [f"panda_left_joint{i}" for i in range(1, 8)]
-_RIGHT_ARM = [f"panda_right_joint{i}" for i in range(1, 8)]
-_LEFT_PANDA_GRIPPER = [f"panda_left_finger_joint{i}" for i in range(1, 3)]
-_RIGHT_PANDA_GRIPPER = [f"panda_right_finger_joint{i}" for i in range(1, 3)]
-
-_ROBOTIQ_JOINTS = [
-    "robotiq_85_left_knuckle_joint",
-    "robotiq_85_right_knuckle_joint",
-    "robotiq_85_left_inner_knuckle_joint",
-    "robotiq_85_right_inner_knuckle_joint",
-    "robotiq_85_left_finger_tip_joint",
-    "robotiq_85_right_finger_tip_joint",
-]
-
-_LEFT_ROBOTIQ_GRIPPER = ["panda_left_" + joint for joint in _ROBOTIQ_JOINTS]
-
-_RIGHT_ROBOTIQ_GRIPPER = ["panda_right_" + joint for joint in _ROBOTIQ_JOINTS]
-
-CANONICAL_ARM_JOINTS = _LEFT_ARM + _RIGHT_ARM
-ARM_JOINT_COUNT = len(_LEFT_ARM) + len(_RIGHT_ARM)  # Should be 14
+from ..utils.image_processor import process_image_bytes
 
 POSE_TWIST_MSG_DEF = """
 std_msgs/Header header
@@ -78,37 +37,6 @@ geometry_msgs/Twist twist
 # Register custom type with rosbags
 types = get_types_from_msg(POSE_TWIST_MSG_DEF, "teleop_controller_msgs/msg/PoseTwist")
 register_types(types)
-
-
-def create_joint_order(cfg: PipelineConfig):
-    joint_order = CANONICAL_ARM_JOINTS.copy()
-
-    if cfg.left_gripper == GripperType.PANDA:
-        joint_order += _LEFT_PANDA_GRIPPER
-    elif cfg.left_gripper == GripperType.ROBOTIQ:
-        joint_order += _LEFT_ROBOTIQ_GRIPPER
-    else:
-        raise ValueError(f"Unsupported left gripper type: {cfg.left_gripper}")
-
-    if cfg.right_gripper == GripperType.PANDA:
-        joint_order += _RIGHT_PANDA_GRIPPER
-    elif cfg.right_gripper == GripperType.ROBOTIQ:
-        joint_order += _RIGHT_ROBOTIQ_GRIPPER
-    else:
-        raise ValueError(f"Unsupported right gripper type: {cfg.right_gripper}")
-    return joint_order
-
-
-def _joint_reorder_indices(
-    cfg: PipelineConfig, names: list[str], joint_order: Optional[List[str]] = None
-) -> List[int]:
-    if not joint_order:
-        joint_order = create_joint_order(cfg)
-
-    # Create a mapping from the message's joint order to our canonical order.
-    name_to_idx = {name: i for i, name in enumerate(names)}
-    reorder_indices = [name_to_idx[name] for name in joint_order]
-    return reorder_indices
 
 
 def parse_joints(cfg: PipelineConfig, msg_data, schema_name: RosSchemaEnum):
@@ -142,9 +70,9 @@ def parse_joints(cfg: PipelineConfig, msg_data, schema_name: RosSchemaEnum):
 def parse_image(
     cfg: PipelineConfig, msg_data, schema_name: RosSchemaEnum
 ) -> np.ndarray:
-    assert (
-        schema_name == RosSchemaEnum.IMAGE
-    ), f"Unexpected RGB image schema: {schema_name}"
+    assert schema_name == RosSchemaEnum.IMAGE, (
+        f"Unexpected RGB image schema: {schema_name}"
+    )
     img_msg = deserialize_cdr(msg_data, schema_name.value)
     img_bytes = img_msg.data
     is_depth = "compressedDepth" in img_msg.format
@@ -185,14 +113,14 @@ def parse_array(
 def parse_joint_waypoint(
     cfg: PipelineConfig, msg_data, schema_name: RosSchemaEnum, side: str
 ) -> np.ndarray:
-    assert (
-        schema_name == RosSchemaEnum.JOINT_WAYPOINT
-    ), f"Unexpected joint waypoint schema: {schema_name}"
+    assert schema_name == RosSchemaEnum.JOINT_WAYPOINT, (
+        f"Unexpected joint waypoint schema: {schema_name}"
+    )
     traj_msg = deserialize_cdr(msg_data, schema_name.value)
 
     assert len(traj_msg.points) == 1, "Expected exactly one trajectory point."
 
-    side_order = {"left": _LEFT_ARM, "right": _RIGHT_ARM}
+    side_order = {"left": LEFT_ARM, "right": RIGHT_ARM}
 
     reorder_indices = _joint_reorder_indices(
         cfg, traj_msg.joint_names, side_order[side]

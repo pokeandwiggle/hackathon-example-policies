@@ -16,21 +16,17 @@ import numpy as np
 import torch
 
 from example_policies.data_ops.utils import geometric, image_processor
-from example_policies.data_ops.utils.message_parsers import CANONICAL_ARM_JOINTS
+from example_policies.utils.constants import OBSERVATION_STATE
+from example_policies.utils.state_builder import StateFeatureSpec
+from example_policies.utils.state_order import CANONICAL_ARM_JOINTS
 
 
 class ObservationBuilder:
     def __init__(self, cfg):
         self.cfg = cfg
 
-        # Set some default expectations
-        self.include_joint_pos = False
-        self.include_joint_vel = False
-        self.include_joint_effort = False
-
-        self.include_tcp = True
-        self.include_last_commands = True
-
+        # Default spec (will be overridden if metadata exists)
+        self.state_spec = StateFeatureSpec()
         self.state_feature_names: list[str] = []
 
         self.configure_metadata(cfg)
@@ -40,29 +36,34 @@ class ObservationBuilder:
         if not cfg.metadata:
             return
 
-        self.state_feature_names = cfg.metadata["features"]["observation.state"][
-            "names"
-        ]
-        names = self.state_feature_names
+        self.state_feature_names = cfg.metadata["features"][OBSERVATION_STATE]["names"]
 
-        # Check if any state feature contains "joint_pos_"
-        self.include_joint_pos = any("joint_pos_" in name for name in names)
-        self.include_joint_vel = any("joint_vel_" in name for name in names)
-        self.include_joint_effort = any("joint_eff_" in name for name in names)
-
-        self.include_tcp = any("tcp_" in name for name in names)
-
-        self.include_last_commands = any("last_command_" in name for name in names)
-
-        # TODO: Detect Gripper Schema
+        # Use shared state builder to reverse-engineer the spec from feature names
+        self.state_spec = StateFeatureSpec.from_feature_names(self.state_feature_names)
 
     @property
     def include_joint_state(self):
-        return (
-            self.include_joint_pos
-            or self.include_joint_vel
-            or self.include_joint_effort
-        )
+        return self.state_spec.include_joint_state
+
+    @property
+    def include_joint_pos(self):
+        return self.state_spec.include_joint_positions
+
+    @property
+    def include_joint_vel(self):
+        return self.state_spec.include_joint_velocities
+
+    @property
+    def include_joint_effort(self):
+        return self.state_spec.include_joint_efforts
+
+    @property
+    def include_tcp(self):
+        return self.state_spec.include_tcp_poses
+
+    @property
+    def include_last_commands(self):
+        return self.state_spec.include_last_command
 
     def get_observation(self, snapshot_response, last_command, device):
         observation = {}

@@ -12,13 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
 
 from ..config.pipeline_config import PipelineConfig
-from ...utils.action_order import ActionMode
 from ..config.rosbag_topics import RosTopicEnum
-from ..utils import message_parsers as rmp
 from ..utils.geometric import positive_quat
+from . import message_parsers as rmp
 from .frame_buffer import FrameBuffer
 
 
@@ -60,11 +58,7 @@ class FrameParser:
         state_frame["joint_data"] = joint_data
         state_frame["gripper_state"] = gripper_state
 
-        if self.config.include_tcp_poses or self.config.action_level in [
-            ActionMode.TCP,
-            ActionMode.TELEOP,
-            ActionMode.DELTA_TCP,
-        ]:
+        if self.config.requires_tcp_poses():
             msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.ACTUAL_TCP_LEFT)
             raw_pose = rmp.parse_pose(self.config, msg_data, schema_name)
             state_frame["actual_tcp_left"] = positive_quat(raw_pose)
@@ -86,11 +80,7 @@ class FrameParser:
             self.config, msg_data, schema_name
         )
 
-        if self.config.action_level in [
-            ActionMode.TCP,
-            ActionMode.TELEOP,
-            ActionMode.DELTA_TCP,
-        ]:
+        if self.config.is_tcp_action():
             msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DES_TCP_LEFT)
             raw_pose = rmp.parse_desired_tcp(self.config, msg_data, schema_name)
             desired_frame["des_tcp_left"] = positive_quat(raw_pose)
@@ -99,7 +89,7 @@ class FrameParser:
             raw_pose = rmp.parse_desired_tcp(self.config, msg_data, schema_name)
             desired_frame["des_tcp_right"] = positive_quat(raw_pose)
 
-        elif self.config.action_level in [ActionMode.JOINT, ActionMode.DELTA_JOINT]:
+        elif self.config.is_joint_action():
             msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DES_JOINT_LEFT)
             desired_frame["des_joint_left"] = rmp.parse_joint_waypoint(
                 self.config, msg_data, schema_name, "left"
@@ -133,28 +123,6 @@ class FrameParser:
 
             msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.RGB_RIGHT_IMAGE)
             images["observation.images.rgb_right"] = rmp.parse_image(
-                self.config, msg_data, schema_name
-            )
-
-        if self.config.include_depth_images:
-            msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DEPTH_LEFT_IMAGE)
-            images["observation.images.depth_left"] = rmp.parse_image(
-                self.config, msg_data, schema_name
-            )
-
-            msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DEPTH_RIGHT_IMAGE)
-            images["observation.images.depth_right"] = rmp.parse_image(
-                self.config, msg_data, schema_name
-            )
-
-        if self.config.include_depth_images:
-            msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DEPTH_LEFT_IMAGE)
-            images["observation.images.depth_left"] = rmp.parse_image(
-                self.config, msg_data, schema_name
-            )
-
-            msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DEPTH_RIGHT_IMAGE)
-            images["observation.images.depth_right"] = rmp.parse_image(
                 self.config, msg_data, schema_name
             )
 
