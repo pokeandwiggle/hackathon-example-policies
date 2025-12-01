@@ -84,7 +84,7 @@ def compare_observations(
         dataset_state = dataset_obs["observation.state"].cpu().numpy().squeeze()
         robot_state = robot_obs["observation.state"].cpu().numpy().squeeze()
 
-        state_names = cfg.input_features["observation.state"]
+        state_names = cfg.input_features["observation.state"].names
 
         # Create comparison table
         table = Table(title="State Values Comparison")
