@@ -70,16 +70,16 @@ def inference_loop(
             # Predict the next action with respect to the current observation
             with torch.inference_mode():
                 action = policy.select_action(observation)
-                # print(f"\n=== RAW MODEL PREDICTION ===")
-                # dbg_printer.print(step, observation, action, raw_action=True)
-                # print()
+
             action = model_to_action_trans.translate(action, observation)
 
             # print(f"\n=== ABSOLUTE ROBOT COMMANDS ===")
             dbg_printer.print(step, observation, action, raw_action=False)
 
             robot_interface.send_action(
-                action, model_to_action_trans.action_mode, controller
+                action,
+                model_to_action_trans.action_mode,
+                controller,
             )
             # policy._queues["action"].clear()
 
