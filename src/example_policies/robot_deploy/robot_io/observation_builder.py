@@ -97,6 +97,7 @@ class ObservationBuilder:
         )
 
         images = self.process_all_cameras(snapshot_response, device)
+        print(f"Processed {len(images)} images from cameras.")
         observation.update(images)
 
         return observation
