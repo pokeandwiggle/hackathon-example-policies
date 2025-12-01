@@ -84,7 +84,6 @@ class ActionTranslator:
         Dispatch to the correct transformation based on inferred action mode.
         """
         action = action.clone()
-
         # action[:, dc.LEFT_GRIPPER_IDX] = 1.0 - action[:, dc.LEFT_GRIPPER_IDX]
         # action[:, dc.RIGHT_GRIPPER_IDX] = 1.0 - action[:, dc.RIGHT_GRIPPER_IDX]
 
@@ -100,12 +99,15 @@ class ActionTranslator:
         if self.action_mode == ActionMode.DELTA_TCP:
             return self._delta_tcp(action, observation)
         if self.action_mode == ActionMode.ABS_TCP:
-            print("ABS TCP action mode")
-            # return self._absolute_tcp(action)
+            return self._absolute_tcp(action)
             # only update position, keep last orientation
-            action[:, DUAL_ABS_LEFT_POS_IDXS] = abs_pose[:, DUAL_ABS_LEFT_POS_IDXS]
-            action[:, DUAL_ABS_RIGHT_POS_IDXS] = abs_pose[:, DUAL_ABS_RIGHT_POS_IDXS]
-            return action
+            # action[:, DUAL_ABS_LEFT_POS_IDXS] = abs_pose[:, DUAL_ABS_LEFT_POS_IDXS]
+            # action[:, DUAL_ABS_RIGHT_POS_IDXS] = abs_pose[:, DUAL_ABS_RIGHT_POS_IDXS]
+            # action[:, DUAL_ABS_LEFT_QUAT_IDXS] = last_action[:, DUAL_ABS_LEFT_QUAT_IDXS]
+            # action[:, DUAL_ABS_RIGHT_QUAT_IDXS] = last_action[
+            #     :, DUAL_ABS_RIGHT_QUAT_IDXS
+            # ]
+            # return action
         if self.action_mode == ActionMode.DELTA_JOINT:
             return self._delta_joint(action, observation)
         if self.action_mode == ActionMode.ABS_JOINT:
