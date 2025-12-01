@@ -78,8 +78,8 @@ class ActionTranslator:
         Dispatch to the correct transformation based on inferred action mode.
         """
         action = action.clone()
-        action[:, dc.LEFT_GRIPPER_IDX] = 1.0 - action[:, dc.LEFT_GRIPPER_IDX]
-        action[:, dc.RIGHT_GRIPPER_IDX] = 1.0 - action[:, dc.RIGHT_GRIPPER_IDX]
+        # action[:, dc.LEFT_GRIPPER_IDX] = 1.0 - action[:, dc.LEFT_GRIPPER_IDX]
+        # action[:, dc.RIGHT_GRIPPER_IDX] = 1.0 - action[:, dc.RIGHT_GRIPPER_IDX]
 
         # Invert gripper action values to match the robot's open/close convention:
         # incoming actions use "close=1", but robot expects "open=1"
