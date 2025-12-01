@@ -100,7 +100,6 @@ class ActionTranslator:
             return self._delta_tcp(action, observation)
         if self.action_mode == ActionMode.ABS_TCP:
             return self._absolute_tcp(action)
-            # only update position, keep last orientation
             # action[:, DUAL_ABS_LEFT_POS_IDXS] = abs_pose[:, DUAL_ABS_LEFT_POS_IDXS]
             # action[:, DUAL_ABS_RIGHT_POS_IDXS] = abs_pose[:, DUAL_ABS_RIGHT_POS_IDXS]
             # action[:, DUAL_ABS_LEFT_QUAT_IDXS] = last_action[:, DUAL_ABS_LEFT_QUAT_IDXS]
