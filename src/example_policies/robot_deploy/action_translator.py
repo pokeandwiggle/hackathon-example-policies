@@ -84,8 +84,8 @@ class ActionTranslator:
         Dispatch to the correct transformation based on inferred action mode.
         """
         action = action.clone()
-        # action[:, dc.LEFT_GRIPPER_IDX] = 1.0 - action[:, dc.LEFT_GRIPPER_IDX]
-        # action[:, dc.RIGHT_GRIPPER_IDX] = 1.0 - action[:, dc.RIGHT_GRIPPER_IDX]
+        action[:, dc.LEFT_GRIPPER_IDX] = 1.0 - action[:, dc.LEFT_GRIPPER_IDX]
+        action[:, dc.RIGHT_GRIPPER_IDX] = 1.0 - action[:, dc.RIGHT_GRIPPER_IDX]
 
         if self.last_action is None:
             self.last_action = self._init_last_action_from_observation(
