@@ -139,15 +139,31 @@ def compare_observations(
                 print(f"    Dataset shape: {dataset_img.shape}")
                 print(f"    Robot shape:   {robot_img.shape}")
 
+                # Print individual camera statistics
+                print(f"\n    [cyan]Dataset Image Statistics:[/cyan]")
+                print(f"      Min:    {np.min(dataset_img):.4f}")
+                print(f"      Max:    {np.max(dataset_img):.4f}")
+                print(f"      Mean:   {np.mean(dataset_img):.4f}")
+                print(f"      Std:    {np.std(dataset_img):.4f}")
+                print(f"      Median: {np.median(dataset_img):.4f}")
+
+                print(f"\n    [cyan]Robot Image Statistics:[/cyan]")
+                print(f"      Min:    {np.min(robot_img):.4f}")
+                print(f"      Max:    {np.max(robot_img):.4f}")
+                print(f"      Mean:   {np.mean(robot_img):.4f}")
+                print(f"      Std:    {np.std(robot_img):.4f}")
+                print(f"      Median: {np.median(robot_img):.4f}")
+
                 if dataset_img.shape == robot_img.shape:
                     diff = robot_img - dataset_img
-                    print(f"    Mean pixel difference:     {np.mean(np.abs(diff)):.4f}")
-                    print(f"    Max pixel difference:      {np.max(np.abs(diff)):.4f}")
+                    print(f"\n    [cyan]Comparison Metrics:[/cyan]")
+                    print(f"      Mean pixel difference:     {np.mean(np.abs(diff)):.4f}")
+                    print(f"      Max pixel difference:      {np.max(np.abs(diff)):.4f}")
                     print(
-                        f"    RMS pixel difference:      {np.sqrt(np.mean(diff**2)):.4f}"
+                        f"      RMS pixel difference:      {np.sqrt(np.mean(diff**2)):.4f}"
                     )
                     print(
-                        f"    Correlation coefficient:   {np.corrcoef(dataset_img.flatten(), robot_img.flatten())[0, 1]:.4f}"
+                        f"      Correlation coefficient:   {np.corrcoef(dataset_img.flatten(), robot_img.flatten())[0, 1]:.4f}"
                     )
                 else:
                     print("    [red]ERROR: Shape mismatch![/red]")
