@@ -128,7 +128,8 @@ def inference_loop(
 
             # Translate action to robot coordinates
             action = model_to_action_trans.translate(action, observation)
-            print(action)
+            for i in range(action.shape[1]):
+                print(action[0, i].item())
             break
 
             print(f"\n=== POLICY OUTPUT FOR DATASET OBSERVATION ===")
