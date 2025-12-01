@@ -21,6 +21,7 @@ from example_policies import data_constants as dc
 from example_policies.utils.action_order import (
     DUAL_ABS_LEFT_POS_IDXS,
     DUAL_ABS_LEFT_QUAT_IDXS,
+    DUAL_ABS_RIGHT_POS_IDXS,
     DUAL_ABS_RIGHT_QUAT_IDXS,
 )
 
@@ -94,10 +95,12 @@ class ActionTranslator:
             # return self._absolute_tcp(action)
             last_action = observation["observation.state"][:, self.state_info_idxs]
             # only update position, keep last orientation
-            action[:, DUAL_ABS_LEFT_QUAT_IDXS] = last_action[:, DUAL_ABS_LEFT_QUAT_IDXS]
-            action[:, DUAL_ABS_RIGHT_QUAT_IDXS] = last_action[
-                :, DUAL_ABS_RIGHT_QUAT_IDXS
-            ]
+            action[:, DUAL_ABS_LEFT_POS_IDXS] = last_action[:, DUAL_ABS_LEFT_POS_IDXS]
+            action[:, DUAL_ABS_RIGHT_POS_IDXS] = last_action[:, DUAL_ABS_RIGHT_POS_IDXS]
+            # action[:, DUAL_ABS_LEFT_QUAT_IDXS] = last_action[:, DUAL_ABS_LEFT_QUAT_IDXS]
+            # action[:, DUAL_ABS_RIGHT_QUAT_IDXS] = last_action[
+            #     :, DUAL_ABS_RIGHT_QUAT_IDXS
+            # ]
             return action
         if self.action_mode == ActionMode.DELTA_JOINT:
             return self._delta_joint(action, observation)
