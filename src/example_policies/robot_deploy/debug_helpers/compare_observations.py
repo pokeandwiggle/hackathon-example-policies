@@ -133,7 +133,7 @@ def compare_observations(
             print(f"\nComparing image key: [yellow]{img_key}[/yellow]")
             if img_key in dataset_obs and img_key in robot_obs:
                 dataset_img = dataset_obs[img_key].cpu().numpy()
-                robot_img = robot_obs[img_key].cpu().numpy()
+                robot_img = robot_obs[img_key].cpu().squeeze().numpy()
 
                 print(f"\n  [yellow]{img_key}:[/yellow]")
                 print(f"    Dataset shape: {dataset_img.shape}")
