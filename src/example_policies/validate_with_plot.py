@@ -85,6 +85,7 @@ def main():
         return f"{float(v):{w}.{p}f}"
 
     for step in dataset:
+        print(step)
         episode_of_current_step = step.get("episode_index")
         if episode_of_current_step is None:
             raise KeyError("Expected key 'episode_index' in batch.")
