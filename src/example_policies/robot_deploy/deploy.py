@@ -43,13 +43,14 @@ def inference_loop(
     service_stub: robot_service_pb2_grpc.RobotServiceStub,
     controller=None,
 ):
-
     if controller is None:
         controller = RobotClient.CART_WAYPOINT
 
     robot_interface = RobotInterface(service_stub, cfg)
     model_to_action_trans = ActionTranslator(cfg)
     dbg_printer = print_info.InfoPrinter(cfg)
+
+    robot_interface.move_home()
 
     step = 0
     done = False
