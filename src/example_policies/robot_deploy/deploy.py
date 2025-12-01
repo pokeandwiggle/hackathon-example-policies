@@ -68,7 +68,7 @@ def inference_loop(
 
         if observation:
             # Predict the next action with respect to the current observation
-            for i, obs in enumerate(observation["observation.state"].cpu().numpy()):
+            for i, obs in enumerate(observation["observation.state"][0].cpu().numpy()):
                 print(f"Obs {i}: {obs}")
 
             with torch.inference_mode():

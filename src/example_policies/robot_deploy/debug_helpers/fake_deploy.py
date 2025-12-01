@@ -122,7 +122,7 @@ def inference_loop(
             if ask_for_input:
                 input("Press Enter to send next action...")
 
-            for i, obs in enumerate(observation["observation.state"].cpu().numpy()):
+            for i, obs in enumerate(observation["observation.state"][0].cpu().numpy()):
                 print(f"Obs {i}: {obs}")
 
             # Predict the next action using the policy with dataset observation
