@@ -74,15 +74,6 @@ def main():
         root=args.dataset,
     )
 
-    dataloader = torch.utils.data.DataLoader(
-        dataset,
-        num_workers=8,
-        batch_size=1,
-        shuffle=False,  # Not shuffling but choosing sequential batches from the batch
-        pin_memory=device != "cpu",
-        drop_last=False,
-    )
-
     ep = args.episode
     targets = []
     preds = []
@@ -93,22 +84,22 @@ def main():
     def _fmt(v: torch.Tensor, w=9, p=3):
         return f"{float(v):{w}.{p}f}"
 
-    for batch in dataloader:
-        b_ep = batch.get("episode_index")
-        if b_ep is None:
+    for step in dataset:
+        episode_of_current_step = step.get("episode_index")
+        if episode_of_current_step is None:
             raise KeyError("Expected key 'episode_index' in batch.")
-        b_ep = int(b_ep.view(-1)[0].item())
+        episode_of_current_step = int(episode_of_current_step.view(-1)[0].item())
 
-        if b_ep < ep:
+        if episode_of_current_step < ep:
             continue
-        if b_ep > ep:
+        if episode_of_current_step > ep:
             break
         found_any = (
             True  # We are in the correct episode which contains the true trajectory
         )
 
         batch = to_device_batch(
-            batch, device, non_blocking=True
+            step, torch.device(device), non_blocking=True
         )  # Push all tensors of the batch to the GPU
 
         tgt = batch["action"].detach().float().view(-1)
@@ -145,7 +136,7 @@ def main():
         ax.grid(True, linestyle="--", alpha=0.3)
         if d == 0:
             ax.set_title(f"Episode {ep}: action targets vs. predictions")
-    axes[-1].set_xlabel("time (s)" if "timestamp" in batch else "step")
+    axes[-1].set_xlabel("time (s)" if "timestamp" in step else "step")
 
     # single legend outside if many dims
     handles, labels = axes[0].get_legend_handles_labels()
