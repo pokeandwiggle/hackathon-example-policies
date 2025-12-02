@@ -160,7 +160,7 @@ def inference_loop(
             action = policy.select_action(observation)
 
         # Translate action to robot coordinates
-        # action = model_to_action_trans.translate(action, observation)
+        action = model_to_action_trans.translate(action, observation)
 
         print(f"\n=== POLICY OUTPUT FOR FULL ROBOT OBSERVATION ===")
         # dbg_printer.print(step, dataset_observation, action, raw_action=False)
