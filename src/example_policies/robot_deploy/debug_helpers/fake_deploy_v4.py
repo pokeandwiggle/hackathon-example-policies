@@ -158,6 +158,7 @@ def inference_loop(
         robot_state = robot_observation["observation.state"].cpu().numpy().squeeze()
 
         observation["observation.state"] = robot_observation["observation.state"]
+
         print(f"\n=== OBSERVATION STATE COMPARISON ===")
         for i, (ds_val, rb_val) in enumerate(zip(dataset_state, robot_state)):
             diff = ds_val - rb_val
@@ -179,10 +180,10 @@ def inference_loop(
         ):
             diff = pred_val - true_val
             print(
-                f"  [{i:02d}]: predicted={pred_val:.6f}, dataset_gt={true_val:.6f}, diff={diff:.6f}"
+                "  [{i:02d}]: predicted={pred_val:.6f}, dataset_gt={true_val:.6f}, diff={diff:.6f}"
             )
 
-        break
+        # break
         # Translate action to robot coordinates
         action = model_to_action_trans.translate(action, observation)
 
