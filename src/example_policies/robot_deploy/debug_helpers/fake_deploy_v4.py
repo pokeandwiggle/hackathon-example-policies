@@ -160,14 +160,19 @@ def inference_loop(
         print(f"Dataset state: {type(dataset_state)} , len={dataset_state.shape[0]}")
         print(f"Robot state:   {type(robot_state)}, len={robot_state.shape[0]}")
         print(f"State difference (robot - dataset): {robot_state - dataset_state}")
-        # observation["observation.state"] = robot_observation["observation.state"]
+        observation["observation.state"] = robot_observation["observation.state"]
 
         if ask_for_input:
             input("Press Enter to send next action...")
 
         # Predict the next action using the policy with full robot observation
+        action_from_dataset = dataset_observation["action"].cpu().numpy().squeeze()
         with torch.inference_mode():
             action = policy.select_action(observation)
+
+        print(f"\n=== POLICY OUTPUT FOR DATASET OBSERVATION ===")
+        print(f"Action from dataset: {action_from_dataset}")
+        print(f"Predicted action:    {action.cpu().numpy().squeeze()}")
 
         # Translate action to robot coordinates
         action = model_to_action_trans.translate(action, observation)
