@@ -135,7 +135,7 @@ def inference_loop(
             observation = dataset_observation.copy()
 
             # we add some noise to the state
-            for i in observation["observation.state"].shape[0]:
+            for i in range(observation["observation.state"].shape[0]):
                 observation["observation.state"][i] += 0.001 * torch.randn(
                     observation["observation.state"][i].shape,
                     device=observation["observation.state"].device,
