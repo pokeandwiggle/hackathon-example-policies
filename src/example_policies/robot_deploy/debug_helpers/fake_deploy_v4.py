@@ -184,11 +184,14 @@ def inference_loop(
         action = model_to_action_trans.translate(action, observation)
 
         print(f"\n=== POLICY OUTPUT FOR FULL ROBOT OBSERVATION ===")
-        dbg_printer.print(step, observation, action, raw_action=False)
+        dbg_printer.print(step, dataset_observation, action, raw_action=False)
+        dbg_printer.print(step, robot_observation, action, raw_action=False)
 
         # Send action to robot
         robot_interface.send_action(
-            action, model_to_action_trans.action_mode, controller
+            action,
+            model_to_action_trans.action_mode,
+            controller,
         )
 
         # Wait for execution to finish
