@@ -147,8 +147,9 @@ def inference_loop(
         dataset_state = dataset_observation["observation.state"].cpu().numpy().squeeze()
         robot_state = robot_observation["observation.state"].cpu().numpy().squeeze()
 
-        print(f"Dataset state: {dataset_state}")
-        print(f"Robot state:   {robot_state}")
+        print(f"Dataset state: {type(dataset_state)} , len={dataset_state.shape[0]}")
+        print(f"Robot state:   {type(robot_state)}, len={robot_state.shape[0]}")
+        print(f"State difference (robot - dataset): {robot_state - dataset_state}")
         observation["observation.state"] = robot_observation["observation.state"]
 
         if ask_for_input:
