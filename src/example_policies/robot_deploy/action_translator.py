@@ -12,18 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from enum import Enum
 
 import torch
 from torch.nn import functional as F
 
 from example_policies import data_constants as dc
-from example_policies.utils.action_order import (
-    DUAL_ABS_LEFT_POS_IDXS,
-    DUAL_ABS_LEFT_QUAT_IDXS,
-    DUAL_ABS_RIGHT_POS_IDXS,
-    DUAL_ABS_RIGHT_QUAT_IDXS,
-)
 
 from ..data_ops.utils.geometric import axis_angle_to_quat_torch, quat_mul_torch
 from .utils.action_mode import ActionMode
