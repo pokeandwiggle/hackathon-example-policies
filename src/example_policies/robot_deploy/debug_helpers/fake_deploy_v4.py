@@ -147,45 +147,23 @@ def inference_loop(
         dataset_state = dataset_observation["observation.state"].cpu().numpy().squeeze()
         robot_state = robot_observation["observation.state"].cpu().numpy().squeeze()
 
-        print(f"\n[cyan]Step {step}: State Comparison[/cyan]")
-        print(f"\n[yellow]Dataset State:[/yellow]")
-        for i, val in enumerate(dataset_state):
-            print(f"  [{i:2d}] {val:10.6f}")
-
-        print(f"\n[yellow]Robot State:[/yellow]")
-        for i, val in enumerate(robot_state):
-            print(f"  [{i:2d}] {val:10.6f}")
-
-        print(f"\n[yellow]Difference (Robot - Dataset):[/yellow]")
-        diff = robot_state - dataset_state
-        for i, val in enumerate(diff):
-            print(f"  [{i:2d}] {val:10.6f}")
-
-        print(f"\n[yellow]Statistics:[/yellow]")
-        print(f"  Mean absolute difference: {np.mean(np.abs(diff)):.6f}")
-        print(f"  Max absolute difference:  {np.max(np.abs(diff)):.6f}")
-        print(f"  RMS difference:           {np.sqrt(np.mean(diff**2)):.6f}")
-
+        print(f"Dataset state: {dataset_state}")
+        print(f"Robot state:   {robot_state}")
         observation["observation.state"] = robot_observation["observation.state"]
 
         if ask_for_input:
             input("Press Enter to send next action...")
-
-        print(f"\n[cyan]Using:[/cyan]")
-        print(f"  State: robot (live)")
-        print(f"  Images: robot (live)")
-        print(f"  [green]100% live robot observations[/green]")
 
         # Predict the next action using the policy with full robot observation
         with torch.inference_mode():
             action = policy.select_action(observation)
 
         # Translate action to robot coordinates
-        action = model_to_action_trans.translate(action, observation)
+        # action = model_to_action_trans.translate(action, observation)
 
         print(f"\n=== POLICY OUTPUT FOR FULL ROBOT OBSERVATION ===")
-        dbg_printer.print(step, dataset_observation, action, raw_action=False)
-        dbg_printer.print(step, robot_observation, action, raw_action=False)
+        # dbg_printer.print(step, dataset_observation, action, raw_action=False)
+        # dbg_printer.print(step, robot_observation, action, raw_action=False)
 
         # Send action to robot
         robot_interface.send_action(
