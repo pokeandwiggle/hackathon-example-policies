@@ -162,7 +162,7 @@ def inference_loop(
         for i, (ds_val, rb_val) in enumerate(zip(dataset_state, robot_state)):
             diff = ds_val - rb_val
             print(
-                f"  [{i:02d}]: dataset={ds_val:.6f}, robot={rb_val:.6f}, diff={diff:.6f}"
+                f"  [{i:02d<10}]: dataset={ds_val:.6f}, robot={rb_val:.6f}, diff={diff:.6f}"
             )
 
         if ask_for_input:
@@ -179,7 +179,7 @@ def inference_loop(
         ):
             diff = pred_val - true_val
             print(
-                f"  [{i:02d}]: predicted={pred_val:.6f}, dataset_gt={true_val:.6f}, diff={diff:.6f}"
+                f"  [{i:02d<10}]: predicted={pred_val:.6f}, dataset_gt={true_val:.6f}, diff={diff:.6f}"
             )
 
         break
