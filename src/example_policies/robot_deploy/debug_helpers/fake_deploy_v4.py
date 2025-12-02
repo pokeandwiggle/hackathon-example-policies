@@ -157,10 +157,13 @@ def inference_loop(
         dataset_state = dataset_observation["observation.state"].cpu().numpy().squeeze()
         robot_state = robot_observation["observation.state"].cpu().numpy().squeeze()
 
-        print(f"Dataset state: {type(dataset_state)} , len={dataset_state.shape[0]}")
-        print(f"Robot state:   {type(robot_state)}, len={robot_state.shape[0]}")
-        print(f"State difference (robot - dataset): {robot_state - dataset_state}")
         observation["observation.state"] = robot_observation["observation.state"]
+        print(f"\n=== OBSERVATION STATE COMPARISON ===")
+        for i, (ds_val, rb_val) in enumerate(zip(dataset_state, robot_state)):
+            diff = ds_val - rb_val
+            print(
+                f"  [{i:02d}]: dataset={ds_val:.6f}, robot={rb_val:.6f}, diff={diff:.6f}"
+            )
 
         if ask_for_input:
             input("Press Enter to send next action...")
@@ -171,13 +174,15 @@ def inference_loop(
             action = policy.select_action(observation)
 
         print(f"\n=== POLICY OUTPUT FOR DATASET OBSERVATION ===")
-        print(f"Action from dataset:")
-        for i, val in enumerate(action_from_dataset):
-            print(f"  [{i:02d}]: {val:.6f}")
-        print(f"Predicted action: ")
-        for i, val in enumerate(action.cpu().numpy().squeeze()):
-            print(f"  [{i:02d}]: {val:.6f}")
+        for i, (pred_val, true_val) in enumerate(
+            zip(action.cpu().numpy().squeeze(), action_from_dataset)
+        ):
+            diff = pred_val - true_val
+            print(
+                f"  [{i:02d}]: predicted={pred_val:.6f}, dataset_gt={true_val:.6f}, diff={diff:.6f}"
+            )
 
+        break
         # Translate action to robot coordinates
         action = model_to_action_trans.translate(action, observation)
 
