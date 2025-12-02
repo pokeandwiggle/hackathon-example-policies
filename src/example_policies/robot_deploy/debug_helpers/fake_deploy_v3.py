@@ -135,9 +135,9 @@ def inference_loop(
             observation = dataset_observation.copy()
 
             # we add some noise to the state
-            observation["observation.state"] += (
-                torch.randn_like(observation["observation.state"]) * 0.0001
-            )
+            # observation["observation.state"] += (
+            #     torch.randn_like(observation["observation.state"]) * 0.0
+            # )
 
             # Replace all image observations with robot images
             image_keys = [
