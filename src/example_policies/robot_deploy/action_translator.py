@@ -141,7 +141,7 @@ class ActionTranslator:
         return full_abs
 
     def _absolute_tcp(self, action: torch.Tensor) -> torch.Tensor:
-        action = _normalize_quats(action.clone())
+        # action = _normalize_quats(action.clone())
         # action = _positive_quats(action)
         return action
 
