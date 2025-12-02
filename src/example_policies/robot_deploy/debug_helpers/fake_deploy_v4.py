@@ -35,6 +35,7 @@ from example_policies.robot_deploy.robot_io.robot_service import (
     robot_service_pb2_grpc,
 )
 from example_policies.robot_deploy.utils import print_info
+from rich import print
 
 
 def inference_loop(
@@ -139,7 +140,9 @@ def inference_loop(
                 key for key in robot_observation.keys() if "image" in key.lower()
             ]
             for img_key in image_keys:
+                print(f"Found image key: {img_key}")
                 if img_key in robot_observation:
+                    print(f"Replacing observation key '{img_key}' with robot image")
                     observation[img_key] = robot_observation[img_key]
 
             observation["observation.state"] = robot_observation["observation.state"]
