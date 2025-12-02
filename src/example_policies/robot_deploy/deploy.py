@@ -68,14 +68,14 @@ def inference_loop(
 
         if observation:
             # Predict the next action with respect to the current observation
-            for i, obs in enumerate(observation["observation.state"][0].cpu().numpy()):
-                print(f"Obs {i}: {obs}")
+            # for i, obs in enumerate(observation["observation.state"][0].cpu().numpy()):
+            #     print(f"Obs {i}: {obs}")
 
             with torch.inference_mode():
                 action = policy.select_action(observation)
 
             action = model_to_action_trans.translate(action, observation)
-            break
+            # break
 
             # print(f"\n=== ABSOLUTE ROBOT COMMANDS ===")
             dbg_printer.print(step, observation, action, raw_action=False)

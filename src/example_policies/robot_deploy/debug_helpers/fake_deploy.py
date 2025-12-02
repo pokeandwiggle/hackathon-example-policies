@@ -122,8 +122,8 @@ def inference_loop(
             if ask_for_input:
                 input("Press Enter to send next action...")
 
-            for i, obs in enumerate(observation["observation.state"][0].cpu().numpy()):
-                print(f"Obs {i}: {obs}")
+            # for i, obs in enumerate(observation["observation.state"][0].cpu().numpy()):
+            #     print(f"Obs {i}: {obs}")
 
             # Predict the next action using the policy with dataset observation
             with torch.inference_mode():
@@ -131,7 +131,6 @@ def inference_loop(
 
             # Translate action to robot coordinates
             action = model_to_action_trans.translate(action, observation)
-            break
 
             print(f"\n=== POLICY OUTPUT FOR DATASET OBSERVATION ===")
             dbg_printer.print(step, observation, action, raw_action=False)
