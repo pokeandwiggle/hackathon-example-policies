@@ -122,6 +122,16 @@ def inference_loop(
     while not done:
         start_time = time.time()
 
+        batch = next(iterator, None)
+        if batch is None:
+            print("End of dataset reached, stopping inference loop.")
+            break
+        # Move observation to correct device
+        dataset_observation = {
+            key: value.to(cfg.device) if isinstance(value, torch.Tensor) else value
+            for key, value in batch.items()
+        }
+
         # Get current robot observation (use this for everything)
         robot_observation = robot_interface.get_observation(cfg.device)
 
