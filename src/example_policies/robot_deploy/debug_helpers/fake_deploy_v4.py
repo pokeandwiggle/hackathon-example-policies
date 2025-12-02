@@ -143,14 +143,37 @@ def inference_loop(
                 print(f"Replacing observation key '{img_key}' with robot image")
                 observation[img_key] = robot_observation[img_key]
 
+        # Debug: Compare dataset state vs robot state
+        dataset_state = dataset_observation["observation.state"].cpu().numpy().squeeze()
+        robot_state = robot_observation["observation.state"].cpu().numpy().squeeze()
+
+        print(f"\n[cyan]Step {step}: State Comparison[/cyan]")
+        print(f"\n[yellow]Dataset State:[/yellow]")
+        for i, val in enumerate(dataset_state):
+            print(f"  [{i:2d}] {val:10.6f}")
+
+        print(f"\n[yellow]Robot State:[/yellow]")
+        for i, val in enumerate(robot_state):
+            print(f"  [{i:2d}] {val:10.6f}")
+
+        print(f"\n[yellow]Difference (Robot - Dataset):[/yellow]")
+        diff = robot_state - dataset_state
+        for i, val in enumerate(diff):
+            print(f"  [{i:2d}] {val:10.6f}")
+
+        print(f"\n[yellow]Statistics:[/yellow]")
+        print(f"  Mean absolute difference: {np.mean(np.abs(diff)):.6f}")
+        print(f"  Max absolute difference:  {np.max(np.abs(diff)):.6f}")
+        print(f"  RMS difference:           {np.sqrt(np.mean(diff**2)):.6f}")
+
         observation["observation.state"] = robot_observation["observation.state"]
 
         if ask_for_input:
             input("Press Enter to send next action...")
 
-        print(f"\n[cyan]Step {step}:[/cyan]")
-        print(f"  Using state from robot (live)")
-        print(f"  Using images from robot (live)")
+        print(f"\n[cyan]Using:[/cyan]")
+        print(f"  State: robot (live)")
+        print(f"  Images: robot (live)")
         print(f"  [green]100% live robot observations[/green]")
 
         # Predict the next action using the policy with full robot observation
