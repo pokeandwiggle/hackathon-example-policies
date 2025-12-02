@@ -122,69 +122,60 @@ def inference_loop(
     while not done:
         start_time = time.time()
 
-        try:
-            # Get observation from dataset (only to maintain frame count and timing)
+        # Get current robot observation (use this for everything)
+        robot_observation = robot_interface.get_observation(cfg.device)
 
-            # Get current robot observation (use this for everything)
-            robot_observation = robot_interface.get_observation(cfg.device)
-
-            if robot_observation is None:
-                print(
-                    "[yellow]Warning: Failed to get robot observation, skipping step[/yellow]"
-                )
-                time.sleep(0.1)
-                continue
-
-            # Use full robot observation (both state and images)
-            observation = dataset_observation.copy()
-
-            # Replace all image observations with robot images
-            image_keys = [
-                key for key in robot_observation.keys() if "image" in key.lower()
-            ]
-            for img_key in image_keys:
-                print(f"Found image key: {img_key}")
-                if img_key in robot_observation:
-                    print(f"Replacing observation key '{img_key}' with robot image")
-                    observation[img_key] = robot_observation[img_key]
-
-            observation["observation.state"] = robot_observation["observation.state"]
-
-            if ask_for_input:
-                input("Press Enter to send next action...")
-
-            print(f"\n[cyan]Step {step}:[/cyan]")
-            print(f"  Using state from robot (live)")
-            print(f"  Using images from robot (live)")
-            print(f"  [green]100% live robot observations[/green]")
-
-            # Predict the next action using the policy with full robot observation
-            with torch.inference_mode():
-                action = policy.select_action(observation)
-
-            # Translate action to robot coordinates
-            action = model_to_action_trans.translate(action, observation)
-
-            print(f"\n=== POLICY OUTPUT FOR FULL ROBOT OBSERVATION ===")
-            dbg_printer.print(step, observation, action, raw_action=False)
-
-            # Send action to robot
-            robot_interface.send_action(
-                action, model_to_action_trans.action_mode, controller
+        if robot_observation is None:
+            print(
+                "[yellow]Warning: Failed to get robot observation, skipping step[/yellow]"
             )
+            time.sleep(0.1)
+            continue
 
-            # Wait for execution to finish
-            elapsed_time = time.time() - start_time
-            sleep_duration = period - elapsed_time
+        # Use full robot observation (both state and images)
+        observation = dataset_observation.copy()
 
-            print(f"Sleep duration: {sleep_duration:.3f} s")
-            time.sleep(max(0.0, sleep_duration))
+        # Replace all image observations with robot images
+        image_keys = [key for key in robot_observation.keys() if "image" in key.lower()]
+        for img_key in image_keys:
+            print(f"Found image key: {img_key}")
+            if img_key in robot_observation:
+                print(f"Replacing observation key '{img_key}' with robot image")
+                observation[img_key] = robot_observation[img_key]
 
-            step += 1
+        observation["observation.state"] = robot_observation["observation.state"]
 
-        except StopIteration:
-            print(f"\nReached end of dataset episode {ep_index} (used for timing only)")
-            done = True
+        if ask_for_input:
+            input("Press Enter to send next action...")
+
+        print(f"\n[cyan]Step {step}:[/cyan]")
+        print(f"  Using state from robot (live)")
+        print(f"  Using images from robot (live)")
+        print(f"  [green]100% live robot observations[/green]")
+
+        # Predict the next action using the policy with full robot observation
+        with torch.inference_mode():
+            action = policy.select_action(observation)
+
+        # Translate action to robot coordinates
+        action = model_to_action_trans.translate(action, observation)
+
+        print(f"\n=== POLICY OUTPUT FOR FULL ROBOT OBSERVATION ===")
+        dbg_printer.print(step, observation, action, raw_action=False)
+
+        # Send action to robot
+        robot_interface.send_action(
+            action, model_to_action_trans.action_mode, controller
+        )
+
+        # Wait for execution to finish
+        elapsed_time = time.time() - start_time
+        sleep_duration = period - elapsed_time
+
+        print(f"Sleep duration: {sleep_duration:.3f} s")
+        time.sleep(max(0.0, sleep_duration))
+
+        step += 1
 
 
 def main():
