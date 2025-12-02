@@ -171,8 +171,12 @@ def inference_loop(
             action = policy.select_action(observation)
 
         print(f"\n=== POLICY OUTPUT FOR DATASET OBSERVATION ===")
-        print(f"Action from dataset: {action_from_dataset}")
-        print(f"Predicted action:    {action.cpu().numpy().squeeze()}")
+        print(f"Action from dataset:")
+        for i, val in enumerate(action_from_dataset):
+            print(f"  [{i:02d}]: {val:.6f}")
+        print(f"Predicted action: ")
+        for i, val in enumerate(action.cpu().numpy().squeeze()):
+            print(f"  [{i:02d}]: {val:.6f}")
 
         # Translate action to robot coordinates
         action = model_to_action_trans.translate(action, observation)
