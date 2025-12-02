@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from enum import Enum
 
 import torch
 from torch.nn import functional as F
@@ -142,8 +141,8 @@ class ActionTranslator:
         return full_abs
 
     def _absolute_tcp(self, action: torch.Tensor) -> torch.Tensor:
-        action = _normalize_quats(action.clone())
-        action = _positive_quats(action)
+        # action = _normalize_quats(action.clone())
+        # action = _positive_quats(action)
         return action
 
     def _absolute_joint(self, action: torch.Tensor) -> torch.Tensor:

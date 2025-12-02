@@ -88,6 +88,7 @@ def inference_loop(
         repo_id=fake_repo_id,
         root=data_dir,
         episodes=[ep_index],
+        video_backend="pyav",
     )
 
     robot_interface = RobotInterface(service_stub, cfg)
@@ -115,17 +116,6 @@ def inference_loop(
 
     input("Press Enter to move robot to start...")
     robot_interface.move_home()
-
-    if model_to_action_trans.action_mode in (ActionMode.DELTA_TCP, ActionMode.ABS_TCP):
-        state = batch["observation.state"]
-        state = cfg.get_tcp_from_state(state[0].cpu().numpy())
-        # The robot expects the action to include gripper state as the last two elements.
-        DEFAULT_GRIPPER_STATE = [0, 0]  # [gripper_position, gripper_velocity]
-        action = np.concatenate([state, DEFAULT_GRIPPER_STATE]).astype(np.float32)
-        # add batch axis
-        action = action[None, :]
-        print("Moving robot to start position...")
-        robot_interface.send_action(torch.from_numpy(action), ActionMode.ABS_TCP)
 
     input("Press Enter to continue...")
 

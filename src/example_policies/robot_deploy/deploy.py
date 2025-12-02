@@ -21,6 +21,7 @@ import grpc
 # Lerobot Environment Bug
 import numpy as np
 import torch
+from rich import print
 
 from example_policies.robot_deploy.action_translator import ActionTranslator
 from example_policies.robot_deploy.policy_loader import load_policy
@@ -43,13 +44,16 @@ def inference_loop(
     service_stub: robot_service_pb2_grpc.RobotServiceStub,
     controller=None,
 ):
-
     if controller is None:
         controller = RobotClient.CART_WAYPOINT
+
+    print(f"The config is: {cfg}")
 
     robot_interface = RobotInterface(service_stub, cfg)
     model_to_action_trans = ActionTranslator(cfg)
     dbg_printer = print_info.InfoPrinter(cfg)
+
+    robot_interface.move_home()
 
     step = 0
     done = False
@@ -60,32 +64,31 @@ def inference_loop(
 
     while not done:
         start_time = time.time()
-        print(policy.config.input_features)
         observation = robot_interface.get_observation(cfg.device, show=False)
 
         if observation:
             # Predict the next action with respect to the current observation
+            # for i, obs in enumerate(observation["observation.state"][0].cpu().numpy()):
+            #     print(f"Obs {i}: {obs}")
+
             with torch.inference_mode():
                 action = policy.select_action(observation)
-                print(f"\n=== RAW MODEL PREDICTION ===")
-                dbg_printer.print(step, observation, action, raw_action=True)
-                print()
-            action = model_to_action_trans.translate(action, observation)
 
-            print(f"\n=== ABSOLUTE ROBOT COMMANDS ===")
+            action = model_to_action_trans.translate(action, observation)
+            # break
+
+            # print(f"\n=== ABSOLUTE ROBOT COMMANDS ===")
             dbg_printer.print(step, observation, action, raw_action=False)
 
             robot_interface.send_action(
-                action, model_to_action_trans.action_mode, controller
+                action,
+                model_to_action_trans.action_mode,
+                controller,
             )
-            # policy._queues["action"].clear()
 
         # wait for execution to finish
         elapsed_time = time.time() - start_time
         sleep_duration = period - elapsed_time
-        print(sleep_duration)
-        # wait for input
-        # input("Press Enter to continue...")
         time.sleep(max(0.0, sleep_duration))
 
         step += 1

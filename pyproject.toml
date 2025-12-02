@@ -28,6 +28,7 @@ dependencies = [
     "lerobot[smolvla]",
     "mcap>=1.3.0",
     "opencv-python>=4.12.0.88",
+    "rich>=14.2.0",
     "rosbags>=0.10.11",
     "scipy>=1.15.3",
     "torch>=2.8.0",
