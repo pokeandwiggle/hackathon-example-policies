@@ -115,6 +115,12 @@ def inference_loop(
             # Get observation from dataset (only to maintain frame count and timing)
             batch = next(iterator)
 
+            # Move observation to correct device
+            dataset_observation = {
+                key: value.to(cfg.device) if isinstance(value, torch.Tensor) else value
+                for key, value in batch.items()
+            }
+
             # Get current robot observation (use this for everything)
             robot_observation = robot_interface.get_observation(cfg.device)
 
@@ -126,7 +132,17 @@ def inference_loop(
                 continue
 
             # Use full robot observation (both state and images)
-            observation = robot_observation
+            observation = dataset_observation.copy()
+
+            # Replace all image observations with robot images
+            image_keys = [
+                key for key in robot_observation.keys() if "image" in key.lower()
+            ]
+            for img_key in image_keys:
+                if img_key in robot_observation:
+                    observation[img_key] = robot_observation[img_key]
+
+            observation["observation.state"] = robot_observation["observation.state"]
 
             if ask_for_input:
                 input("Press Enter to send next action...")
