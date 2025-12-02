@@ -93,8 +93,20 @@ def inference_loop(
         observation = robot_interface.get_observation(cfg.device)
         time.sleep(0.1)
 
+    print(f"Robot observation: {observation.keys()}")
     input("Press Enter to move robot to start...")
     robot_interface.move_home()
+
+    # Dataset observation
+    iterator = iter(dataloader)
+    batch = next(iterator)
+
+    dataset_observation = {
+        key: value.to(cfg.device) if isinstance(value, torch.Tensor) else value
+        for key, value in batch.items()
+    }
+
+    print(f"Dataset observation: {dataset_observation.keys()}")
 
     input(
         "Press Enter to start policy inference with full robot observations (state + images from robot)..."
@@ -107,20 +119,11 @@ def inference_loop(
     print("Starting policy inference loop with full robot observations...")
     period = 1.0 / hz
 
-    iterator = iter(dataloader)
-
     while not done:
         start_time = time.time()
 
         try:
             # Get observation from dataset (only to maintain frame count and timing)
-            batch = next(iterator)
-
-            # Move observation to correct device
-            dataset_observation = {
-                key: value.to(cfg.device) if isinstance(value, torch.Tensor) else value
-                for key, value in batch.items()
-            }
 
             # Get current robot observation (use this for everything)
             robot_observation = robot_interface.get_observation(cfg.device)
