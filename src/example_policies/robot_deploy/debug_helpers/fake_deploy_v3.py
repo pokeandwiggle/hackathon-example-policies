@@ -134,8 +134,15 @@ def inference_loop(
             # Create hybrid observation: state from dataset, images from robot
             observation = dataset_observation.copy()
 
+            # we add some noise to the state
+            observation["observation.state"] += (
+                torch.randn_like(observation["observation.state"]) * 0.01
+            )
+
             # Replace all image observations with robot images
-            image_keys = [key for key in robot_observation.keys() if "image" in key.lower()]
+            image_keys = [
+                key for key in robot_observation.keys() if "image" in key.lower()
+            ]
             for img_key in image_keys:
                 if img_key in robot_observation:
                     observation[img_key] = robot_observation[img_key]
