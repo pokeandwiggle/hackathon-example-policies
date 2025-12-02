@@ -133,7 +133,7 @@ def inference_loop(
 
             # Create hybrid observation: images from dataset, state from robot
             observation = dataset_observation.copy()
-            observation["observation.state"] = robot_observation["observation.state"]
+            # observation["observation.state"] = robot_observation["observation.state"]
 
             if ask_for_input:
                 input("Press Enter to send next action...")
