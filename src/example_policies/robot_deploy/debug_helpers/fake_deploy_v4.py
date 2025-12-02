@@ -150,7 +150,7 @@ def inference_loop(
         print(f"Dataset state: {type(dataset_state)} , len={dataset_state.shape[0]}")
         print(f"Robot state:   {type(robot_state)}, len={robot_state.shape[0]}")
         print(f"State difference (robot - dataset): {robot_state - dataset_state}")
-        observation["observation.state"] = robot_observation["observation.state"]
+        # observation["observation.state"] = robot_observation["observation.state"]
 
         if ask_for_input:
             input("Press Enter to send next action...")
