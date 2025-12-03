@@ -135,9 +135,9 @@ def inference_loop(
             observation = dataset_observation.copy()
 
             # we add some noise to the state to check if robot overfits
-            # print(observation["observation.state"].shape)
+            print(observation["observation.state"].shape)
             # for i in range(observation["observation.state"].shape[0]):
-            #     observation["observation.state"][i] += 0.00001
+            observation["observation.state"][7] += 0.00001
 
             # Replace all image observations with robot images
             image_keys = [
