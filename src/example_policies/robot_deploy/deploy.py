@@ -51,9 +51,11 @@ def inference_loop(
     model_to_action_trans = ActionTranslator(cfg)
     dbg_printer = print_info.InfoPrinter(cfg)
 
+    
     step = 0
     done = False
-
+    robot_interface.client.send_move_home()
+    input("Press Enter to start")
     # Inference Loop
     print("Starting inference loop...")
     period = 1.0 / hz

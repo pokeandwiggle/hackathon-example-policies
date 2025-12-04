@@ -432,3 +432,42 @@ def beso_config(
         policy_kwargs=policy_kwargs,
     )
     return cfg
+
+
+def dit_flow_image_config(
+    dataset_root_dir: str,
+    batch_size: int = 64,
+    epochs: int = 200,
+    resume_path: str = None,
+    policy_kwargs: dict = None,
+    enable_wandb: bool = False,
+):
+    # Diffusion Policy settings:
+    n_obs_steps: int = 2
+    horizon: int = 16
+    n_action_steps: int = 8
+
+    default_kwargs = {}
+
+    if policy_kwargs is not None:
+        default_kwargs.update(policy_kwargs)
+    policy_kwargs = default_kwargs
+
+    cfg = create_lerobot_config(
+        # Model selection: e.g., "act", "diffusion", "pi0", "smolvla"
+        model_name="ditflow_image",
+        # Path to the LeRobot dataset directory
+        dataset_root_dir=dataset_root_dir,
+        # Training hyperparameters
+        batch_size=batch_size,
+        lr=2e-4,
+        epochs=epochs,
+        save_freq_epochs=100,
+        # Enable Weights & Biases for experiment tracking
+        enable_wandb=enable_wandb,
+        resume_path=resume_path,
+        # Additional Policy Keywords
+        policy_kwargs=policy_kwargs,
+    )
+    return cfg
+
