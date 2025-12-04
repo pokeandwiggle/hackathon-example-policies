@@ -27,7 +27,7 @@ from lerobot.policies.utils import (
 )
 
 from ...factory import register_policy
-from .configuration_dit_flow import DiTFlowConfig
+from .configuration_dit_flow_image import DiTFlowImageConfig
 
 
 def _get_activation_fn(activation: str):
@@ -312,19 +312,19 @@ class _DiTNoiseNet(nn.Module):
         )
 
 
-@register_policy(name="ditflow")
-class DiTFlowPolicy(PreTrainedPolicy):
+@register_policy(name="ditflow_image")
+class DiTFlowImagePolicy(PreTrainedPolicy):
     """
     Diffusion Policy as per "Diffusion Policy: Visuomotor Policy Learning via Action Diffusion"
     (paper: https://arxiv.org/abs/2303.04137, code: https://github.com/real-stanford/diffusion_policy).
     """
 
-    config_class = DiTFlowConfig
-    name = "ditflow"
+    config_class = DiTFlowImageConfig
+    name = "ditflow_image"
 
     def __init__(
         self,
-        config: DiTFlowConfig,
+        config: DiTFlowImageConfig,
         dataset_stats: dict[str, dict[str, torch.Tensor]] | None = None,
     ):
         """
@@ -390,8 +390,6 @@ class DiTFlowPolicy(PreTrainedPolicy):
 
     @torch.no_grad()
     def select_action(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
-        if "action" in batch:
-            batch.pop("action")  # remove action if present in the input batch
 
         batch = self.normalize_inputs(batch)
         if self.config.image_features:
@@ -427,12 +425,13 @@ class DiTFlowPolicy(PreTrainedPolicy):
 
 
 class DiTFlowModel(nn.Module):
-    def __init__(self, config: DiTFlowConfig):
+    def __init__(self, config: DiTFlowImageConfig):
         super().__init__()
         self.config = config
 
         # Build observation encoders (depending on which observations are provided).
-        global_cond_dim = self.config.robot_state_feature.shape[0]
+        # global_cond_dim = self.config.robot_state_feature.shape[0]
+        global_cond_dim = 0
         if self.config.image_features:
             num_images = len(self.config.image_features)
             if self.config.use_separate_rgb_encoder_per_camera:
@@ -511,7 +510,8 @@ class DiTFlowModel(nn.Module):
     ) -> torch.Tensor:
         """Encode image features and concatenate them all together along with the state vector."""
         batch_size, n_obs_steps = batch[OBS_STATE].shape[:2]
-        global_cond_feats = [batch[OBS_STATE]]
+        # global_cond_feats = [batch[OBS_STATE]]
+        global_cond_feats = []
         # Extract image features.
         if self.config.image_features:
             if self.config.use_separate_rgb_encoder_per_camera:
