@@ -98,6 +98,7 @@ class ObservationBuilder:
 
         images = self.process_all_cameras(snapshot_response, device)
         observation.update(images)
+        observation["task"] = "sort red blocks"
 
         return observation
 
