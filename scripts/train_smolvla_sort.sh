@@ -1,12 +1,11 @@
 lerobot-train \
     --job_name=smolvla_sort_red_blocks_100 \
-    --output_dir=/root/autodl-tmp/outputs/smolvla_sort_red_blocks_100/ \
-    --dataset.repo_id=sort_red_blocks_100 \
-    --dataset.root=/root/autodl-tmp/sort_red_blocks_100 \
+    --output_dir=./outputs/smolvla_sort_red_blocks_100/ \
+    --dataset.repo_id=continuallearning/sort_red_blocks_100 \
     --policy.path=lerobot/smolvla_base \
     --policy.push_to_hub=false \
     --policy.scheduler_decay_steps=60000 \
-    --batch_size=128 \
+    --batch_size=64 \
     --num_workers=16 \
     --steps=60000 \
     --eval_freq=0 \
