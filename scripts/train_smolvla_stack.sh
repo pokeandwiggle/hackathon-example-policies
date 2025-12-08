@@ -1,14 +1,14 @@
 lerobot-train \
-    --job_name=smolvla_stack_red_blocks_100 \
-    --output_dir=/root/autodl-tmp/outputs/smolvla_stack_red_blocks_100/ \
+    --job_name=smolvla_stack_red_blocks_100_long \
+    --output_dir=/root/autodl-tmp/outputs/smolvla_stack_red_blocks_100_long/ \
     --dataset.repo_id=stack_red_blocks_100 \
     --dataset.root=/root/autodl-tmp/stack_red_blocks_100 \
-    --policy.path=lerobot/smolvla_base \
+    --policy.path=/root/autodl-tmp/outputs/smolvla_stack_red_blocks_100/checkpoints/last/pretrained_model \
     --policy.push_to_hub=false \
-    --policy.scheduler_decay_steps=30000 \
+    --policy.scheduler_decay_steps=90000 \
     --batch_size=128 \
     --num_workers=16 \
-    --steps=30000 \
+    --steps=90000 \
     --eval_freq=0 \
     --save_freq=10000 \
     --log_freq=100 \
