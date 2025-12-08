@@ -1,0 +1,17 @@
+lerobot-train \
+    --job_name=smolvla_sort_red_blocks_100_reproduce \
+    --output_dir=/root/autodl-tmp/outputs/smolvla_sort_red_blocks_100_reproduce/ \
+    --dataset.repo_id=continuallearning/sort_red_blocks_100 \
+    --policy.path=lerobot/smolvla_base \
+    --policy.push_to_hub=false \
+    --policy.scheduler_decay_steps=200000 \
+    --batch_size=64 \
+    --num_workers=32 \
+    --steps=200000 \
+    --eval_freq=0 \
+    --save_freq=50000 \
+    --log_freq=100 \
+    --wandb.enable=true \
+    --wandb.disable_artifact=true \
+    --wandb.project=paper \
+    --wandb.entity=470620104-technical-university-of-munich;
