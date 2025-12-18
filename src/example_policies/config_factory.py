@@ -265,20 +265,20 @@ class DiTFlowConfig(PolicyConfigBase):
     batch_size: int = 64
     lr: float = 2e-4
     steps: int = 100_000
-    save_freq: int = 10_000
+    save_freq: int = 5_000
     n_obs_steps: int = 2
     horizon: int = 16
     n_action_steps: int = 8
 
-    # Weight for SO3 Aware Trajectory integration loss. Recommended: 0.0 to disable. 0.01 to start.
-    integrated_so3_loss_weight: float = 0.0
-    # Weight for focal loss on termination signal. Recommended: 0.0 to disable. 10.0 to start.
-    termination_focal_loss_weight: float = 0.0
-    termination_focal_loss_index: int = -1
+    # # Weight for SO3 Aware Trajectory integration loss. Recommended: 0.0 to disable. 0.01 to start.
+    # integrated_so3_loss_weight: float = 0.0
+    # # Weight for focal loss on termination signal. Recommended: 0.0 to disable. 10.0 to start.
+    # termination_focal_loss_weight: float = 0.0
+    # termination_focal_loss_index: int = -1
 
     @property
     def model_name(self) -> str:
-        return "xditflow"
+        return "ditflow"
 
     @property
     def default_policy_kwargs(self) -> dict:
@@ -286,7 +286,7 @@ class DiTFlowConfig(PolicyConfigBase):
             "n_obs_steps": self.n_obs_steps,
             "horizon": self.horizon,
             "n_action_steps": self.n_action_steps,
-            "integrated_so3_loss_weight": self.integrated_so3_loss_weight,
-            "termination_focal_loss_weight": self.termination_focal_loss_weight,
-            "termination_focal_loss_index": self.termination_focal_loss_index,
+            # "integrated_so3_loss_weight": self.integrated_so3_loss_weight,
+            # "termination_focal_loss_weight": self.termination_focal_loss_weight,
+            # "termination_focal_loss_index": self.termination_focal_loss_index,
         }
