@@ -8,6 +8,8 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+# From https://github.com/huggingface/lerobot/pull/680
+
 import copy
 from collections import deque
 
@@ -390,9 +392,6 @@ class DiTFlowPolicy(PreTrainedPolicy):
 
     @torch.no_grad()
     def select_action(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
-        if "action" in batch:
-            batch.pop("action")  # remove action if present in the input batch
-
         batch = self.normalize_inputs(batch)
         if self.config.image_features:
             batch = dict(
@@ -432,8 +431,7 @@ class DiTFlowModel(nn.Module):
         self.config = config
 
         # Build observation encoders (depending on which observations are provided).
-        # If image_only, don't include state features in conditioning
-        global_cond_dim = 0 if self.config.image_only else self.config.robot_state_feature.shape[0]
+        global_cond_dim = self.config.robot_state_feature.shape[0]
         if self.config.image_features:
             num_images = len(self.config.image_features)
             if self.config.use_separate_rgb_encoder_per_camera:
@@ -512,8 +510,7 @@ class DiTFlowModel(nn.Module):
     ) -> torch.Tensor:
         """Encode image features and concatenate them all together along with the state vector."""
         batch_size, n_obs_steps = batch[OBS_STATE].shape[:2]
-        # If image_only, don't include state features in conditioning
-        global_cond_feats = [] if self.config.image_only else [batch[OBS_STATE]]
+        global_cond_feats = [batch[OBS_STATE]]
         # Extract image features.
         if self.config.image_features:
             if self.config.use_separate_rgb_encoder_per_camera:
@@ -642,4 +639,5 @@ class DiTFlowModel(nn.Module):
             in_episode_bound = ~batch["action_is_pad"]
             loss = loss * in_episode_bound.unsqueeze(-1)
 
+        # Compute mean MSE loss
         return loss.mean()

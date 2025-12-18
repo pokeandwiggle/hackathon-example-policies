@@ -15,7 +15,19 @@
 import torch
 from torch import nn
 
-from example_policies import data_constants as dc
+from ...utils.action_order import (
+    DUAL_ABS_LEFT_POS_IDXS,
+    DUAL_ABS_LEFT_QUAT_IDXS,
+    DUAL_ABS_RIGHT_POS_IDXS,
+    DUAL_ABS_RIGHT_QUAT_IDXS,
+    DUAL_DELTA_LEFT_POS_IDXS,
+    DUAL_DELTA_LEFT_ROT_IDXS,
+    DUAL_DELTA_RIGHT_POS_IDXS,
+    DUAL_DELTA_RIGHT_ROT_IDXS,
+    GET_LEFT_GRIPPER_IDX,
+    GET_RIGHT_GRIPPER_IDX,
+    ActionMode,
+)
 
 
 def quat_geodesic_angle(q_pred, q_gt, eps=1e-5):
@@ -35,12 +47,12 @@ class PoseLoss(nn.Module):
     """
 
     # Define slices for action tensor components
-    LEFT_POS_IDXS = dc.DUAL_LEFT_POS_IDXS
-    LEFT_QUAT_IDXS = dc.DUAL_LEFT_QUAT_IDXS
-    RIGHT_POS_IDXS = dc.DUAL_RIGHT_POS_IDXS
-    RIGHT_QUAT_IDXS = dc.DUAL_RIGHT_QUAT_IDXS
-    LEFT_GRIPPER_IDX = dc.LEFT_GRIPPER_IDX
-    RIGHT_GRIPPER_IDX = dc.RIGHT_GRIPPER_IDX
+    LEFT_POS_IDXS = DUAL_ABS_LEFT_POS_IDXS
+    LEFT_QUAT_IDXS = DUAL_ABS_LEFT_QUAT_IDXS
+    RIGHT_POS_IDXS = DUAL_ABS_RIGHT_POS_IDXS
+    RIGHT_QUAT_IDXS = DUAL_ABS_RIGHT_QUAT_IDXS
+    LEFT_GRIPPER_IDX = GET_LEFT_GRIPPER_IDX(ActionMode.ABS_TCP)
+    RIGHT_GRIPPER_IDX = GET_RIGHT_GRIPPER_IDX(ActionMode.ABS_TCP)
 
     def __init__(self, pos_weight=1.0, quat_weight=1.0, grip_weight=1.0) -> None:
         super().__init__()
@@ -122,10 +134,10 @@ class IntegratedDeltaPoseLoss(PoseLoss):
     Gripper values are assumed ABSOLUTE per timestep; we take the last value.
     """
 
-    DELTA_LEFT_POS_IDXS = dc.DUAL_DELTA_LEFT_POS_IDXS
-    DELTA_LEFT_ROT_IDXS = dc.DUAL_DELTA_LEFT_ROT_IDXS
-    DELTA_RIGHT_POS_IDXS = dc.DUAL_DELTA_RIGHT_POS_IDXS
-    DELTA_RIGHT_ROT_IDXS = dc.DUAL_DELTA_RIGHT_ROT_IDXS
+    DELTA_LEFT_POS_IDXS = DUAL_DELTA_LEFT_POS_IDXS
+    DELTA_LEFT_ROT_IDXS = DUAL_DELTA_LEFT_ROT_IDXS
+    DELTA_RIGHT_POS_IDXS = DUAL_DELTA_RIGHT_POS_IDXS
+    DELTA_RIGHT_ROT_IDXS = DUAL_DELTA_RIGHT_ROT_IDXS
 
     def forward(
         self, predicted: torch.Tensor, target: torch.Tensor
@@ -140,13 +152,17 @@ class IntegratedDeltaPoseLoss(PoseLoss):
 
         return loss, loss_dict
 
-    def integrate_trajectory(self, trajectory: torch.Tensor) -> torch.Tensor:
-        """Integrate delta trajectory to a single final pose.
+    def integrate_trajectory(
+        self, trajectory: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Integrate delta trajectory to absolute poses.
 
         Args:
             trajectory: (B, T, 14) delta actions (pos/axis-angle/pos/axis-angle[/absolute grippers])
         Returns:
-            (B, 1, 16) final absolute pose (dual arm + grippers)
+            tuple of (abs_traj, final_pose):
+                abs_traj: (B, T, 16) absolute poses for all timesteps
+                final_pose: (B, 1, 16) final absolute pose (last timestep)
         """
         # Reuse the new per-step integration and pick the last step
         abs_traj = self.integrate_trajectory_sequence(trajectory)  # (B,T,16)

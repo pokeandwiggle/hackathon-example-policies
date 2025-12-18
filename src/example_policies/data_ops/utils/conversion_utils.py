@@ -3,7 +3,6 @@
 import json
 import pathlib
 import shutil
-from mcap.reader import make_reader
 
 from example_policies.utils.constants import (
     BLACKLIST_FILE,
@@ -26,40 +25,6 @@ def get_sorted_episodes(episode_dir: pathlib.Path) -> list[pathlib.Path]:
     episode_paths.sort(key=lambda p: p.stat().st_ctime)
     return episode_paths
 
-def get_selected_episodes(episode_dir: pathlib.Path, success_only=True):
-    """Get episode paths sorted by creation time (oldest first), that fulfil success criteria in the MCAP file.
-
-    Args:
-        episode_dir: Directory containing .mcap episode files
-        success_only: If True, include only successful episodes
-
-    Returns:
-        List of episode paths sorted by creation date that fulfil success criteria in the MCAP file
-    """
-
-    episode_paths = list(episode_dir.rglob("*.mcap"))
-    episode_paths.sort(key=lambda p: p.stat().st_ctime)
-    filtered_episode_paths = []
-
-    if success_only is True:
-        for ep_path in episode_paths:
-            try:
-                with open(ep_path, 'rb') as f:
-                    reader = make_reader(f)
-
-                    # Iterate through metadata records
-                    for metadata_record in reader.iter_metadata():
-                        if metadata_record.name == "recording_info":
-                            # metadata is already a dict, no need to decode
-                            metadata = metadata_record.metadata
-                            if metadata.get("phase") == "task" and metadata.get("quality") == "good":
-                                filtered_episode_paths.append(ep_path)
-                                break
-            except (OSError, ValueError, KeyError) as e:
-                print(f"Error reading {ep_path}: {e}")
-                continue
-
-    return filtered_episode_paths
 
 def filter_episode_paths(
     episode_paths: list[pathlib.Path],

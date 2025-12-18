@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import numpy as np
+
+from ...utils.state_order import CANONICAL_ARM_JOINTS
 from .robot_service import robot_service_pb2, robot_service_pb2_grpc
 
 
@@ -107,16 +110,121 @@ class RobotClient:
         response = self.stub.SetJointTarget(set_target_request)
         return response
 
-    def send_move_home(self):
+    def move_to_joint_goal(
+        self, joint_angles: np.ndarray, joint_names: list[str] = CANONICAL_ARM_JOINTS
+    ):
         """
-        Sends a request to move the robot to its home position and resets the control mode.
+        Moves the robot to a specific joint configuration using trajectory planning.
+
+        Args:
+            joint_angles: Array of target joint angles (radians)
+            joint_names: List of joint names corresponding to the angles.
+                        Defaults to CANONICAL_ARM_JOINTS (left + right arm joints)
 
         Returns:
-            The response from the MoveHome gRPC call.
+            The response from the MoveToJointGoal gRPC call
+
+        Raises:
+            Exception: If the move fails, with the error message from the response
+            ValueError: If joint_angles and joint_names have different lengths
         """
-        # Reset control_mode because moving home is a special operation that does not use the previous control mode.
+        # Validate input lengths match
+        if len(joint_angles) != len(joint_names):
+            raise ValueError(
+                f"Length mismatch: joint_angles has {len(joint_angles)} elements "
+                f"but joint_names has {len(joint_names)} elements"
+            )
+
+        # Reset control_mode because moving to a goal is a special operation
         self.control_mode = None
 
-        move_home_request = robot_service_pb2.MoveHomeRequest()
-        response = self.stub.MoveHome(move_home_request)
+        # Build the request with joint angle map
+        request = robot_service_pb2.MoveToJointGoalRequest()
+        for name, angle in zip(joint_names, joint_angles):
+            request.joint_angles[name] = float(angle)
+
+        response = self.stub.MoveToJointGoal(request)
+
+        if not response.success:
+            raise Exception(f"Failed to move to joint goal: {response.error_message}")
+
+        return response
+
+    def set_gripper_state(
+        self, gripper_id: str, width: float, speed: float = 0.0, force: float = 0.0
+    ):
+        """
+        Controls the gripper state (open/close).
+
+        Args:
+            gripper_id: Gripper identifier ("left" or "right")
+            width: Desired gripper width in meters
+            speed: Gripper speed in m/s
+            force: Gripper force in Newtons
+
+        Returns:
+            The response from the SetGripperState gRPC call
+        """
+        request = robot_service_pb2.SetGripperStateRequest()
+        request.gripper_id = gripper_id
+        request.width = width
+        request.speed = speed
+        request.force = force
+
+        response = self.stub.SetGripperState(request)
+        return response
+
+    def visualize_cart_direct_targets(
+        self, cart_targets: list[robot_service_pb2.CartesianTarget]
+    ):
+        """
+        Visualizes a sequence of Cartesian targets for all arms as separate trajectories.
+
+        Args:
+            cart_targets: List of CartesianTarget messages to visualize
+
+        Returns:
+            Dictionary mapping arm_id to response
+        """
+        # Group poses by arm_id
+        arm_requests = {}
+
+        for cart_target in cart_targets:
+            for arm_id, pose in cart_target.robot_poses.items():
+                if arm_id not in arm_requests:
+                    request = robot_service_pb2.VisualizeCartesianTargetActionChunkRequest()
+                    request.arm_id = arm_id
+                    arm_requests[arm_id] = request
+                arm_requests[arm_id].poses.append(pose)
+
+        # Send visualization requests for each arm
+        responses = {}
+        for arm_id, request in arm_requests.items():
+            if request.poses:
+                responses[arm_id] = self.stub.VisualizeCartesianTargetActionChunk(request)
+
+        return responses
+
+    def visualize_joint_direct_targets(
+        self, joint_targets: list[robot_service_pb2.JointTarget], arm_id: str = "right"
+    ):
+        """
+        Visualizes a sequence of joint targets.
+
+        Args:
+            joint_targets: List of JointTarget messages to visualize
+
+        Returns:
+            The response from the visualization gRPC call
+        """
+        request = robot_service_pb2.VisualizeJointConfigurationPathRequest()
+        # Use "right" as default arm_id (can be extended to support both arms)
+        request.arm_id = arm_id
+
+        for joint_target in joint_targets:
+            config = robot_service_pb2.JointConfiguration()
+            config.joint_angles.update(joint_target.joint_angles)
+            request.configurations.append(config)
+
+        response = self.stub.VisualizeJointConfigurationPath(request)
         return response

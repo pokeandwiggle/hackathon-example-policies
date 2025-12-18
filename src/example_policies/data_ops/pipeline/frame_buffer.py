@@ -14,8 +14,7 @@
 
 from typing import Any, List
 
-from ..config.pipeline_config import PipelineConfig
-from ...utils.action_order import ActionMode
+from ..config.pipeline_config import ActionMode, PipelineConfig
 from ..config.rosbag_topics import RosSchemaEnum, RosTopicEnum
 
 
@@ -54,37 +53,42 @@ class FrameBuffer:
 def _build_required_attributes(config: PipelineConfig) -> List[RosTopicEnum]:
     """Build list of required attributes based on configuration."""
     listen_topics = []
+
+    # Always required
     listen_topics.append(RosTopicEnum.ACTUAL_JOINT_STATE)
     listen_topics.append(RosTopicEnum.RGB_STATIC_IMAGE)
     listen_topics.extend(
         [RosTopicEnum.DES_GRIPPER_LEFT, RosTopicEnum.DES_GRIPPER_RIGHT]
     )
 
-    if config.action_level in [ActionMode.TCP, ActionMode.DELTA_TCP]:
-        listen_topics.extend([RosTopicEnum.DES_TCP_LEFT, RosTopicEnum.DES_TCP_RIGHT])
-    elif config.action_level in [ActionMode.JOINT, ActionMode.DELTA_JOINT]:
+    # Action-specific desired topics
+    if config.is_tcp_action():
+        if config.action_level == ActionMode.TELEOP:
+            listen_topics.extend(
+                [RosTopicEnum.DES_TELEOP_LEFT, RosTopicEnum.DES_TELEOP_RIGHT]
+            )
+        else:
+            listen_topics.extend(
+                [RosTopicEnum.DES_TCP_LEFT, RosTopicEnum.DES_TCP_RIGHT]
+            )
+    elif config.is_joint_action():
         listen_topics.extend(
             [RosTopicEnum.DES_JOINT_LEFT, RosTopicEnum.DES_JOINT_RIGHT]
         )
-    elif config.action_level == ActionMode.TELEOP:
-        listen_topics.extend(
-            [RosTopicEnum.DES_TELEOP_LEFT, RosTopicEnum.DES_TELEOP_RIGHT]
-        )
 
-    if config.include_tcp_poses or config.action_level in [
-        ActionMode.TCP,
-        ActionMode.DELTA_TCP,
-        ActionMode.TELEOP,
-    ]:
+    # TCP poses (for observation or action)
+    if config.requires_tcp_poses():
         listen_topics.extend(
             [RosTopicEnum.ACTUAL_TCP_LEFT, RosTopicEnum.ACTUAL_TCP_RIGHT]
         )
 
+    # Optional RGB images
     if config.include_rgb_images:
         listen_topics.extend(
             [RosTopicEnum.RGB_LEFT_IMAGE, RosTopicEnum.RGB_RIGHT_IMAGE]
         )
 
+    # Optional depth images
     if config.include_depth_images:
         listen_topics.extend(
             [RosTopicEnum.DEPTH_LEFT_IMAGE, RosTopicEnum.DEPTH_RIGHT_IMAGE]

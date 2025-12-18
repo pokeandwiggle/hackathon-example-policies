@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # Copyright 2025 Poke & Wiggle GmbH. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +21,7 @@ import matplotlib.pyplot as plt
 import torch
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
-from example_policies.robot_deploy.policy_loader import load_policy
+from example_policies.robot_deploy.deploy_core.policy_loader import load_policy
 
 
 def to_device_batch(batch: dict, device: torch.device, non_blocking: bool = True):
@@ -32,36 +34,46 @@ def to_device_batch(batch: dict, device: torch.device, non_blocking: bool = True
     return out
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Robot service client")
+def parse_args():
+    parser = argparse.ArgumentParser(description="Validate policy with action plot")
     parser.add_argument(
+        "-c",
         "--checkpoint",
         type=Path,
         required=True,
-        help="Path to the policy checkpoint directory.",
+        metavar="PATH",
+        help="Path to the policy checkpoint directory",
     )
     parser.add_argument(
+        "-d",
         "--dataset",
         type=Path,
         required=True,
-        help="Path to the dataset directory.",
+        metavar="PATH",
+        help="Path to the dataset directory",
     )
     parser.add_argument(
+        "-e",
         "--episode",
         type=int,
         default=0,
-        help="Episode index to compare (default: 0).",
+        metavar="N",
+        help="Episode index to compare (default: 0)",
     )
     parser.add_argument(
+        "-o",
         "--output",
         type=Path,
         default=None,
-        help=(
-            "Optional path for saving the matplotlib figure. "
-            "If omitted, saved as actions_episode<EP>.png in cwd"
-        ),
+        metavar="PATH",
+        help="Output path for the figure (default: actions_episode<E>.png)",
     )
     args = parser.parse_args()
+    return args
+
+
+def main():
+    args = parse_args()
 
     # Select your device
     device = "cpu" if not torch.cuda.is_available() else "cuda"
@@ -78,7 +90,7 @@ def main():
         dataset,
         num_workers=8,
         batch_size=1,
-        shuffle=False,  # Not shuffling but choosing sequential batches from the batch
+        shuffle=False,  # Not shuffling, so processing sequential batches from the dataset
         pin_memory=device != "cpu",
         drop_last=False,
     )
@@ -87,7 +99,6 @@ def main():
     targets = []
     preds = []
     times = []
-    found_any = False
     action_dim = None
 
     def _fmt(v: torch.Tensor, w=9, p=3):
@@ -103,9 +114,6 @@ def main():
             continue
         if b_ep > ep:
             break
-        found_any = (
-            True  # We are in the correct episode which contains the true trajectory
-        )
 
         batch = to_device_batch(
             batch, device, non_blocking=True

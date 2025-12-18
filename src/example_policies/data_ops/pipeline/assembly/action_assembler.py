@@ -16,8 +16,7 @@ import dataclasses
 
 import numpy as np
 
-from ...config.pipeline_config import PipelineConfig
-from ....utils.action_order import ActionMode
+from ...config.pipeline_config import ActionMode, PipelineConfig
 from ...utils import delta_ops
 
 # Absolute (non-delta) action sources
@@ -61,14 +60,15 @@ class ActionAssembler:
         grip_l = 1.0 - parsed_frame["des_gripper_left"][0]
         grip_r = 1.0 - parsed_frame["des_gripper_right"][0]
 
+        left_action = None
+        right_action = None
+
         if action_level in ABS_SPECS:
             left_key, right_key = ABS_SPECS[action_level]
             left_abs = parsed_frame[left_key]
             right_abs = parsed_frame[right_key]
-            action_vec = np.concatenate(
-                [left_abs, right_abs, [grip_l, grip_r]], dtype=np.float32
-            )
-            new_last = LastCommand(left=left_abs, right=right_abs)
+            left_action, right_action = left_abs, right_abs
+            new_last = LastCommand(left=left_abs.copy(), right=right_abs.copy())
 
         elif action_level in DELTA_SPECS:
             left_key, right_key, delta_fn = DELTA_SPECS[action_level]
@@ -80,20 +80,20 @@ class ActionAssembler:
                 last_abs_command = LastCommand(left=left_abs, right=right_abs)
 
             # Compute step-to-step deltas (previous -> current)
-            left_delta = delta_fn(last_abs_command.left, left_abs)
-            right_delta = delta_fn(last_abs_command.right, right_abs)
+            left_action = delta_fn(last_abs_command.left, left_abs)
+            right_action = delta_fn(last_abs_command.right, right_abs)
 
-            action_vec = np.concatenate(
-                [left_delta, right_delta, [grip_l, grip_r]], dtype=np.float32
-            )
-
-            # UPDATE history to current absolute (bug fix)
+            # UPDATE history to current absolute
             new_last = LastCommand(left=left_abs.copy(), right=right_abs.copy())
         else:
             raise NotImplementedError(f"Unsupported action level: {action_level}")
 
-        # Add termination signal slot (set to 0.0, will be modified in post-processing)
+        action_parts = [left_action, right_action, [grip_l, grip_r]]
+
+        # Termination signal
         if self.config.requires_termination_signal():
-            action_vec = np.append(action_vec, 0.0).astype(np.float32)
+            action_parts.append([0])
+
+        action_vec = np.concatenate(action_parts, dtype=np.float32)
 
         return {"action": action_vec}, new_last

@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # Copyright 2025 Poke & Wiggle GmbH. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,15 +14,37 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import argparse
+import dataclasses
+import pathlib
 from copy import deepcopy
-from pprint import pprint
 
-# First Import Numpy. Workaround for torch / lerobot bug
-import numpy
+import draccus
 
 from example_policies import config_factory as cf
 from example_policies.lerobot_patches import apply_patches
+
+
+@dataclasses.dataclass
+class TrainCliArgs:
+    """Main training script arguments with nested policy configuration.
+
+    All policy-specific parameters are exposed via the --policy.* namespace.
+    For example:
+        --policy.batch-size 32
+        --policy.horizon 20
+        --policy.termination-focal-loss-weight 1.0
+    """
+
+    # Path to the dataset directory containing training data.
+    data_dir: pathlib.Path
+    # Include depth images in the input features.
+    include_depth: bool = False
+    # Nested policy configuration - exposes all DiTFlowConfig parameters
+    policy: cf.DiTFlowConfig = dataclasses.field(default_factory=cf.DiTFlowConfig)
+
+    def __post_init__(self):
+        """Sync data_dir to nested policy config after parsing."""
+        self.policy.dataset_root_dir = str(self.data_dir)
 
 
 def select_inputs(include_depth: bool = False):
@@ -52,32 +76,18 @@ def filter_depth(cfg, include_depth: bool = False):
     return cfg
 
 
-def main(
-    data_dir: str,
-    include_depth: bool = False,
-    batch_size: int = 64,
-    resume_path: str = None,
-    wandb_project: str = None,
-):
-    # --- 1. Configure Training ---
-    # This section defines the core parameters for the training run, including the model
-    # architecture, dataset, and key hyperparameters.
+def train_policy(cli_config: TrainCliArgs):
+    """Build training configuration and start training.
 
-    # cfg, input_features = cf.create_predefined_model_config(...)
-    cfg = cf.dit_flow_config(
-        data_dir,
-        batch_size,
-        resume_path=resume_path,
-    )
+    Args:
+        args: Parsed CLI arguments with nested policy configuration.
+    """
+    # Build the LeRobot training configuration from the nested policy config.
+    # The policy config already has all parameters set via CLI (e.g., --policy.batch-size).
+    cfg = cli_config.policy.build()
 
-    cfg.wandb.project = (
-        wandb_project if wandb_project is not None else "munich_hackathon"
-    )
-
-    # Reduce System Memory
-    # cfg.num_workers = 2
-
-    cfg = filter_depth(cfg, include_depth)
+    # Filter depth images based on include_depth flag
+    cfg = filter_depth(cfg, cli_config.include_depth)
 
     train(cfg)
 
@@ -85,47 +95,18 @@ def main(
 def train(cfg):
     print("\nStarting training...")
     # import after monkey patching
-    from lerobot.scripts.train import init_logging, train
+    from lerobot.scripts.train import init_logging
+    from lerobot.scripts.train import train as lerobot_train
 
     init_logging()
-    train(cfg)
+    lerobot_train(cfg)
 
 
-def _parse_args():
-    parser = argparse.ArgumentParser(description="Training script for LeRobot policies")
-    parser.add_argument(
-        "data_dir",
-        type=str,
-        help="Path to the data directory",
-    )
-    parser.add_argument(
-        "--include_depth", action="store_true", help="Include depth images in the input"
-    )
-    parser.add_argument(
-        "--batch_size", type=int, default=64, help="Batch size for training"
-    )
-
-    parser.add_argument(
-        "--resume", type=str, default=None, help="Path to the checkpoint directory"
-    )
-
-    parser.add_argument(
-        "--wandb_project",
-        type=str,
-        default=None,
-        help="Weights & Biases project name. If not set, defaults to 'munich_hackathon'.",
-    )
-
-    return parser.parse_args()
+def main():
+    cli_config = draccus.parse(config_class=TrainCliArgs)
+    train_policy(cli_config)
 
 
 if __name__ == "__main__":
     apply_patches()
-    args = _parse_args()
-    main(
-        data_dir=args.data_dir,
-        include_depth=args.include_depth,
-        batch_size=args.batch_size,
-        resume_path=args.resume,
-        wandb_project=args.wandb_project,
-    )
+    main()

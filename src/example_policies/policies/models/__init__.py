@@ -12,4 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from . import beso, dit_flow, so3_act, so3_diffusion
+from . import dit_flow as dit_flow
+from . import so3_act as so3_act
+from . import so3_diffusion as so3_diffusion

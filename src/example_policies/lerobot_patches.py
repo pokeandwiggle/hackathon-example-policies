@@ -23,6 +23,7 @@ from lerobot.policies import factory as lerobot_factory
 from lerobot.utils import train_utils, wandb_utils
 
 from .policies.factory import get_policy
+from .utils.constants import INFO_FILE, META_DIR
 
 
 def monkey_patch_dataset():
@@ -60,7 +61,7 @@ def monkey_patch_save_checkpoint():
     ):
         original_save_fn(checkpoint_dir, step, cfg, policy, optimizer, scheduler)
         pretrained_dir = checkpoint_dir / PRETRAINED_MODEL_DIR
-        meta_json = pathlib.Path(cfg.dataset.root) / "meta" / "info.json"
+        meta_json = pathlib.Path(cfg.dataset.root) / META_DIR / INFO_FILE
         # Copy Metadata for deployment data selection
         shutil.copy(meta_json, pretrained_dir / "dataset_info.json")
 
