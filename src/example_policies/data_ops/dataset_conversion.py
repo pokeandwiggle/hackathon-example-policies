@@ -33,7 +33,7 @@ from example_policies.data_ops.config import pipeline_config
 from example_policies.data_ops.pipeline.episode_converter import EpisodeConverter
 from example_policies.data_ops.pipeline.post_lerobot_ops import PostLerobotPipeline
 from example_policies.data_ops.utils.conversion_utils import (
-    get_sorted_episodes,
+    get_selected_episodes,
     save_metadata,
     validate_input_dir,
 )
@@ -156,7 +156,7 @@ def main():
     print(f"  - Target FPS: {config.target_fps}")
     print(f"  - Task: {config.task_name}")
 
-    episode_paths = get_sorted_episodes(config.episodes_dir)
+    episode_paths = get_selected_episodes(config.episodes_dir)
     result = convert_episodes(episode_paths, config.output, config)
     print_conversion_result(result)
 
