@@ -101,7 +101,7 @@ class PipelineConfig:
     task_name: str = ""
 
     # Pauses
-    max_pause_seconds: float = 0.2
+    max_pause_seconds: float = 0.8
     pause_velocity: float = 0.03
     save_pauses: bool = False
 
@@ -112,7 +112,7 @@ class PipelineConfig:
     save_normal: bool = False
 
     # Subsampling
-    recording_fps: int = 30
+    recording_fps: int = 20
     target_fps: int = 10
     subsample_offset: int = 0
 
