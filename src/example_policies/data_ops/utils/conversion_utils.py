@@ -59,6 +59,8 @@ def get_selected_episodes(episode_dir: pathlib.Path, success_only=True):
             except (OSError, ValueError, KeyError) as e:
                 print(f"Error reading {ep_path}: {e}")
                 continue
+    else:
+        filtered_episode_paths = episode_paths
 
     return filtered_episode_paths
 
