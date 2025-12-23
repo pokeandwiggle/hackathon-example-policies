@@ -52,7 +52,8 @@ def get_selected_episodes(episode_dir: pathlib.Path, success_only=True):
                         if metadata_record.name == "recording_info":
                             # metadata is already a dict, no need to decode
                             metadata = metadata_record.metadata
-                            if metadata.get("phase") == "task" and (metadata.get("quality") == "good" or metadata.get("quality") == "excellent"):
+                            quality = metadata.get("quality")
+                            if quality in ["ok", "good", "excellent"]:
                                 filtered_episode_paths.append(ep_path)
                                 break
             except (OSError, ValueError, KeyError) as e:
