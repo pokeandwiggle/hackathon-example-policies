@@ -88,6 +88,7 @@ def main():
     dataset = LeRobotDataset(
         repo_id=args.dataset,
         root=args.dataset,
+        video_backend="pyav", # pyav works on jupyterhub, unlike torchcodec
     )
 
     dataloader = torch.utils.data.DataLoader(
