@@ -224,8 +224,8 @@ def _build_cart_target(
     des_target_msg.gripper_widths["left"] = left_gripper
     des_target_msg.gripper_widths["right"] = right_gripper
 
-    des_target_msg.robot_stiffness_factors["left"] = 1.0
-    des_target_msg.robot_stiffness_factors["right"] = 1.0
+    des_target_msg.robot_stiffness_factors["left"] = 0.7
+    des_target_msg.robot_stiffness_factors["right"] = 0.7
 
     return des_target_msg
 
@@ -246,7 +246,7 @@ def _build_joint_target(np_action: np.ndarray, action_mode: ActionMode
         GET_RIGHT_GRIPPER_IDX(abs_mode)
     ]
 
-    des_target_msg.robot_stiffness_factors["left"] = 1.0
-    des_target_msg.robot_stiffness_factors["right"] = 1.0
+    des_target_msg.robot_stiffness_factors["left"] = 0.7
+    des_target_msg.robot_stiffness_factors["right"] = 0.7
 
     return des_target_msg

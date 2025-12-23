@@ -264,7 +264,7 @@ class DiTFlowConfig(PolicyConfigBase):
 
     batch_size: int = 64
     lr: float = 2e-4
-    steps: int = 100_000
+    steps: int = 10_000
     save_freq: int = 5_000
     n_obs_steps: int = 2
     horizon: int = 16
