@@ -79,6 +79,40 @@ class RobotInterface:
         else:
             raise RuntimeError(f"Unknown action mode: {action_mode}")
 
+    def move_home(self):
+        """Sends a command to move the robot to its home position and opens the grippers."""
+        # Move home
+        try:
+            self.client.send_move_home()
+        except Exception as e:
+            # If homing fails due to controller state, try recovery and retry
+            error_msg = str(e).lower()
+            if "trajectory controller" in error_msg or "controller" in error_msg:
+                print("Homing failed, attempting controller recovery...")
+                try:
+                    recover_request = robot_service_pb2.RecoverErrorsRequest()
+                    self.client.stub.RecoverErrors(recover_request)
+                    print("Recovery complete, retrying home...")
+                    self.client.send_move_home()
+                except Exception as recovery_error:
+                    print(f"Recovery failed: {recovery_error}")
+                    raise  # Re-raise the original error
+            else:
+                raise  # Re-raise if it's a different error
+        
+        # Open grippers
+        for _ in range(3):  # Minimum 3 messages required by stability buffer (STABILITY_BUFFER_SIZE)
+            gripper_target = robot_service_pb2.JointTarget()
+            
+            # Set gripper widths to open (normalized 0.0-1.0, where 1.0 = fully open)
+            gripper_target.gripper_widths["left"] = 1.0
+            gripper_target.gripper_widths["right"] = 1.0
+            
+            # Send directly via gRPC without changing control mode
+            set_target_request = robot_service_pb2.SetJointTargetRequest()
+            set_target_request.joint_target.CopyFrom(gripper_target)
+            self.client.stub.SetJointTarget(set_target_request)
+            
     def move_to_joint_goal(
         self, joint_angles: np.ndarray, joint_names: list[str] = CANONICAL_ARM_JOINTS
     ):
