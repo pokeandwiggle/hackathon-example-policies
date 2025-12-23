@@ -101,7 +101,7 @@ class PipelineConfig:
     task_name: str = ""
 
     # Pauses
-    max_pause_seconds: float = 1.5
+    max_pause_seconds: float = 0.5
     pause_velocity: float = 0.03
     save_pauses: bool = False
 
