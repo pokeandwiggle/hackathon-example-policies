@@ -392,6 +392,9 @@ class DiTFlowPolicy(PreTrainedPolicy):
 
     @torch.no_grad()
     def select_action(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
+        if "action" in batch:
+            batch.pop("action")  # remove action if present in the input batch
+            
         batch = self.normalize_inputs(batch)
         if self.config.image_features:
             batch = dict(

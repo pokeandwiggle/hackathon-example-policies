@@ -26,7 +26,7 @@ class InferenceRunner:
 
     def run_step(self, policy_bundle: PolicyBundle) -> Optional[float]:
         """Execute one inference step. Returns termination signal if present."""
-        start_time = time.time()
+        start_time = time.monotonic()
         observation = self.robot_interface.get_observation(policy_bundle.config.device)
 
         if not observation:
@@ -73,7 +73,7 @@ class InferenceRunner:
 
     def _wait_for_period(self, start_time: float):
         """Wait to maintain control frequency."""
-        elapsed = time.time() - start_time
+        elapsed = time.monotonic() - start_time
         sleep_time = self.period - elapsed
         if sleep_time < 0:
             print(f"Warning: cannot maintain desired frequency of {self.config.hz} Hz")
