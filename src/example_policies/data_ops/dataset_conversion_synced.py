@@ -1,0 +1,338 @@
+#!/usr/bin/env -S nix run ./nix#bazelisk -- run //example_policies:dataset_conversion_synced --
+
+# Copyright 2025 Poke & Wiggle GmbH. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Sensor-timestamp synchronized dataset conversion.
+
+This script converts MCAP episodes to LeRobot dataset format using
+sensor timestamps for synchronization instead of log_time (arrival order).
+
+Key features:
+- Generates synthetic timestamps at a fixed target frequency
+- Finds nearest messages from all topics within a tolerance window
+- Messages from slower topics may be reused for multiple frames
+
+For log_time based conversion, use dataset_conversion.py instead.
+"""
+
+import dataclasses
+import enum
+import pathlib
+import time
+
+import draccus
+from lerobot.datasets.lerobot_dataset import LeRobotDataset
+
+from example_policies.data_ops.config import pipeline_config
+from example_policies.data_ops.config.dataset_type import DatasetType
+from example_policies.data_ops.config.rosbag_topics import RosTopicEnum
+from example_policies.data_ops.pipeline.frame_assembler import FrameAssembler
+from example_policies.data_ops.pipeline.frame_parser import FrameParser
+from example_policies.data_ops.pipeline.frame_synchronizer import (
+    FrameSynchronizer,
+    TimestampedMessage,
+)
+from example_policies.data_ops.pipeline.frame_targeter import FrameTargeter
+from example_policies.data_ops.pipeline.post_lerobot_ops import PostLerobotPipeline
+from example_policies.data_ops.utils.conversion_utils import (
+    get_selected_episodes,
+    save_metadata,
+    validate_input_dir,
+)
+
+
+class SyncedFrameBuffer:
+    """Adapter to make synced frame dict compatible with FrameParser.
+
+    FrameParser expects a FrameBuffer-like object with get_msg() method.
+    This class wraps the synced frame dictionary to provide that interface.
+    """
+
+    def __init__(self, synced_frame: dict[RosTopicEnum, TimestampedMessage]):
+        self.synced_frame = synced_frame
+
+    def get_msg(self, topic: RosTopicEnum) -> tuple[bytes, any]:
+        """Get message data and schema for a topic."""
+        ts_msg = self.synced_frame[topic]
+        return (ts_msg.data, ts_msg.schema_name)
+
+    def is_complete(self) -> bool:
+        """Always returns True since synced frames are pre-validated."""
+        return True
+
+
+class SyncedEpisodeConverter:
+    """Episode converter using synthetic timestamp synchronization.
+
+    This converter uses sensor timestamps to synchronize messages across
+    topics at a fixed output frequency (config.target_fps).
+    """
+
+    def __init__(
+        self,
+        output_dir: pathlib.Path,
+        config: pipeline_config.PipelineConfig,
+        features: dict,
+        tolerance_ms: float | None = None,
+    ):
+        self.config = config
+        self.output_dir = output_dir
+        
+        # Default tolerance to 40% of frame interval
+        if tolerance_ms is None:
+            tolerance_ms = (1000.0 / config.target_fps) * 0.4
+        self.tolerance_ms = tolerance_ms
+
+        # Sync components
+        self.frame_synchronizer = FrameSynchronizer(config, tolerance_ms=tolerance_ms)
+
+        # Parsing and assembly (reuse existing pipeline)
+        self.frame_parser = FrameParser(config)
+        self.frame_assembler = FrameAssembler(config)
+        self.frame_targeter = FrameTargeter(config)
+
+        # Dataset writer
+        self.dataset = LeRobotDataset.create(
+            repo_id="local_only",
+            fps=config.target_fps,
+            root=output_dir,
+            use_videos=True,
+            image_writer_threads=16,
+            image_writer_processes=8,
+            features=features,
+        )
+
+        # Tracking
+        self.episode_counter = 0
+        self.episode_mapping: dict[int, str] = {}
+        self.blacklist: list[int] = []
+        self.start_time = time.time()
+
+    def reset_episode_state(self) -> None:
+        """Reset state for new episode."""
+        self.frame_assembler.reset()
+        self.frame_targeter.reset()
+
+    def process_episode(
+        self, episode_path: pathlib.Path, episode_idx: int
+    ) -> bool:
+        """Process an episode using sensor-timestamp synchronization.
+
+        Args:
+            episode_path: Path to the MCAP episode file
+            episode_idx: Index of the episode
+
+        Returns:
+            True if episode was saved, False otherwise
+        """
+        self.reset_episode_state()
+
+        # Pass 1: Ingest all messages
+        print(f"  Ingesting messages...")
+        self.frame_synchronizer.ingest_episode(episode_path)
+
+        # Pass 2: Generate synchronized frames
+        saved_frames = 0
+        skipped_pauses = 0
+        for synced_frame in self.frame_synchronizer.generate_synced_frames():
+            # Wrap synced frame for compatibility with FrameParser
+            frame_buffer = SyncedFrameBuffer(synced_frame)
+
+            # Check for pause (skip if robot is idle)
+            target_datasets = self.frame_targeter.determine_targets(
+                frame_buffer, self.frame_parser
+            )
+            if DatasetType.MAIN not in target_datasets:
+                skipped_pauses += 1
+                continue
+
+            # Parse and assemble using existing pipeline
+            parsed = self.frame_parser.parse_frame(frame_buffer)
+            assembled = self.frame_assembler.assemble(parsed)
+
+            # Add to dataset
+            self.dataset.add_frame(assembled, task=self.config.task_name)
+            saved_frames += 1
+
+        print(f"  Saved {saved_frames} frames (skipped {skipped_pauses} pauses)")
+
+        if saved_frames == 0:
+            return False
+
+        # Save episode
+        self.dataset.save_episode()
+
+        # Track episode
+        self.episode_mapping[self.episode_counter] = str(episode_path)
+
+        # Check if episode is too short
+        min_frames = self.config.min_episode_seconds * self.config.target_fps
+        if saved_frames < min_frames:
+            print(f"  Episode too short ({saved_frames} frames), adding to blacklist")
+            self.blacklist.append(self.episode_counter)
+
+        self.episode_counter += 1
+        return True
+
+    def get_total_time(self) -> float:
+        """Get total elapsed time."""
+        return time.time() - self.start_time
+
+
+def convert_episodes_synced(
+    episode_paths: list[pathlib.Path],
+    output_dir: pathlib.Path,
+    config: pipeline_config.PipelineConfig,
+    tolerance_ms: float | None = None,
+) -> dict:
+    """Convert episodes using sensor-timestamp synchronization.
+
+    Args:
+        episode_paths: List of paths to .mcap episode files
+        output_dir: Output directory for converted dataset
+        config: Pipeline configuration (uses config.target_fps for output frequency)
+        tolerance_ms: Maximum time difference for sync (milliseconds).
+            If None, defaults to 40% of frame interval.
+
+    Returns:
+        Dict with keys: episode_mapping, blacklist, episodes_saved, total_time
+    """
+    features = pipeline_config.build_features(config)
+    converter = SyncedEpisodeConverter(
+        output_dir,
+        config,
+        features,
+        tolerance_ms=tolerance_ms,
+    )
+    post_pipeline = PostLerobotPipeline(config)
+
+    for ep_idx, episode_path in enumerate(episode_paths):
+        print(f"Processing {episode_path}...")
+
+        try:
+            converter.process_episode(episode_path, ep_idx)
+        except Exception as e:
+            print(
+                f"Skipping faulty file: {episode_path} due to {type(e).__name__}: {e}"
+            )
+            import traceback
+
+            traceback.print_exc()
+            continue
+
+    save_metadata(
+        output_dir,
+        converter.episode_mapping,
+        converter.blacklist,
+        config,
+    )
+
+    # Only run post-processing if we have episodes
+    if converter.episode_mapping:
+        post_pipeline.process_lerobot(output_dir)
+    else:
+        print("\nNo episodes to post-process.")
+
+    return {
+        "episode_mapping": converter.episode_mapping,
+        "blacklist": converter.blacklist,
+        "episodes_saved": len(converter.episode_mapping),
+        "total_time": converter.get_total_time(),
+    }
+
+
+def print_conversion_result(result: dict) -> None:
+    """Print conversion statistics."""
+    print("\nConversion complete!")
+    print(f"  - Episodes saved: {result['episodes_saved']}")
+    print(f"  - Blacklisted episodes: {len(result['blacklist'])}")
+    print(f"  - Total time: {result['total_time']:.2f}s")
+
+
+
+@dataclasses.dataclass
+class ScriptArgs:
+    """Arguments for synced conversion script."""
+
+    episodes_dir: pathlib.Path = pathlib.Path("./data")
+    output: pathlib.Path = pathlib.Path("./output")
+
+    # Sync-specific parameters
+    tolerance_ms: float | None = None  # Auto-computed from target_fps if None
+
+
+@dataclasses.dataclass
+class SyncedConfig(ScriptArgs, pipeline_config.PipelineConfig):
+    """Configuration for synced conversion.
+
+    Inherits from ScriptArgs and PipelineConfig to include all parameters.
+    """
+
+    def to_dict(self):
+        data = dataclasses.asdict(self)
+        for key, value in data.items():
+            if isinstance(value, pathlib.Path):
+                data[key] = str(value)
+            if isinstance(value, enum.Enum):
+                data[key] = value.value
+        return data
+
+
+def main():
+    """
+    Sensor-timestamp synchronized conversion.
+
+    Example usage:
+        python dataset_conversion_synced.py \\
+            --episodes-dir /path/to/episodes \\
+            --output /path/to/output \\
+            --target-fps 10 \\
+            --tolerance-ms 40 \\
+            --action-level DELTA_TCP
+
+    Use --help to see all available options and their descriptions.
+    """
+    config = draccus.parse(config_class=SyncedConfig)
+
+    validate_input_dir(config.episodes_dir)
+
+    # Compute tolerance if not specified
+    tolerance_ms = config.tolerance_ms
+    if tolerance_ms is None:
+        tolerance_ms = (1000.0 / config.target_fps) * 0.4
+
+    print(f"Converting episodes from: {config.episodes_dir}")
+    print(f"Output directory: {config.output}")
+    print("Sync config:")
+    print(f"  - Target FPS: {config.target_fps}Hz")
+    print(f"  - Tolerance: {tolerance_ms:.1f}ms {'(auto)' if config.tolerance_ms is None else ''}")
+    print("Pipeline config:")
+    print(f"  - Action level: {config.action_level}")
+    print(f"  - Image resolution: {config.image_resolution}")
+    print(f"  - Task: {config.task_name}")
+
+    episode_paths = get_selected_episodes(config.episodes_dir)
+    result = convert_episodes_synced(
+        episode_paths,
+        config.output,
+        config,
+        tolerance_ms=tolerance_ms,
+    )
+    print_conversion_result(result)
+
+
+if __name__ == "__main__":
+    main()
+    

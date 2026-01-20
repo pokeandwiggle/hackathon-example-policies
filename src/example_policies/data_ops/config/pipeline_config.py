@@ -103,18 +103,18 @@ class PipelineConfig:
     # Pauses
     max_pause_seconds: float = 0.5
     pause_velocity: float = 0.03
-    save_pauses: bool = False
+    save_pauses: bool = False  # Old dataset pipeline only
 
-    # Speedup
-    gripper_active_speed: float = 0.05
-    boost_factor: int = 1
-    grace_period_seconds: float = 0.2
-    save_normal: bool = False
+    # Speedup - Old dataset pipeline only
+    gripper_active_speed: float = 0.05  # Old dataset pipeline only
+    boost_factor: int = 1  # Old dataset pipeline only
+    grace_period_seconds: float = 0.2  # Old dataset pipeline only
+    save_normal: bool = False  # Old dataset pipeline only
 
     # Subsampling
-    recording_fps: int = 20
+    recording_fps: int = 30  # Old dataset pipeline only
     target_fps: int = 10
-    subsample_offset: int = 0
+    subsample_offset: int = 0  # Old dataset pipeline only
 
     min_episode_seconds: int = 8
 
