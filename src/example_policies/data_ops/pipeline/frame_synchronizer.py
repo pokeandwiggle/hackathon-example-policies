@@ -69,7 +69,7 @@ class FrameSynchronizer:
     Args:
         config: Pipeline configuration (uses config.target_fps for output frequency)
         tolerance_ms: Maximum allowed time difference in milliseconds.
-            If None, defaults to 40% of frame interval (1000/target_fps * 0.4)
+            If None, defaults to 50% of frame interval (1000/target_fps * 0.5)
     """
 
     def __init__(
@@ -80,9 +80,9 @@ class FrameSynchronizer:
         self.config = config
         self.target_frequency = config.target_fps
         
-        # Default tolerance to 40% of frame interval
+        # Default tolerance to 100% of frame interval (100ms at 10Hz)
         if tolerance_ms is None:
-            tolerance_ms = (1000.0 / self.target_frequency) * 0.4
+            tolerance_ms = (1000.0 / self.target_frequency) * 1.0
         self.tolerance = tolerance_ms / 1000.0  # Convert to seconds
 
         # Build list of required topics
@@ -331,11 +331,26 @@ class FrameSynchronizer:
         Returns:
             The nearest TimestampedMessage, or None if beyond tolerance
         """
+        msg, _ = self.find_nearest_with_gap(topic, target_time)
+        return msg
+
+    def find_nearest_with_gap(
+        self, topic: RosTopicEnum, target_time: float
+    ) -> tuple[TimestampedMessage | None, float | None]:
+        """Find the message nearest to target_time and return the time gap.
+
+        Args:
+            topic: The topic to search
+            target_time: The target timestamp in seconds
+
+        Returns:
+            Tuple of (nearest TimestampedMessage or None, gap in seconds or None)
+        """
         timestamps = self.timestamps[topic]
         messages = self.messages[topic]
 
         if not timestamps:
-            return None
+            return None, None
 
         # Binary search for insertion point
         idx = bisect.bisect_left(timestamps, target_time)
@@ -348,16 +363,16 @@ class FrameSynchronizer:
             candidates.append((idx, abs(timestamps[idx] - target_time)))
 
         if not candidates:
-            return None
+            return None, None
 
         # Pick the closest one
         best_idx, best_diff = min(candidates, key=lambda x: x[1])
 
         # Only reject if beyond tolerance
         if best_diff > self.tolerance:
-            return None
+            return None, best_diff
 
-        return messages[best_idx]
+        return messages[best_idx], best_diff
 
     def generate_synced_frames(self) -> Iterator[dict[RosTopicEnum, TimestampedMessage]]:
         """Generate synchronized frames at fixed intervals using synthetic timestamps.
@@ -407,13 +422,16 @@ class FrameSynchronizer:
             frame: dict[RosTopicEnum, TimestampedMessage] = {}
 
             for topic in self.required_topics:
-                msg = self.find_nearest(topic, target_time)
+                msg, gap = self.find_nearest_with_gap(topic, target_time)
 
                 if msg is None:
+                    gap_ms = gap * 1000 if gap is not None else float("inf")
+                    exceeded_ms = gap_ms - (self.tolerance * 1000)
                     print(
                         f"WARNING: Skipping entire episode - topic '{topic.value}' "
                         f"has no message within {self.tolerance * 1000:.1f}ms tolerance "
-                        f"of timestamp {target_time:.3f}s"
+                        f"of timestamp {target_time:.3f}s "
+                        f"(nearest was {gap_ms:.1f}ms away, exceeded by {exceeded_ms:.1f}ms)"
                     )
                     return
 

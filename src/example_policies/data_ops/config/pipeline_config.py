@@ -79,7 +79,7 @@ class PipelineConfig:
     include_joint_velocities: bool = False
     include_joint_efforts: bool = False
     include_tcp_poses: bool = True
-    include_last_command: bool = False
+    include_last_command: bool = True
 
     include_rgb_images: bool = True
     include_depth_images: bool = False
@@ -101,7 +101,7 @@ class PipelineConfig:
     task_name: str = ""
 
     # Pauses
-    max_pause_seconds: float = 0.5
+    max_pause_seconds: float = 0.2
     pause_velocity: float = 0.03
     save_pauses: bool = False  # Old dataset pipeline only
 

@@ -85,14 +85,10 @@ class SyncedEpisodeConverter:
         output_dir: pathlib.Path,
         config: pipeline_config.PipelineConfig,
         features: dict,
-        tolerance_ms: float | None = None,
+        tolerance_ms: float,
     ):
         self.config = config
         self.output_dir = output_dir
-        
-        # Default tolerance to 40% of frame interval
-        if tolerance_ms is None:
-            tolerance_ms = (1000.0 / config.target_fps) * 0.4
         self.tolerance_ms = tolerance_ms
 
         # Sync components
@@ -195,7 +191,7 @@ def convert_episodes_synced(
     episode_paths: list[pathlib.Path],
     output_dir: pathlib.Path,
     config: pipeline_config.PipelineConfig,
-    tolerance_ms: float | None = None,
+    tolerance_ms: float,
 ) -> dict:
     """Convert episodes using sensor-timestamp synchronization.
 
@@ -204,7 +200,6 @@ def convert_episodes_synced(
         output_dir: Output directory for converted dataset
         config: Pipeline configuration (uses config.target_fps for output frequency)
         tolerance_ms: Maximum time difference for sync (milliseconds).
-            If None, defaults to 40% of frame interval.
 
     Returns:
         Dict with keys: episode_mapping, blacklist, episodes_saved, total_time
@@ -271,6 +266,7 @@ class ScriptArgs:
 
     # Sync-specific parameters
     tolerance_ms: float | None = None  # Auto-computed from target_fps if None
+    max_episodes: int | None = None  # Stop after N episodes (None = no limit)
 
 
 @dataclasses.dataclass
@@ -311,7 +307,7 @@ def main():
     # Compute tolerance if not specified
     tolerance_ms = config.tolerance_ms
     if tolerance_ms is None:
-        tolerance_ms = (1000.0 / config.target_fps) * 0.4
+        tolerance_ms = (1000.0 / config.target_fps) * 1.0
 
     print(f"Converting episodes from: {config.episodes_dir}")
     print(f"Output directory: {config.output}")
@@ -324,6 +320,9 @@ def main():
     print(f"  - Task: {config.task_name}")
 
     episode_paths = get_selected_episodes(config.episodes_dir)
+    if config.max_episodes is not None:
+        episode_paths = episode_paths[:config.max_episodes]
+        print(f"  - Limiting to first {config.max_episodes} episodes")
     result = convert_episodes_synced(
         episode_paths,
         config.output,
@@ -335,4 +334,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
