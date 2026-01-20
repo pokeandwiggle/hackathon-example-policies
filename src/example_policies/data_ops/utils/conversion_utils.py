@@ -26,12 +26,13 @@ def get_sorted_episodes(episode_dir: pathlib.Path) -> list[pathlib.Path]:
     episode_paths.sort(key=lambda p: p.stat().st_ctime)
     return episode_paths
 
-def get_selected_episodes(episode_dir: pathlib.Path, success_only=True):
+def get_selected_episodes(episode_dir: pathlib.Path, success_only=True, excellent_only=True):
     """Get episode paths sorted by creation time (oldest first), that fulfil success criteria in the MCAP file.
 
     Args:
         episode_dir: Directory containing .mcap episode files
         success_only: If True, include only successful episodes
+        excellent_only: If True, include only episodes with "excellent" quality
 
     Returns:
         List of episode paths sorted by creation date that fulfil success criteria in the MCAP file
@@ -53,7 +54,10 @@ def get_selected_episodes(episode_dir: pathlib.Path, success_only=True):
                             # metadata is already a dict, no need to decode
                             metadata = metadata_record.metadata
                             quality = metadata.get("quality")
-                            if quality in ["ok", "good", "excellent"]:
+                            if excellent_only is True and quality == "excellent":
+                                filtered_episode_paths.append(ep_path)
+                                break
+                            elif excellent_only is False and quality in ["excellent", "good", "ok"]:
                                 filtered_episode_paths.append(ep_path)
                                 break
             except (OSError, ValueError, KeyError) as e:
