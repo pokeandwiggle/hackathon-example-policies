@@ -396,6 +396,14 @@ class DiTFlowPolicy(PreTrainedPolicy):
             batch.pop("action")  # remove action if present in the input batch
             
         batch = self.normalize_inputs(batch)
+        
+        # FIX: Clamp normalized state to [-1, 1] to prevent OOD values
+        # Features with tiny normalization ranges (e.g., unused gripper) can produce
+        # extreme values that break inference. See investigation in compare_dataset_vs_live.
+        if OBS_STATE in batch:
+            batch = dict(batch)  # shallow copy
+            batch[OBS_STATE] = torch.clamp(batch[OBS_STATE], -1.0, 1.0)
+        
         if self.config.image_features:
             batch = dict(
                 batch

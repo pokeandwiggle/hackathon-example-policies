@@ -19,11 +19,43 @@ import shutil
 
 from lerobot.constants import PRETRAINED_MODEL_DIR
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
+from lerobot.datasets import video_utils
 from lerobot.policies import factory as lerobot_factory
 from lerobot.utils import train_utils, wandb_utils
 
 from .policies.factory import get_policy
 from .utils.constants import INFO_FILE, META_DIR
+
+
+def monkey_patch_video_query():
+    """
+    Patch _query_videos to avoid squeezing the temporal dimension when n_obs_steps=1.
+    
+    The original code uses `frames.squeeze(0)` which removes the temporal dimension
+    when there's only 1 frame. This causes shape mismatches in the policy's forward
+    pass which expects shape (B, n_obs_steps, C, H, W).
+    
+    The original squeeze(0) was likely intended for a different purpose but is harmful
+    when n_obs_steps=1. We simply don't squeeze at all - the temporal dimension should
+    always be preserved.
+    """
+
+    def patched_query_videos(
+        self, query_timestamps: dict[str, list[float]], ep_idx: int
+    ) -> dict[str, "torch.Tensor"]:
+        item = {}
+        for vid_key, query_ts in query_timestamps.items():
+            video_path = self.root / self.meta.get_video_file_path(ep_idx, vid_key)
+            frames = video_utils.decode_video_frames(
+                video_path, query_ts, self.tolerance_s, self.video_backend
+            )
+            # Don't squeeze - preserve temporal dimension for all cases
+            # Original code did frames.squeeze(0) which breaks n_obs_steps=1
+            item[vid_key] = frames  # Shape: (n_obs_steps, C, H, W)
+
+        return item
+
+    LeRobotDataset._query_videos = patched_query_videos
 
 
 def monkey_patch_dataset():
@@ -137,5 +169,6 @@ def monkey_patch_wandb():
 def apply_patches():
     monkey_patch_policy_factory()
     monkey_patch_dataset()
+    monkey_patch_video_query()
     monkey_patch_save_checkpoint()
     monkey_patch_wandb()
