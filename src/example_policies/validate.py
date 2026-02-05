@@ -103,6 +103,7 @@ def main():
     # Dictionary to store data for each episode
     episodes_data = {}
     action_dim = None
+    prev_ep = -1
 
     # Collect data for all episodes
     for batch in dataloader:
@@ -114,6 +115,11 @@ def main():
         # Skip if we've reached max episodes
         if args.max_episodes is not None and b_ep >= args.max_episodes:
             break
+
+        # Reset policy when starting a new episode
+        if b_ep != prev_ep:
+            policy.reset()
+            prev_ep = b_ep
 
         # Initialize episode data structure if needed
         if b_ep not in episodes_data:

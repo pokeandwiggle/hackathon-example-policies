@@ -100,6 +100,7 @@ def main():
     preds = []
     times = []
     action_dim = None
+    episode_started = False
 
     def _fmt(v: torch.Tensor, w=9, p=3):
         return f"{float(v):{w}.{p}f}"
@@ -114,6 +115,11 @@ def main():
             continue
         if b_ep > ep:
             break
+
+        # Reset policy at the start of the target episode
+        if not episode_started:
+            policy.reset()
+            episode_started = True
 
         batch = to_device_batch(
             batch, device, non_blocking=True
