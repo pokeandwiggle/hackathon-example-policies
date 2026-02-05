@@ -45,7 +45,6 @@ from example_policies.data_ops.pipeline.frame_synchronizer import (
     TimestampedMessage,
 )
 from example_policies.data_ops.pipeline.frame_targeter import FrameTargeter
-from example_policies.data_ops.pipeline.post_lerobot_ops import PostLerobotPipeline
 from example_policies.data_ops.utils.conversion_utils import (
     get_selected_episodes,
     save_metadata,
@@ -118,6 +117,7 @@ class SyncedEpisodeConverter:
 
     def reset_episode_state(self) -> None:
         """Reset state for new episode."""
+        self.frame_parser.reset()
         self.frame_assembler.reset()
         self.frame_targeter.reset()
 
@@ -158,8 +158,9 @@ class SyncedEpisodeConverter:
             parsed = self.frame_parser.parse_frame(frame_buffer)
             assembled = self.frame_assembler.assemble(parsed)
 
-            # Add to dataset
-            self.dataset.add_frame(assembled, task=self.config.task_name)
+            # Add to dataset (v3.0 API: task goes in frame dict, not as kwarg)
+            assembled["task"] = self.config.task_name
+            self.dataset.add_frame(assembled)
             saved_frames += 1
 
         print(f"  Saved {saved_frames} frames (skipped {skipped_pauses} pauses)")
@@ -211,7 +212,6 @@ def convert_episodes_synced(
         features,
         tolerance_ms=tolerance_ms,
     )
-    post_pipeline = PostLerobotPipeline(config)
 
     for ep_idx, episode_path in enumerate(episode_paths):
         print(f"Processing {episode_path}...")
@@ -233,12 +233,6 @@ def convert_episodes_synced(
         converter.blacklist,
         config,
     )
-
-    # Only run post-processing if we have episodes
-    if converter.episode_mapping:
-        post_pipeline.process_lerobot(output_dir)
-    else:
-        print("\nNo episodes to post-process.")
 
     return {
         "episode_mapping": converter.episode_mapping,

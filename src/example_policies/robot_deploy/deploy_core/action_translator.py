@@ -52,6 +52,12 @@ class ActionTranslator:
     def __init__(self, cfg):
         self.last_action = None
         self.action_mode: ActionMode = ActionMode.parse_action_mode(cfg)
+
+        # Track last output for quaternion continuity (only needed for absolute TCP mode)
+        # DELTA_TCP gets continuity from quaternion composition, so no tracking needed
+        self._track_output_quaternion = self.action_mode == ActionMode.TCP
+        self.last_output_action = None
+
         self._state_feature_names = []
         if getattr(cfg, "metadata", None):
             self._state_feature_names = cfg.metadata["features"][OBSERVATION_STATE][
@@ -168,7 +174,10 @@ class ActionTranslator:
 
     def _absolute_tcp(self, action: torch.Tensor) -> torch.Tensor:
         action = _normalize_quats(action.clone())
-        action = _positive_quats(action)
+        # Continuity tracking only for absolute TCP mode (not DELTA_TCP)
+        if self._track_output_quaternion:
+            action = _continuous_quats(action, self.last_output_action)
+            self.last_output_action = action.clone()
         return action
 
     def _absolute_joint(self, action: torch.Tensor) -> torch.Tensor:
@@ -202,4 +211,30 @@ def _positive_quats(action: torch.Tensor) -> torch.Tensor:
         action[:, DUAL_ABS_LEFT_QUAT_IDXS] = -action[:, DUAL_ABS_LEFT_QUAT_IDXS]
     if action[0, DUAL_ABS_RIGHT_QUAT_IDXS][-1] < 0:
         action[:, DUAL_ABS_RIGHT_QUAT_IDXS] = -action[:, DUAL_ABS_RIGHT_QUAT_IDXS]
+    return action
+
+
+def _continuous_quats(
+    action: torch.Tensor, last_action: torch.Tensor | None
+) -> torch.Tensor:
+    """Ensure quaternion continuity by choosing sign closest to previous frame.
+
+    This prevents quaternion jumps when rotations pass through w ≈ 0 configurations.
+    Falls back to positive_quats convention for the first frame.
+    """
+    if last_action is None:
+        return _positive_quats(action)
+
+    # Left arm quaternion continuity
+    left_quat = action[0, DUAL_ABS_LEFT_QUAT_IDXS]
+    last_left_quat = last_action[0, DUAL_ABS_LEFT_QUAT_IDXS]
+    if torch.dot(left_quat, last_left_quat) < 0:
+        action[:, DUAL_ABS_LEFT_QUAT_IDXS] = -left_quat
+
+    # Right arm quaternion continuity
+    right_quat = action[0, DUAL_ABS_RIGHT_QUAT_IDXS]
+    last_right_quat = last_action[0, DUAL_ABS_RIGHT_QUAT_IDXS]
+    if torch.dot(right_quat, last_right_quat) < 0:
+        action[:, DUAL_ABS_RIGHT_QUAT_IDXS] = -right_quat
+
     return action

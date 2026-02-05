@@ -17,7 +17,7 @@ import os
 import pathlib
 import shutil
 
-from lerobot.constants import PRETRAINED_MODEL_DIR
+from lerobot.utils.constants import PRETRAINED_MODEL_DIR
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.datasets import video_utils
 from lerobot.policies import factory as lerobot_factory

@@ -31,7 +31,6 @@ from mcap.reader import NonSeekingReader
 
 from example_policies.data_ops.config import pipeline_config
 from example_policies.data_ops.pipeline.episode_converter import EpisodeConverter
-from example_policies.data_ops.pipeline.post_lerobot_ops import PostLerobotPipeline
 from example_policies.data_ops.utils.conversion_utils import (
     get_selected_episodes,
     save_metadata,
@@ -56,7 +55,6 @@ def convert_episodes(
     """
     features = pipeline_config.build_features(config)
     converter = EpisodeConverter(output_dir, config, features)
-    post_pipeline = PostLerobotPipeline(config)
 
     for ep_idx, episode_path in enumerate(episode_paths):
         print(f"Processing {episode_path}...")
@@ -86,8 +84,6 @@ def convert_episodes(
         converter.blacklist,
         config,
     )
-
-    post_pipeline.process_lerobot(output_dir)
 
     return {
         "episode_mapping": converter.episode_mapping,

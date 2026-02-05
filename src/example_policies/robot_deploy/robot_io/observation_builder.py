@@ -15,7 +15,8 @@
 import numpy as np
 import torch
 
-from example_policies.data_ops.utils import geometric, image_processor
+from example_policies.data_ops.utils import image_processor
+from example_policies.data_ops.utils.geometric import continuous_quat
 from example_policies.utils.constants import OBSERVATION_STATE
 from example_policies.utils.state_builder import StateFeatureSpec
 from example_policies.utils.state_order import CANONICAL_ARM_JOINTS
@@ -28,6 +29,10 @@ class ObservationBuilder:
         # Default spec (will be overridden if metadata exists)
         self.state_spec = StateFeatureSpec()
         self.state_feature_names: list[str] = []
+
+        # Track previous TCP poses for quaternion continuity
+        self._prev_tcp_left = None
+        self._prev_tcp_right = None
 
         self.configure_metadata(cfg)
 
@@ -148,7 +153,13 @@ class ObservationBuilder:
                     pose.orientation.w,
                 ]
             )
-            pose_arr = geometric.positive_quat(pose_arr)
+            # Apply quaternion continuity tracking
+            if robot_name == "left":
+                pose_arr = continuous_quat(pose_arr, self._prev_tcp_left)
+                self._prev_tcp_left = pose_arr.copy()
+            else:
+                pose_arr = continuous_quat(pose_arr, self._prev_tcp_right)
+                self._prev_tcp_right = pose_arr.copy()
             tcp_poses.append(pose_arr)
 
         return np.array(tcp_poses, dtype=np.float32).flatten()

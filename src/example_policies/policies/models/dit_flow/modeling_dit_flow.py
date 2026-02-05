@@ -18,10 +18,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F  # noqa: N812
-from lerobot.constants import ACTION, OBS_ENV_STATE, OBS_IMAGES, OBS_STATE
+from lerobot.utils.constants import ACTION, OBS_ENV_STATE, OBS_IMAGES, OBS_STATE
 from lerobot.policies.diffusion.modeling_diffusion import DiffusionRgbEncoder
-from lerobot.policies.normalize import Normalize, Unnormalize
 from lerobot.policies.pretrained import PreTrainedPolicy
+
+from example_policies.compat import Normalize, Unnormalize
 from lerobot.policies.utils import (
     get_device_from_parameters,
     get_dtype_from_parameters,

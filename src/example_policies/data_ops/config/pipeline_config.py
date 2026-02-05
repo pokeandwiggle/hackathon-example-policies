@@ -95,7 +95,7 @@ class PipelineConfig:
     right_gripper: GripperType = GripperType.PANDA
 
     # Termination Signal Processing
-    termination_horizon_seconds: float = 0.5
+    termination_horizon_seconds: float = 0.0
 
     # Task name
     task_name: str = ""

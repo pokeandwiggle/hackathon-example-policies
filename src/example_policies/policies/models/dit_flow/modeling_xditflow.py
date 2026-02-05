@@ -55,7 +55,7 @@ class XDiTFlowPolicy(DiTFlowPolicy):
         self.config = config
 
         # Set up normalization (same as base class)
-        from lerobot.policies.normalize import Normalize, Unnormalize
+        from example_policies.compat import Normalize, Unnormalize
 
         self.normalize_inputs = Normalize(
             config.input_features, config.normalization_mapping, dataset_stats

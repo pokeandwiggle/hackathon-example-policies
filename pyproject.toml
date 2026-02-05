@@ -36,7 +36,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-lerobot = { git = "https://github.com/LiXiling/lerobot.git" }
+lerobot = { git = "https://github.com/pokeandwiggle/lerobot.git", branch = "fix/output-features-guard" }
 
 
 [dependency-groups]
