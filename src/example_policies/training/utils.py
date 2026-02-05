@@ -42,6 +42,7 @@ def create_dataset_config(data_dir: pathlib.Path):
 def make_episode_white_list(dataset_root_dir: str | pathlib.Path):
     blacklist_path = os.path.join(dataset_root_dir, META_DIR, BLACKLIST_FILE)
     episodes_path = os.path.join(dataset_root_dir, META_DIR, EPISODES_FILE)
+    info_path = os.path.join(dataset_root_dir, META_DIR, "info.json")
 
     if not os.path.exists(blacklist_path):
         return None
@@ -49,13 +50,30 @@ def make_episode_white_list(dataset_root_dir: str | pathlib.Path):
     with open(blacklist_path, "r") as f:
         # Use a set for efficient lookup of blacklisted indices.
         blacklisted_indices = set(json.load(f))
+    
+    # If blacklist is empty, no need to filter
+    if not blacklisted_indices:
+        return None
 
     all_episodes = []
-    with open(episodes_path, "r") as f:
-        # Correctly parse the .jsonl file line by line.
-        for line in f:
-            if line.strip():  # Ensure the line is not empty
-                all_episodes.append(json.loads(line)["episode_index"])
+    
+    # Try new format first (info.json with total_episodes)
+    if os.path.exists(info_path):
+        with open(info_path, "r") as f:
+            info = json.load(f)
+        if "total_episodes" in info:
+            all_episodes = list(range(info["total_episodes"]))
+    
+    # Fall back to old format (episodes.jsonl)
+    if not all_episodes and os.path.exists(episodes_path):
+        with open(episodes_path, "r") as f:
+            # Correctly parse the .jsonl file line by line.
+            for line in f:
+                if line.strip():  # Ensure the line is not empty
+                    all_episodes.append(json.loads(line)["episode_index"])
+    
+    if not all_episodes:
+        return None
 
     # Create a whitelist of episodes that are not in the blacklist.
     whitelist = [

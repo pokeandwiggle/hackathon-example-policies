@@ -78,7 +78,7 @@ def main():
     # Select your device
     device = "cpu" if not torch.cuda.is_available() else "cuda"
 
-    policy, cfg = load_policy(args.checkpoint)
+    policy, cfg, preprocessor, postprocessor = load_policy(args.checkpoint)
     policy.to(device)
 
     dataset = LeRobotDataset(
@@ -122,9 +122,20 @@ def main():
         tgt = batch["action"].detach().float().view(-1)
         if action_dim is None:
             action_dim = tgt.numel()  # Only load the action dimension once
+        
+        # Apply preprocessor if available (normalization)
+        obs = batch
+        if preprocessor is not None:
+            obs = preprocessor(batch)
+        
         action = policy.select_action(
-            batch
+            obs
         )  # This is the output of the action chunk. Could be more or less.
+        
+        # Apply postprocessor if available (unnormalization)
+        if postprocessor is not None:
+            action = postprocessor(action)
+        
         pred = action.detach().float().view(-1)
 
         # collect

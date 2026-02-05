@@ -67,7 +67,15 @@ class InferenceRunner:
         self, policy_bundle: PolicyBundle, observation: dict
     ) -> tuple[torch.Tensor, Optional[float]]:
         """Process action from policy, extracting termination signal if present."""
+        # Apply preprocessor if available (normalization)
+        if policy_bundle.preprocessor is not None:
+            observation = policy_bundle.preprocessor(observation)
+
         action = policy_bundle.policy.select_action(observation)
+
+        # Apply postprocessor if available (unnormalization)
+        if policy_bundle.postprocessor is not None:
+            action = policy_bundle.postprocessor(action)
 
         termination_signal = None
         if policy_bundle.has_termination:

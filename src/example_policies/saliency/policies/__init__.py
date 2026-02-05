@@ -3,14 +3,14 @@
 from . import ditflow
 
 # Registry of policy-specific modules
-# Each module should have: supports_policy(policy) and compute_action_with_gradients(policy, batch)
+# Each module should have: supports_policy(policy) and compute_action_with_gradients(policy, batch, preprocessor=None)
 POLICY_MODULES = [
     ditflow,
     # Add more policy modules here (e.g., diffusion, act, etc.)
 ]
 
 
-def get_action_with_gradients(policy, batch):
+def get_action_with_gradients(policy, batch, preprocessor=None):
     """
     Get action prediction with gradients for any supported policy.
 
@@ -19,6 +19,7 @@ def get_action_with_gradients(policy, batch):
     Args:
         policy: The policy model
         batch: Input batch with gradients enabled on observation tensors
+        preprocessor: Optional preprocessor pipeline for normalization
 
     Returns:
         tuple: (action, processed_batch)
@@ -28,7 +29,7 @@ def get_action_with_gradients(policy, batch):
     """
     for module in POLICY_MODULES:
         if module.supports_policy(policy):
-            return module.compute_action_with_gradients(policy, batch)
+            return module.compute_action_with_gradients(policy, batch, preprocessor=preprocessor)
 
     policy_name = (
         policy.config.name if hasattr(policy.config, "name") else type(policy).__name__

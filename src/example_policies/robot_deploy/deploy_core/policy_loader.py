@@ -75,7 +75,7 @@ def load_dataset_info(dir_path: pathlib.Path) -> dict:
 
 def load_policy(checkpoint_dir: pathlib.Path):
     apply_patches()
-    from lerobot.policies.factory import get_policy_class
+    from lerobot.policies.factory import get_policy_class, make_pre_post_processors
 
     checkpoint_dir = get_checkpoint_path(checkpoint_dir)
     cfg = PreTrainedConfig.from_pretrained(checkpoint_dir)
@@ -85,5 +85,74 @@ def load_policy(checkpoint_dir: pathlib.Path):
     policy.reset()
     metadata = load_metadata(checkpoint_dir)
 
+    # Load preprocessor and postprocessor for inference
+    # Try loading from pretrained path first, fall back to creating new ones
+    try:
+        preprocessor, postprocessor = make_pre_post_processors(
+            policy_cfg=cfg,
+            pretrained_path=checkpoint_dir,
+        )
+    except Exception:
+        # Old checkpoint without processor configs - extract stats from policy's
+        # normalize_inputs/unnormalize_outputs modules (if available) and create processors
+        dataset_stats = _extract_stats_from_policy(policy)
+        preprocessor, postprocessor = make_pre_post_processors(
+            policy_cfg=cfg,
+            pretrained_path=None,
+            dataset_stats=dataset_stats,
+        )
+
     setattr(cfg, "metadata", metadata)
-    return policy, cfg
+    return policy, cfg, preprocessor, postprocessor
+
+
+def _extract_stats_from_policy(policy) -> dict | None:
+    """Extract dataset stats from policy's normalize_inputs module for backward compatibility.
+    
+    Old checkpoints have stats stored in normalize_inputs.buffer_* parameters.
+    This extracts them to create processors dynamically.
+    """
+    if not hasattr(policy, 'normalize_inputs'):
+        return None
+    
+    stats = {}
+    normalize = policy.normalize_inputs
+    
+    # Iterate through attributes looking for buffer_* ParameterDicts
+    for attr_name in dir(normalize):
+        if attr_name.startswith('buffer_'):
+            # Convert buffer_observation_state back to observation.state
+            key = attr_name[7:].replace('_', '.')
+            buffer = getattr(normalize, attr_name)
+            
+            if hasattr(buffer, 'mean') and hasattr(buffer, 'std'):
+                stats[key] = {
+                    'mean': buffer['mean'].data,
+                    'std': buffer['std'].data,
+                }
+            elif hasattr(buffer, 'min') and hasattr(buffer, 'max'):
+                stats[key] = {
+                    'min': buffer['min'].data,
+                    'max': buffer['max'].data,
+                }
+    
+    # Also get action stats from unnormalize_outputs
+    if hasattr(policy, 'unnormalize_outputs'):
+        unnormalize = policy.unnormalize_outputs
+        for attr_name in dir(unnormalize):
+            if attr_name.startswith('buffer_'):
+                key = attr_name[7:].replace('_', '.')
+                buffer = getattr(unnormalize, attr_name)
+                
+                if hasattr(buffer, 'mean') and hasattr(buffer, 'std'):
+                    stats[key] = {
+                        'mean': buffer['mean'].data,
+                        'std': buffer['std'].data,
+                    }
+                elif hasattr(buffer, 'min') and hasattr(buffer, 'max'):
+                    stats[key] = {
+                        'min': buffer['min'].data,
+                        'max': buffer['max'].data,
+                    }
+    
+    return stats if stats else None

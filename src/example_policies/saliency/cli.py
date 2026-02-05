@@ -140,9 +140,9 @@ def main():
     device = "cpu" if not torch.cuda.is_available() else "cuda"
     logging.info(f"Using device: {device}")
 
-    # Load policy
+    # Load policy and processors
     logging.info(f"Loading policy from {args.checkpoint}")
-    policy, cfg = load_policy(args.checkpoint)
+    policy, cfg, preprocessor, postprocessor = load_policy(args.checkpoint)
     policy.to(device)
 
     # Load dataset
@@ -183,7 +183,7 @@ def main():
     logging.info("Computing saliency maps...")
     with torch.set_grad_enabled(True):
         image_saliency_maps, state_saliency, action_output = compute_saliency(
-            policy, batch, image_keys, state_key
+            policy, batch, image_keys, state_key, preprocessor=preprocessor
         )
 
     # Visualize results

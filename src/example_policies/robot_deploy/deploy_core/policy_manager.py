@@ -25,7 +25,7 @@ class PolicyManager:
     def load_single(checkpoint_path: Path, device: str) -> PolicyBundle:
         """Load a single policy from checkpoint path."""
         print(f"Loading checkpoint: {checkpoint_path.name}")
-        policy, cfg = load_policy(checkpoint_path)
+        policy, cfg, preprocessor, postprocessor = load_policy(checkpoint_path)
         policy.to(device)
 
         policy_bundle = PolicyBundle(
@@ -35,6 +35,8 @@ class PolicyManager:
             printer=print_info.InfoPrinter(cfg),
             checkpoint_path=checkpoint_path,
             has_termination=PolicyManager._has_termination_signal(cfg),
+            preprocessor=preprocessor,
+            postprocessor=postprocessor,
         )
         print(f"  Termination signal support: {policy_bundle.has_termination}")
         return policy_bundle

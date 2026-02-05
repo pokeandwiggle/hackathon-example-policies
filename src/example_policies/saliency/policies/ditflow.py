@@ -8,18 +8,27 @@ def supports_policy(policy) -> bool:
     return hasattr(policy, "dit_flow")
 
 
-def compute_action_with_gradients(policy, batch):
+def compute_action_with_gradients(policy, batch, preprocessor=None):
     """
     Compute DiT Flow action with gradients.
 
     Bypasses @torch.no_grad() by manually preprocessing and calling
     the velocity network directly.
 
+    Args:
+        policy: The DiT Flow policy
+        batch: The input observation batch
+        preprocessor: Optional preprocessor pipeline for normalization
+
     Returns:
         tuple: (action, processed_batch)
     """
-    # Normalize inputs (creates new tensors without gradients)
-    batch = policy.normalize_inputs(batch)
+    # Normalize inputs using preprocessor if available
+    if preprocessor is not None:
+        batch = preprocessor(batch)
+    elif hasattr(policy, "normalize_inputs"):
+        # Fallback for policies that still have internal normalization
+        batch = policy.normalize_inputs(batch)
 
     # Re-enable gradients on observations
     image_keys = [k for k in batch.keys() if k.startswith("observation.images.")]

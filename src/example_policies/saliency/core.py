@@ -5,7 +5,7 @@ import torch
 from .policies import get_action_with_gradients
 
 
-def compute_saliency(policy, batch, image_keys, state_key="observation.state"):
+def compute_saliency(policy, batch, image_keys, state_key="observation.state", preprocessor=None):
     """
     Compute saliency maps for all image inputs and state vector.
 
@@ -20,6 +20,7 @@ def compute_saliency(policy, batch, image_keys, state_key="observation.state"):
         batch: Input batch dictionary (will not be modified)
         image_keys: List of keys corresponding to image observations
         state_key: Key for state vector observation
+        preprocessor: Optional preprocessor pipeline for normalization
 
     Returns:
         tuple: (image_saliency_maps, state_saliency, action_output)
@@ -34,7 +35,7 @@ def compute_saliency(policy, batch, image_keys, state_key="observation.state"):
     grad_batch = _create_grad_batch(batch, image_keys, state_key)
 
     # Get action prediction with gradients
-    action, processed_batch = get_action_with_gradients(policy, grad_batch)
+    action, processed_batch = get_action_with_gradients(policy, grad_batch, preprocessor=preprocessor)
 
     if not action.requires_grad:
         raise RuntimeError("Action output does not require gradients.")

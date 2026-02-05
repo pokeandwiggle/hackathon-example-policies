@@ -21,7 +21,8 @@ from lerobot.utils.constants import PRETRAINED_MODEL_DIR
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.datasets import video_utils
 from lerobot.policies import factory as lerobot_factory
-from lerobot.utils import train_utils, wandb_utils
+from lerobot.utils import train_utils
+from lerobot.rl import wandb_utils
 
 from .policies.factory import get_policy
 from .utils.constants import INFO_FILE, META_DIR

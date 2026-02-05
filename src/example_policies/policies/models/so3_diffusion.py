@@ -42,6 +42,7 @@ class SO3DiffusionPolicy(DiffusionPolicy):
         self,
         config: SO3DiffusionConfig,
         dataset_stats: dict[str, dict[str, torch.Tensor]] | None = None,
+        dataset_meta=None,  # New lerobot API, not used but must accept
     ):
         super().__init__(config, dataset_stats)
         print("SOE3")

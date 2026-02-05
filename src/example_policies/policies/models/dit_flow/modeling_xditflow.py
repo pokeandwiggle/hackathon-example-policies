@@ -41,12 +41,14 @@ class XDiTFlowPolicy(DiTFlowPolicy):
         self,
         config: XDiTFlowConfig,
         dataset_stats: dict[str, dict[str, torch.Tensor]] | None = None,
+        dataset_meta=None,  # New lerobot API, not used but must accept
     ):
         """
         Args:
             config: XDiTFlow policy configuration class instance.
             dataset_stats: Dataset statistics to be used for normalization. If not passed here, it is expected
                 that they will be passed with a call to `load_state_dict` before the policy is used.
+            dataset_meta: Dataset metadata (new lerobot API, unused here).
         """
         # Call PreTrainedPolicy.__init__ directly to avoid DiTFlowPolicy.__init__
         PreTrainedPolicy.__init__(self, config)

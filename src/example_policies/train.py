@@ -95,8 +95,8 @@ def train_policy(cli_config: TrainCliArgs):
 def train(cfg):
     print("\nStarting training...")
     # import after monkey patching
-    from lerobot.scripts.train import init_logging
-    from lerobot.scripts.train import train as lerobot_train
+    from lerobot.utils.utils import init_logging
+    from lerobot.scripts.lerobot_train import train as lerobot_train
 
     init_logging()
     lerobot_train(cfg)

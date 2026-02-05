@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from lerobot.policies.pretrained import PreTrainedPolicy
 
@@ -18,6 +18,8 @@ class PolicyBundle:
     printer: print_info.InfoPrinter
     checkpoint_path: Path
     has_termination: bool
+    preprocessor: Any = None  # PolicyProcessorPipeline for input normalization
+    postprocessor: Any = None  # PolicyProcessorPipeline for output unnormalization
 
     @property
     def name(self) -> str:

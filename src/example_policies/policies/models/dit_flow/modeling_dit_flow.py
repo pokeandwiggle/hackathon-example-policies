@@ -22,7 +22,6 @@ from lerobot.utils.constants import ACTION, OBS_ENV_STATE, OBS_IMAGES, OBS_STATE
 from lerobot.policies.diffusion.modeling_diffusion import DiffusionRgbEncoder
 from lerobot.policies.pretrained import PreTrainedPolicy
 
-from example_policies.compat import Normalize, Unnormalize
 from lerobot.policies.utils import (
     get_device_from_parameters,
     get_dtype_from_parameters,
@@ -329,6 +328,7 @@ class DiTFlowPolicy(PreTrainedPolicy):
         self,
         config: DiTFlowConfig,
         dataset_stats: dict[str, dict[str, torch.Tensor]] | None = None,
+        dataset_meta=None,  # New lerobot API, not used but must accept
     ):
         """
         Args:
@@ -336,20 +336,27 @@ class DiTFlowPolicy(PreTrainedPolicy):
                 the configuration class is used.
             dataset_stats: Dataset statistics to be used for normalization. If not passed here, it is expected
                 that they will be passed with a call to `load_state_dict` before the policy is used.
+            dataset_meta: Dataset metadata (new lerobot API, unused here).
         """
         super().__init__(config)
 
         config.validate_features()
         self.config = config
 
+        # NOTE: Normalization is now handled by the processor pipeline (processor_dit_flow.py)
+        # for both training and inference. These modules are kept for backward compatibility
+        # with old checkpoints that have stats saved in the model state dict.
+        # They are NOT used in forward/select_action - the processor pipeline handles normalization.
+        from example_policies.compat import Normalize, Unnormalize
         self.normalize_inputs = Normalize(
-            config.input_features, config.normalization_mapping, dataset_stats
-        )
-        self.normalize_targets = Normalize(
-            config.output_features, config.normalization_mapping, dataset_stats
+            config.input_features,
+            config.normalization_mapping,
+            dataset_stats,
         )
         self.unnormalize_outputs = Unnormalize(
-            config.output_features, config.normalization_mapping, dataset_stats
+            config.output_features,
+            config.normalization_mapping,
+            dataset_stats,
         )
 
         # queues are populated during rollout of the policy, they contain the n latest observations and actions
@@ -386,17 +393,15 @@ class DiTFlowPolicy(PreTrainedPolicy):
         # batch = {k: torch.stack(list(self._queues[k]), dim=1) for k in batch if k in self._queues}
         actions = self.dit_flow.generate_actions(batch)
 
-        # TODO(rcadene): make above methods return output dictionary?
-        actions = self.unnormalize_outputs({ACTION: actions})[ACTION]
-
+        # Note: Unnormalization is now handled by the postprocessor pipeline
         return actions
 
     @torch.no_grad()
     def select_action(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
         if "action" in batch:
             batch.pop("action")  # remove action if present in the input batch
-            
-        batch = self.normalize_inputs(batch)
+        
+        # Note: Normalization is now handled by the preprocessor pipeline
         
         # FIX: Clamp normalized state to [-1, 1] to prevent OOD values
         # Features with tiny normalization ranges (e.g., unused gripper) can produce
@@ -424,7 +429,7 @@ class DiTFlowPolicy(PreTrainedPolicy):
 
     def forward(self, batch: dict[str, torch.Tensor]) -> tuple[torch.Tensor, None]:
         """Run the batch through the model and compute the loss for training or validation."""
-        batch = self.normalize_inputs(batch)
+        # Note: Normalization is now handled by the preprocessor pipeline
         if self.config.image_features:
             batch = dict(
                 batch
@@ -432,7 +437,6 @@ class DiTFlowPolicy(PreTrainedPolicy):
             batch["observation.images"] = torch.stack(
                 [batch[key] for key in self.config.image_features], dim=-4
             )
-        batch = self.normalize_targets(batch)
         loss = self.dit_flow.compute_loss(batch)
         return loss, None
 
