@@ -27,6 +27,12 @@ class InferenceRunner:
     def run_step(self, policy_bundle: PolicyBundle) -> Optional[float]:
         """Execute one inference step. Returns termination signal if present."""
         start_time = time.monotonic()
+
+        # Reset policy at the very first step
+        if self.step == 0:
+            print("\n=== RESETTING POLICY ===")
+            policy_bundle.policy.reset()
+            
         observation = self.robot_interface.get_observation(policy_bundle.config.device)
 
         if not observation:
