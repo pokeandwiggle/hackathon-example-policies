@@ -23,6 +23,7 @@ Patches Status (lerobot v0.4.x from pokeandwiggle fork):
 
 import pathlib
 import shutil
+import torch
 
 from lerobot.utils.constants import PRETRAINED_MODEL_DIR
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
@@ -49,7 +50,7 @@ def monkey_patch_video_query():
 
     def patched_query_videos(
         self, query_timestamps: dict[str, list[float]], ep_idx: int
-    ) -> dict[str, "torch.Tensor"]:
+    ) -> dict[str, torch.Tensor]:
         # Get episode metadata for timestamp offset
         ep = self.meta.episodes[ep_idx]
         item = {}
