@@ -23,6 +23,18 @@ class DeployArgumentParser:
             metavar="HZ",
             help="Control frequency in Hz (default: 10.0)",
         )
+        parser.add_argument(
+            "--move-home",
+            action="store_true",
+            help="Move robot to home pose before starting inference",
+        )
+        parser.add_argument(
+            "--mount",
+            type=str,
+            choices=["table", "wall"],
+            default="wall",
+            help="Robot mount type for home pose (default: wall)",
+        )
 
     @staticmethod
     def create_single_policy_parser() -> argparse.ArgumentParser:

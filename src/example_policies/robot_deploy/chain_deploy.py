@@ -3,6 +3,7 @@
 import torch
 
 from example_policies.robot_deploy.deploy_argument_parser import DeployArgumentParser
+from example_policies.robot_deploy.deploy import move_home
 from example_policies.robot_deploy.deploy_core.deployment_structures import (
     InferenceConfig,
 )
@@ -41,6 +42,13 @@ def main():
 
     with RobotConnection(args.robot_server) as stub:
         robot_interface = RobotInterface(stub, policies[0].config)
+
+        # Move to home position if requested
+        if args.move_home:
+            move_home(robot_interface, args.mount)
+            print("Press Enter to start inference...")
+            input()
+
         runner = InferenceRunner(robot_interface, config)
         switcher = PolicySwitcher(policies)
 

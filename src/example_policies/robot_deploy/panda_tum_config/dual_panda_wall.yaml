@@ -1,0 +1,31 @@
+home_joint_configuration:
+  panda_right_joint1: 0.0
+  panda_right_joint2: -1.6
+  panda_right_joint3: -0.4
+  panda_right_joint4: -2.38
+  panda_right_joint5: -1.7
+  panda_right_joint6: 2.2
+  panda_right_joint7: -0.0
+  panda_left_joint1: -0.0
+  panda_left_joint2: -1.6
+  panda_left_joint3: 0.4
+  panda_left_joint4: -2.38
+  panda_left_joint5: 1.7
+  panda_left_joint6: 2.2
+  panda_left_joint7: -1.5
+left_nullspace_config:
+  panda_left_joint1: 0.014675152
+  panda_left_joint2: -1.5305582
+  panda_left_joint3: 0.5671264
+  panda_left_joint4: -2.717720
+  panda_left_joint5: 2.3075577
+  panda_left_joint6: 1.6109013
+  panda_left_joint7: -2.2096095
+right_nullspace_config:
+  panda_right_joint1: -0.021151105
+  panda_right_joint2: -1.4059054
+  panda_right_joint3: -0.6889705
+  panda_right_joint4: -2.4476174
+  panda_right_joint5: -2.129438
+  panda_right_joint6: 2.059776
+  panda_right_joint7: 0.5544311
