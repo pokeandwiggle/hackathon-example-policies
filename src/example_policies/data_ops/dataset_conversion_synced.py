@@ -46,6 +46,8 @@ from example_policies.data_ops.pipeline.frame_synchronizer import (
 )
 from example_policies.data_ops.pipeline.frame_targeter import FrameTargeter
 from example_policies.data_ops.utils.conversion_utils import (
+    AnnotationExtractor,
+    extract_robot_type_from_mcap,
     get_selected_episodes,
     save_metadata,
     validate_input_dir,
@@ -85,6 +87,7 @@ class SyncedEpisodeConverter:
         config: pipeline_config.PipelineConfig,
         features: dict,
         tolerance_ms: float,
+        robot_type: str = "panda_bimanual",
     ):
         self.config = config
         self.output_dir = output_dir
@@ -103,6 +106,7 @@ class SyncedEpisodeConverter:
             repo_id="local_only",
             fps=config.target_fps,
             root=output_dir,
+            robot_type=robot_type,
             use_videos=True,
             image_writer_threads=16,
             image_writer_processes=8,
@@ -193,6 +197,7 @@ def convert_episodes_synced(
     output_dir: pathlib.Path,
     config: pipeline_config.PipelineConfig,
     tolerance_ms: float,
+    with_annotations: bool = False,
 ) -> dict:
     """Convert episodes using sensor-timestamp synchronization.
 
@@ -201,23 +206,42 @@ def convert_episodes_synced(
         output_dir: Output directory for converted dataset
         config: Pipeline configuration (uses config.target_fps for output frequency)
         tolerance_ms: Maximum time difference for sync (milliseconds).
+        with_annotations: If True, extract segment annotations from /annotation topic.
 
     Returns:
-        Dict with keys: episode_mapping, blacklist, episodes_saved, total_time
+        Dict with keys: episode_mapping, blacklist, episodes_saved, total_time,
+        and optionally annotation_extractor if with_annotations=True.
     """
     features = pipeline_config.build_features(config)
+
+    # Extract robot type from first episode
+    robot_type = "panda_bimanual"
+    if episode_paths:
+        robot_type = extract_robot_type_from_mcap(episode_paths[0])
+        print(f"  Detected robot type: {robot_type}")
+
     converter = SyncedEpisodeConverter(
         output_dir,
         config,
         features,
         tolerance_ms=tolerance_ms,
+        robot_type=robot_type,
     )
+
+    # Initialize annotation extractor if requested
+    annotation_extractor = AnnotationExtractor(fps=config.target_fps) if with_annotations else None
 
     for ep_idx, episode_path in enumerate(episode_paths):
         print(f"Processing {episode_path}...")
 
         try:
-            converter.process_episode(episode_path, ep_idx)
+            saved = converter.process_episode(episode_path, ep_idx)
+
+            # Extract annotations after successful conversion
+            if annotation_extractor and saved:
+                dataset_ep_idx = converter.episode_counter - 1
+                annotation_extractor.extract_from_mcap(episode_path, dataset_ep_idx)
+
         except Exception as e:
             print(
                 f"Skipping faulty file: {episode_path} due to {type(e).__name__}: {e}"
@@ -227,6 +251,10 @@ def convert_episodes_synced(
             traceback.print_exc()
             continue
 
+    # Finalize the dataset - required to close parquet writers and write footer metadata
+    print("Finalizing dataset...")
+    converter.dataset.finalize()
+
     save_metadata(
         output_dir,
         converter.episode_mapping,
@@ -234,12 +262,18 @@ def convert_episodes_synced(
         config,
     )
 
-    return {
+    result = {
         "episode_mapping": converter.episode_mapping,
         "blacklist": converter.blacklist,
         "episodes_saved": len(converter.episode_mapping),
         "total_time": converter.get_total_time(),
+        "dataset": converter.dataset,  # Return dataset for push_to_hub
     }
+
+    if annotation_extractor:
+        result["annotation_extractor"] = annotation_extractor
+
+    return result
 
 
 def print_conversion_result(result: dict) -> None:
@@ -261,6 +295,18 @@ class ScriptArgs:
     # Sync-specific parameters
     tolerance_ms: float | None = None  # Auto-computed from target_fps if None
     max_episodes: int | None = None  # Stop after N episodes (None = no limit)
+
+    # Episode filtering
+    success_only: bool = True  # Include only successful episodes (based on MCAP metadata)
+    excellent_only: bool = True  # Include only episodes with 'excellent' quality
+
+    # Annotation extraction (opt-in)
+    with_annotations: bool = False  # Extract segment annotations from /annotation topic
+    skip_failed_segments: bool = False  # Skip frames from failed segments (requires --with-annotations)
+
+    # HuggingFace Hub upload
+    push_to_hub: bool = False  # Push dataset to HuggingFace Hub after conversion
+    repo_id: str | None = None  # HuggingFace repo ID (e.g., 'user/dataset-name')
 
 
 @dataclasses.dataclass
@@ -292,6 +338,12 @@ def main():
             --tolerance-ms 40 \\
             --action-level DELTA_TCP
 
+        # With annotation extraction:
+        python dataset_conversion_synced.py \\
+            --episodes-dir /path/to/episodes \\
+            --output /path/to/output \\
+            --with-annotations
+
     Use --help to see all available options and their descriptions.
     """
     config = draccus.parse(config_class=SyncedConfig)
@@ -308,22 +360,69 @@ def main():
     print("Sync config:")
     print(f"  - Target FPS: {config.target_fps}Hz")
     print(f"  - Tolerance: {tolerance_ms:.1f}ms {'(auto)' if config.tolerance_ms is None else ''}")
+    if config.with_annotations:
+        print("  - Annotations: enabled")
+        if config.skip_failed_segments:
+            print("  - Skip failed segments: enabled")
+    if config.push_to_hub:
+        print(f"  - Push to hub: {config.repo_id or 'repo_id required!'}")
     print("Pipeline config:")
     print(f"  - Action level: {config.action_level}")
     print(f"  - Image resolution: {config.image_resolution}")
     print(f"  - Task: {config.task_name}")
 
-    episode_paths = get_selected_episodes(config.episodes_dir)
+    # Validate push_to_hub requires repo_id
+    if config.push_to_hub and not config.repo_id:
+        raise ValueError("--repo_id is required when using --push_to_hub")
+
+    episode_paths = get_selected_episodes(
+        config.episodes_dir,
+        success_only=config.success_only,
+        excellent_only=config.excellent_only,
+    )
+    if not config.success_only:
+        print("  - Including all episodes (success_only=False)")
+    elif not config.excellent_only:
+        print("  - Including ok/good/excellent episodes (excellent_only=False)")
     if config.max_episodes is not None:
         episode_paths = episode_paths[:config.max_episodes]
         print(f"  - Limiting to first {config.max_episodes} episodes")
+
     result = convert_episodes_synced(
         episode_paths,
         config.output,
         config,
         tolerance_ms=tolerance_ms,
+        with_annotations=config.with_annotations,
     )
+
+    # Save annotations if extracted
+    if config.with_annotations:
+        extractor = result.get("annotation_extractor")
+        if extractor is None or extractor.total_segments == 0:
+            raise RuntimeError(
+                "--with_annotations was set but no segment annotations were found in any episode. "
+                "Ensure the MCAP files contain 'segments' metadata with segment_map data. "
+                "If annotations are not required, remove the --with_annotations flag."
+            )
+
+        print("\nSaving annotations...")
+        extractor.save(config.output)
+
+        # Print annotation stats
+        print(f"  - Episodes with annotations: {extractor.episodes_with_annotations}")
+        print(f"  - Total segments: {extractor.total_segments}")
+
     print_conversion_result(result)
+
+    # Push to HuggingFace Hub if requested
+    if config.push_to_hub:
+        print(f"\nPushing dataset to HuggingFace Hub: {config.repo_id}")
+        dataset = result["dataset"]
+        # Update repo_id for push
+        dataset.repo_id = config.repo_id
+        dataset.push_to_hub(tags=["LeRobot"], license="apache-2.0")
+        print(f"Dataset uploaded to: https://huggingface.co/datasets/{config.repo_id}")
 
 
 if __name__ == "__main__":

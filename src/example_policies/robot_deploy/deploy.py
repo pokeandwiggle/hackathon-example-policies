@@ -1,10 +1,7 @@
 #!/usr/bin/env python
 
 from pathlib import Path
-
-import numpy as np
 import torch
-import yaml
 
 from example_policies.robot_deploy.deploy_argument_parser import DeployArgumentParser
 from example_policies.robot_deploy.deploy_core.deployment_structures import (
@@ -31,13 +28,16 @@ GRIPPER_SPEED = 0.1  # m/s
 GRIPPER_FORCE = 50.0  # N
 
 
-def move_home(robot_interface: RobotInterface, mount: str = "table") -> None:
+def move_home(robot_interface: RobotInterface, mount: str = "wall") -> None:
     """Move the robot to home pose and open grippers.
 
     Args:
         robot_interface: The robot interface to use for commands
         mount: Robot mount type ("table" or "wall")
     """
+    import numpy as np
+    import yaml
+
     config_path = HOME_CONFIGS.get(mount)
     if config_path is None:
         raise ValueError(f"Unknown mount type: {mount}. Valid options: {list(HOME_CONFIGS.keys())}")
@@ -48,7 +48,20 @@ def move_home(robot_interface: RobotInterface, mount: str = "table") -> None:
     with open(config_path) as f:
         config = yaml.safe_load(f)
 
+    # Validate presence of home_joint_configuration in the YAML
+    if "home_joint_configuration" not in config:
+        raise KeyError(
+            f"Missing 'home_joint_configuration' in home config YAML: {config_path}"
+        )
     home_config = config["home_joint_configuration"]
+
+    # Validate that all expected joint names are present
+    missing_joints = [joint_name for joint_name in CANONICAL_ARM_JOINTS if joint_name not in home_config]
+    if missing_joints:
+        raise KeyError(
+            f"Missing joint configuration(s) {missing_joints} in 'home_joint_configuration' "
+            f"for config file: {config_path}"
+        )
 
     # Extract joint angles in canonical order (left arm first, then right arm)
     joint_angles = np.array([home_config[joint_name] for joint_name in CANONICAL_ARM_JOINTS])
