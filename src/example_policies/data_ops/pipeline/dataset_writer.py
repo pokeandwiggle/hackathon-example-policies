@@ -75,7 +75,6 @@ class DatasetWriter:
             DatasetType.PAUSE: 0,
             DatasetType.NO_SPEED_BOOST: 0,
         }
-        self.frame_parser.reset()
         self.frame_targeter.reset()
         self.frame_assembler.reset()
 

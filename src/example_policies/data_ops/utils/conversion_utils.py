@@ -80,8 +80,21 @@ class AnnotationExtractor:
         self.episode_annotations: dict[int, list[dict]] = {}
 
     def _parse_iso_timestamp(self, start_time_str: str) -> float:
-        """Parse ISO format timestamp to Unix timestamp in seconds."""
+        """Parse ISO format timestamp to Unix timestamp in seconds.
+
+        Handles nanosecond precision by truncating to microseconds.
+
+        Args:
+            start_time_str: ISO format timestamp (e.g., '2026-02-05T16:10:21.582082182+00:00')
+
+        Returns:
+            Unix timestamp in seconds
+        """
         from datetime import datetime
+
+        # Truncate nanoseconds to microseconds for datetime parsing
+        # Format: 2026-02-05T16:10:21.582082182+00:00
+        #         ^26 chars^         ^6 chars timezone^
         start_time_truncated = start_time_str[:26] + start_time_str[-6:]
         start_dt = datetime.fromisoformat(start_time_truncated)
         return start_dt.timestamp()
@@ -91,12 +104,12 @@ class AnnotationExtractor:
     ) -> list[dict]:
         """Extract segment annotations from MCAP metadata.
 
-        Reads the 'segments' metadata record which contains segment_map JSON with:
-        - subtask_id: identifier for the subtask
-        - rating: "ok" | "failed" | "excellent"
-        - timestamp_ms: segment end timestamp in milliseconds
+        Reads from the 'segments' metadata record which contains:
+        - segment_map.task: Task info (task_id, display_name, description)
+        - segment_map.subtasks: Subtask definitions with descriptions
+        - segment_map.segments: Segment records with subtask_id, rating, timestamp_ms
 
-        Also reads 'episode_rating' metadata for the episode start_time.
+        Episode start time is obtained from 'episode_rating' metadata.
 
         Args:
             episode_path: Path to the MCAP episode file
@@ -114,30 +127,46 @@ class AnnotationExtractor:
                 reader = make_reader(f)
                 for metadata_record in reader.iter_metadata():
                     if metadata_record.name == "episode_rating":
-                        start_time_str = metadata_record.metadata.get("start_time", "")
+                        start_time_str = metadata_record.metadata.get("start_time")
                         if start_time_str:
                             episode_start_time = self._parse_iso_timestamp(start_time_str)
                     elif metadata_record.name == "segments":
-                        segment_map_str = metadata_record.metadata.get("segment_map", "")
+                        segment_map_str = metadata_record.metadata.get("segment_map")
                         if segment_map_str:
                             segment_map = json.loads(segment_map_str)
 
-            if segment_map is None or episode_start_time is None:
+            if episode_start_time is None:
+                print(f"  Warning: No episode_rating metadata found in {episode_path}")
                 return annotations
 
-            # Build segments from segment_map
-            prev_seconds = 0.0
-            for seg in segment_map:
-                # Convert timestamp_ms to seconds relative to episode start
-                timestamp_ms = seg.get("timestamp_ms", 0)
-                end_seconds = round(timestamp_ms / 1000.0, 3)
+            if segment_map is None:
+                print(f"  Warning: No segments metadata found in {episode_path}")
+                return annotations
+
+            segments = segment_map.get("segments", {})
+            if not segments:
+                print(f"  Warning: No segments in segment_map for {episode_path}")
+                return annotations
+
+            # Sort segments by annotation_id (stored as string keys)
+            sorted_segment_ids = sorted(segments.keys(), key=int)
+
+            # Build annotations: each segment has an end timestamp
+            # Use seconds with 3 decimal places (millisecond precision) per lerobot-annotate format
+            prev_seconds = 0.0  # Start from beginning of episode
+
+            for seg_id in sorted_segment_ids:
+                seg = segments[seg_id]
+                timestamp_s = seg["timestamp_ms"] / 1000
+                end_seconds = round(timestamp_s - episode_start_time, 3)
 
                 annotations.append(
                     {
                         "start_seconds": prev_seconds,
                         "end_seconds": end_seconds,
-                        "rating": seg.get("rating", "ok"),
-                        "subtask_id": seg.get("subtask_id", ""),
+                        "rating": seg["rating"],
+                        "subtask_id": seg["subtask_id"],
+                        "annotation_id": int(seg_id),
                     }
                 )
                 prev_seconds = end_seconds
@@ -165,9 +194,12 @@ class AnnotationExtractor:
             for seg in segments:
                 rating = seg["rating"]
                 subtask_id = seg.get("subtask_id", "")
+
                 if rating == "failed":
+                    # For failed segments, use subtask_id with _failed suffix
                     label = f"{subtask_id}_failed" if subtask_id else "failed"
                 else:
+                    # Use the actual subtask_id with rating suffix
                     label = f"{subtask_id}_{rating}" if subtask_id else f"unknown_{rating}"
 
                 subtasks.append(

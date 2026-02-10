@@ -121,7 +121,6 @@ class SyncedEpisodeConverter:
 
     def reset_episode_state(self) -> None:
         """Reset state for new episode."""
-        self.frame_parser.reset()
         self.frame_assembler.reset()
         self.frame_targeter.reset()
 
@@ -140,7 +139,7 @@ class SyncedEpisodeConverter:
         self.reset_episode_state()
 
         # Pass 1: Ingest all messages
-        print(f"  Ingesting messages...")
+        print("  Ingesting messages...")
         self.frame_synchronizer.ingest_episode(episode_path)
 
         # Pass 2: Generate synchronized frames
@@ -353,7 +352,7 @@ def main():
     # Compute tolerance if not specified
     tolerance_ms = config.tolerance_ms
     if tolerance_ms is None:
-        tolerance_ms = (1000.0 / config.target_fps) * 1.0
+        tolerance_ms = 1000.0 / config.target_fps
 
     print(f"Converting episodes from: {config.episodes_dir}")
     print(f"Output directory: {config.output}")
