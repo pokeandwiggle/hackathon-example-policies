@@ -365,13 +365,80 @@ def get_sorted_episodes(episode_dir: pathlib.Path) -> list[pathlib.Path]:
     episode_paths.sort(key=lambda p: p.stat().st_ctime)
     return episode_paths
 
-def get_selected_episodes(episode_dir: pathlib.Path, success_only=True, excellent_only=True):
+def check_subtask_completeness(episode_path: pathlib.Path) -> tuple[bool, dict]:
+    """Check if all defined subtasks have at least one successful segment.
+
+    Reads the 'segments' metadata from an MCAP file and verifies that every
+    subtask defined in segment_map.subtasks has at least one corresponding
+    segment with a successful rating (excellent, good, or ok).
+
+    Args:
+        episode_path: Path to the MCAP episode file
+
+    Returns:
+        Tuple of (is_complete, details) where:
+        - is_complete: True if all subtasks have at least one successful segment
+        - details: Dict with 'defined_subtasks', 'completed_subtasks', 'missing_subtasks'
+    """
+    details = {
+        "defined_subtasks": set(),
+        "completed_subtasks": set(),
+        "missing_subtasks": set(),
+    }
+
+    try:
+        with open(episode_path, "rb") as f:
+            reader = make_reader(f)
+            for metadata_record in reader.iter_metadata():
+                if metadata_record.name == "segments":
+                    segment_map_str = metadata_record.metadata.get("segment_map")
+                    if not segment_map_str:
+                        continue
+
+                    segment_map = json.loads(segment_map_str)
+
+                    # Get all defined subtasks
+                    subtasks = segment_map.get("subtasks", {})
+                    details["defined_subtasks"] = set(subtasks.keys())
+
+                    # Find which subtasks have successful segments
+                    segments = segment_map.get("segments", {})
+                    successful_ratings = {"excellent", "good", "ok"}
+
+                    for seg in segments.values():
+                        subtask_id = seg.get("subtask_id")
+                        rating = seg.get("rating", "")
+                        if subtask_id and rating in successful_ratings:
+                            details["completed_subtasks"].add(subtask_id)
+
+                    # Calculate missing subtasks
+                    details["missing_subtasks"] = (
+                        details["defined_subtasks"] - details["completed_subtasks"]
+                    )
+                    break
+
+    except (OSError, ValueError, json.JSONDecodeError) as e:
+        print(f"  Warning: Failed to check subtask completeness for {episode_path}: {e}")
+        return False, details
+
+    is_complete = len(details["missing_subtasks"]) == 0 and len(details["defined_subtasks"]) > 0
+    return is_complete, details
+
+
+def get_selected_episodes(
+    episode_dir: pathlib.Path,
+    success_only: bool = True,
+    excellent_only: bool = True,
+    complete_subtasks_only: bool = False,
+) -> list[pathlib.Path]:
     """Get episode paths sorted by creation time (oldest first), that fulfil success criteria in the MCAP file.
 
     Args:
         episode_dir: Directory containing .mcap episode files
         success_only: If True, include only successful episodes
         excellent_only: If True, include only episodes with "excellent" quality
+        complete_subtasks_only: If True, include only episodes where all defined
+            subtasks have at least one successful segment
 
     Returns:
         List of episode paths sorted by creation date that fulfil success criteria in the MCAP file
@@ -394,6 +461,21 @@ def get_selected_episodes(episode_dir: pathlib.Path, success_only=True, excellen
                 filtered_episode_paths.append(ep_path)
     else:
         filtered_episode_paths = episode_paths
+
+    # Apply subtask completeness filter if requested
+    if complete_subtasks_only:
+        complete_paths = []
+        for ep_path in filtered_episode_paths:
+            is_complete, details = check_subtask_completeness(ep_path)
+            if is_complete:
+                complete_paths.append(ep_path)
+            else:
+                missing = details["missing_subtasks"]
+                if missing:
+                    print(f"  ⚠️  Skipping {ep_path.name}: missing subtasks {sorted(missing)}")
+                else:
+                    print(f"  ⚠️  Skipping {ep_path.name}: no subtask definitions found")
+        filtered_episode_paths = complete_paths
 
     return filtered_episode_paths
 
