@@ -401,7 +401,8 @@ def main():
         if extractor is None or extractor.total_segments == 0:
             raise RuntimeError(
                 "--with_annotations was set but no segment annotations were found in any episode. "
-                "Ensure the MCAP files contain 'segments' metadata with segment_map data. "
+                "Ensure the MCAP files contain segment metadata "
+                "('pw_episode_info' in new format, or 'segments' + 'episode_rating' in old format). "
                 "If annotations are not required, remove the --with_annotations flag."
             )
 

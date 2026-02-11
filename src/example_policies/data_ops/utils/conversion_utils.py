@@ -83,19 +83,27 @@ class AnnotationExtractor:
         """Parse ISO format timestamp to Unix timestamp in seconds.
 
         Handles nanosecond precision by truncating to microseconds.
+        Supports both '+00:00' timezone suffix and 'Z' suffix.
 
         Args:
-            start_time_str: ISO format timestamp (e.g., '2026-02-05T16:10:21.582082182+00:00')
+            start_time_str: ISO format timestamp (e.g., '2026-02-05T16:10:21.582082182+00:00'
+                            or '2026-02-11T11:20:46.642772353Z')
 
         Returns:
             Unix timestamp in seconds
         """
-        from datetime import datetime
+        from datetime import datetime, timezone
 
-        # Truncate nanoseconds to microseconds for datetime parsing
-        # Format: 2026-02-05T16:10:21.582082182+00:00
-        #         ^26 chars^         ^6 chars timezone^
-        start_time_truncated = start_time_str[:26] + start_time_str[-6:]
+        # Handle 'Z' suffix (UTC) - convert to +00:00 format
+        if start_time_str.endswith('Z'):
+            # Format: 2026-02-11T11:20:46.642772353Z
+            # Truncate nanoseconds to microseconds
+            start_time_truncated = start_time_str[:26] + '+00:00'
+        else:
+            # Format: 2026-02-05T16:10:21.582082182+00:00
+            # Truncate nanoseconds to microseconds for datetime parsing
+            start_time_truncated = start_time_str[:26] + start_time_str[-6:]
+
         start_dt = datetime.fromisoformat(start_time_truncated)
         return start_dt.timestamp()
 
@@ -104,12 +112,9 @@ class AnnotationExtractor:
     ) -> list[dict]:
         """Extract segment annotations from MCAP metadata.
 
-        Reads from the 'segments' metadata record which contains:
-        - segment_map.task: Task info (task_id, display_name, description)
-        - segment_map.subtasks: Subtask definitions with descriptions
-        - segment_map.segments: Segment records with subtask_id, rating, timestamp_ms
-
-        Episode start time is obtained from 'episode_rating' metadata.
+        Supports two formats:
+        - Old format: 'segments' metadata with segment_map, 'episode_rating' for start time
+        - New format: 'pw_episode_info' with segments list and episode.start_time
 
         Args:
             episode_path: Path to the MCAP episode file
@@ -121,55 +126,41 @@ class AnnotationExtractor:
         annotations = []
         episode_start_time = None
         segment_map = None
+        pw_episode_info = None
 
         try:
             with open(episode_path, "rb") as f:
                 reader = make_reader(f)
                 for metadata_record in reader.iter_metadata():
-                    if metadata_record.name == "episode_rating":
+                    # New format: pw_episode_info
+                    if metadata_record.name == "pw_episode_info":
+                        data_str = metadata_record.metadata.get("data")
+                        if data_str:
+                            pw_episode_info = json.loads(data_str)
+                    # Old format: episode_rating for start time
+                    elif metadata_record.name == "episode_rating":
                         start_time_str = metadata_record.metadata.get("start_time")
                         if start_time_str:
                             episode_start_time = self._parse_iso_timestamp(start_time_str)
+                    # Old format: segments metadata
                     elif metadata_record.name == "segments":
                         segment_map_str = metadata_record.metadata.get("segment_map")
                         if segment_map_str:
                             segment_map = json.loads(segment_map_str)
 
-            if episode_start_time is None:
-                print(f"  Warning: No episode_rating metadata found in {episode_path}")
-                return annotations
-
-            if segment_map is None:
-                print(f"  Warning: No segments metadata found in {episode_path}")
-                return annotations
-
-            segments = segment_map.get("segments", {})
-            if not segments:
-                print(f"  Warning: No segments in segment_map for {episode_path}")
-                return annotations
-
-            # Sort segments by annotation_id (stored as string keys)
-            sorted_segment_ids = sorted(segments.keys(), key=int)
-
-            # Build annotations: each segment has an end timestamp
-            # Use seconds with 3 decimal places (millisecond precision) per lerobot-annotate format
-            prev_seconds = 0.0  # Start from beginning of episode
-
-            for seg_id in sorted_segment_ids:
-                seg = segments[seg_id]
-                timestamp_s = seg["timestamp_ms"] / 1000
-                end_seconds = round(timestamp_s - episode_start_time, 3)
-
-                annotations.append(
-                    {
-                        "start_seconds": prev_seconds,
-                        "end_seconds": end_seconds,
-                        "rating": seg["rating"],
-                        "subtask_id": seg["subtask_id"],
-                        "annotation_id": int(seg_id),
-                    }
+            # Try new format first (pw_episode_info)
+            if pw_episode_info is not None:
+                annotations = self._extract_from_pw_episode_info(pw_episode_info, episode_path)
+            # Fall back to old format
+            elif episode_start_time is not None and segment_map is not None:
+                annotations = self._extract_from_legacy_format(
+                    segment_map, episode_start_time, episode_path
                 )
-                prev_seconds = end_seconds
+            elif episode_start_time is None and segment_map is not None:
+                print(f"  Warning: No episode_rating metadata found in {episode_path}")
+            elif segment_map is None and episode_start_time is not None:
+                print(f"  Warning: No segments metadata found in {episode_path}")
+            # else: neither format found, annotations stays empty
 
         except (OSError, ValueError, json.JSONDecodeError) as e:
             print(f"  Warning: Failed to read annotations from {episode_path}: {e}")
@@ -178,6 +169,104 @@ class AnnotationExtractor:
         if annotations:
             self.episode_annotations[episode_idx] = annotations
             print(f"  Extracted {len(annotations)} segment annotations")
+
+        return annotations
+
+    def _extract_from_pw_episode_info(
+        self, pw_info: dict, episode_path: pathlib.Path
+    ) -> list[dict]:
+        """Extract annotations from new pw_episode_info format.
+
+        Args:
+            pw_info: Parsed pw_episode_info data
+            episode_path: Path for error messages
+
+        Returns:
+            List of annotation dicts
+        """
+        annotations = []
+        episode = pw_info.get("episode", {})
+        segments = pw_info.get("segments", [])
+
+        if not segments:
+            return annotations
+
+        # Get episode start time
+        start_time_str = episode.get("start_time")
+        if not start_time_str:
+            print(f"  Warning: No start_time in pw_episode_info for {episode_path}")
+            return annotations
+
+        episode_start_time = self._parse_iso_timestamp(start_time_str)
+
+        # Process segments - they have start_time and end_time as ISO strings
+        for idx, seg in enumerate(segments):
+            seg_start_str = seg.get("start_time")
+            seg_end_str = seg.get("end_time")
+
+            if not seg_start_str or not seg_end_str:
+                continue
+
+            seg_start = self._parse_iso_timestamp(seg_start_str)
+            seg_end = self._parse_iso_timestamp(seg_end_str)
+
+            start_seconds = round(seg_start - episode_start_time, 3)
+            end_seconds = round(seg_end - episode_start_time, 3)
+
+            annotations.append(
+                {
+                    "start_seconds": start_seconds,
+                    "end_seconds": end_seconds,
+                    "rating": seg.get("rating", ""),
+                    "subtask_id": seg.get("step_name", ""),  # step_name in new format
+                    "annotation_id": idx,
+                }
+            )
+
+        return annotations
+
+    def _extract_from_legacy_format(
+        self, segment_map: dict, episode_start_time: float, episode_path: pathlib.Path
+    ) -> list[dict]:
+        """Extract annotations from legacy segments format.
+
+        Args:
+            segment_map: Parsed segment_map data
+            episode_start_time: Episode start time as Unix timestamp
+            episode_path: Path for error messages
+
+        Returns:
+            List of annotation dicts
+        """
+        annotations = []
+        segments = segment_map.get("segments", {})
+
+        if not segments:
+            print(f"  Warning: No segments in segment_map for {episode_path}")
+            return annotations
+
+        # Sort segments by annotation_id (stored as string keys)
+        sorted_segment_ids = sorted(segments.keys(), key=int)
+
+        # Build annotations: each segment has an end timestamp
+        # Use seconds with 3 decimal places (millisecond precision) per lerobot-annotate format
+        prev_seconds = 0.0  # Start from beginning of episode
+
+        for seg_id in sorted_segment_ids:
+            seg = segments[seg_id]
+            timestamp_s = seg["timestamp_ms"] / 1000
+            end_seconds = round(timestamp_s - episode_start_time, 3)
+
+            annotations.append(
+                {
+                    "start_seconds": prev_seconds,
+                    "end_seconds": end_seconds,
+                    "rating": seg["rating"],
+                    "subtask_id": seg["subtask_id"],
+                    "annotation_id": int(seg_id),
+                }
+            )
+            prev_seconds = end_seconds
 
         return annotations
 
@@ -323,13 +412,36 @@ def extract_episode_metadata(episode_path: pathlib.Path) -> dict | None:
 def _parse_metadata_record(metadata_record) -> dict | None:
     """Parse a single MCAP metadata record.
 
+    Supports multiple metadata formats:
+    - pw_episode_info: New format (v1.0+) with JSON data containing episode.rating
+    - episode_info: Previous format with JSON data containing episode.quality
+    - episode_rating/recording_info: Legacy format with flat k/v pairs
+
     Args:
         metadata_record: MCAP metadata record
 
     Returns:
         Dict with 'quality' and 'task_successful' keys, or None if not matching
     """
-    if metadata_record.name == "episode_info":
+    # New format: pw_episode_info (v1.0+)
+    if metadata_record.name == "pw_episode_info":
+        data_str = metadata_record.metadata.get("data")
+        if data_str:
+            try:
+                info = json.loads(data_str)
+                episode = info.get("episode", {})
+                # In new format, 'rating' is used instead of 'quality'
+                rating = episode.get("rating")
+                # Success is implied by rating being ok/good/excellent
+                task_successful = rating in ("ok", "good", "excellent") if rating else None
+                return {
+                    "quality": rating,  # Use rating as quality for compatibility
+                    "task_successful": task_successful,
+                }
+            except json.JSONDecodeError:
+                pass
+    # Previous format: episode_info
+    elif metadata_record.name == "episode_info":
         data_str = metadata_record.metadata.get("data")
         if data_str:
             try:
@@ -341,6 +453,7 @@ def _parse_metadata_record(metadata_record) -> dict | None:
                 }
             except json.JSONDecodeError:
                 pass
+    # Legacy format: episode_rating/recording_info
     elif metadata_record.name in ("episode_rating", "recording_info"):
         task_successful_str = metadata_record.metadata.get("task_successful", "")
         return {
@@ -368,9 +481,9 @@ def get_sorted_episodes(episode_dir: pathlib.Path) -> list[pathlib.Path]:
 def check_subtask_completeness(episode_path: pathlib.Path) -> tuple[bool, dict]:
     """Check if all defined subtasks have at least one successful segment.
 
-    Reads the 'segments' metadata from an MCAP file and verifies that every
-    subtask defined in segment_map.subtasks has at least one corresponding
-    segment with a successful rating (excellent, good, or ok).
+    Supports two formats:
+    - Old format: 'segments' metadata with segment_map containing subtasks dict and segments dict
+    - New format: 'pw_episode_info' with episode.steps list and segments list
 
     Args:
         episode_path: Path to the MCAP episode file
@@ -386,11 +499,41 @@ def check_subtask_completeness(episode_path: pathlib.Path) -> tuple[bool, dict]:
         "missing_subtasks": set(),
     }
 
+    successful_ratings = {"excellent", "good", "ok"}
+
     try:
         with open(episode_path, "rb") as f:
             reader = make_reader(f)
             for metadata_record in reader.iter_metadata():
-                if metadata_record.name == "segments":
+                # New format: pw_episode_info
+                if metadata_record.name == "pw_episode_info":
+                    data_str = metadata_record.metadata.get("data")
+                    if not data_str:
+                        continue
+
+                    info = json.loads(data_str)
+                    episode = info.get("episode", {})
+
+                    # Get defined steps (subtasks) from episode.steps
+                    steps = episode.get("steps", [])
+                    details["defined_subtasks"] = {step.get("name") for step in steps if step.get("name")}
+
+                    # Find which steps have successful segments
+                    segments = info.get("segments", [])
+                    for seg in segments:
+                        step_name = seg.get("step_name")
+                        rating = seg.get("rating", "")
+                        if step_name and rating in successful_ratings:
+                            details["completed_subtasks"].add(step_name)
+
+                    # Calculate missing subtasks
+                    details["missing_subtasks"] = (
+                        details["defined_subtasks"] - details["completed_subtasks"]
+                    )
+                    break
+
+                # Old format: segments metadata
+                elif metadata_record.name == "segments":
                     segment_map_str = metadata_record.metadata.get("segment_map")
                     if not segment_map_str:
                         continue
@@ -403,7 +546,6 @@ def check_subtask_completeness(episode_path: pathlib.Path) -> tuple[bool, dict]:
 
                     # Find which subtasks have successful segments
                     segments = segment_map.get("segments", {})
-                    successful_ratings = {"excellent", "good", "ok"}
 
                     for seg in segments.values():
                         subtask_id = seg.get("subtask_id")
