@@ -119,6 +119,10 @@ class SyncedEpisodeConverter:
         self.blacklist: list[int] = []
         self.start_time = time.time()
 
+        # Frame mapping for annotation remapping (set after each process_episode)
+        self._last_raw_frame_kept: list[bool] = []
+        self._last_sync_abs_start_s: float = 0.0
+
     def reset_episode_state(self) -> None:
         """Reset state for new episode."""
         self.frame_assembler.reset()
@@ -143,8 +147,10 @@ class SyncedEpisodeConverter:
         self.frame_synchronizer.ingest_episode(episode_path)
 
         # Pass 2: Generate synchronized frames
+        # Track which raw frame indices were kept vs skipped for annotation remapping
         saved_frames = 0
         skipped_pauses = 0
+        raw_frame_kept: list[bool] = []  # True if frame was kept, False if skipped
         for synced_frame in self.frame_synchronizer.generate_synced_frames():
             # Wrap synced frame for compatibility with FrameParser
             frame_buffer = SyncedFrameBuffer(synced_frame)
@@ -155,6 +161,7 @@ class SyncedEpisodeConverter:
             )
             if DatasetType.MAIN not in target_datasets:
                 skipped_pauses += 1
+                raw_frame_kept.append(False)
                 continue
 
             # Parse and assemble using existing pipeline
@@ -165,8 +172,14 @@ class SyncedEpisodeConverter:
             assembled["task"] = self.config.task_name
             self.dataset.add_frame(assembled)
             saved_frames += 1
+            raw_frame_kept.append(True)
 
         print(f"  Saved {saved_frames} frames (skipped {skipped_pauses} pauses)")
+
+        # Store frame mapping for annotation remapping
+        # sync_abs_start_s: absolute timestamp of first synced frame
+        self._last_raw_frame_kept = raw_frame_kept
+        self._last_sync_abs_start_s = self.frame_synchronizer.get_sync_start_offset()
 
         if saved_frames == 0:
             return False
@@ -239,7 +252,12 @@ def convert_episodes_synced(
             # Extract annotations after successful conversion
             if annotation_extractor and saved:
                 dataset_ep_idx = converter.episode_counter - 1
-                annotation_extractor.extract_from_mcap(episode_path, dataset_ep_idx)
+                annotation_extractor.extract_from_mcap(
+                    episode_path,
+                    dataset_ep_idx,
+                    raw_frame_kept=converter._last_raw_frame_kept,
+                    sync_abs_start_s=converter._last_sync_abs_start_s,
+                )
 
         except Exception as e:
             print(

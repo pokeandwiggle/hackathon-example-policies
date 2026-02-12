@@ -101,6 +101,8 @@ class FrameSynchronizer:
         self.messages = {topic: [] for topic in self.required_topics}
         self.timestamps = {topic: [] for topic in self.required_topics}
         self._invalid_episode = False
+        # Absolute timestamp where synced frames begin (set during generate_synced_frames)
+        self._sync_episode_start: float | None = None
 
     def _build_required_topics(self) -> list[RosTopicEnum]:
         """Build list of required topics based on config."""
@@ -402,6 +404,7 @@ class FrameSynchronizer:
         # End: when any topic ends (min of lasts)
         episode_start = max(start_times)
         episode_end = min(end_times)
+        self._sync_episode_start = episode_start
 
         if episode_start >= episode_end:
             print("WARNING: No overlapping time range for all topics")
@@ -448,3 +451,16 @@ class FrameSynchronizer:
             f"  Sync stats: {len(all_frames)} frames at {self.target_frequency:.1f}Hz "
             f"over {duration:.2f}s"
         )
+
+    def get_sync_start_offset(self) -> float:
+        """Get the absolute timestamp where synced frames begin.
+
+        This is the max of all topics' first timestamps — the point where all
+        sensors have started providing data. Used to relate annotation timestamps
+        (relative to MCAP episode metadata start) to synced frame indices.
+
+        Returns:
+            Absolute Unix timestamp (seconds) of the first synced frame,
+            or 0.0 if generate_synced_frames hasn't been called yet.
+        """
+        return self._sync_episode_start if self._sync_episode_start is not None else 0.0

@@ -108,7 +108,11 @@ class AnnotationExtractor:
         return start_dt.timestamp()
 
     def extract_from_mcap(
-        self, episode_path: pathlib.Path, episode_idx: int
+        self,
+        episode_path: pathlib.Path,
+        episode_idx: int,
+        raw_frame_kept: list[bool] | None = None,
+        sync_abs_start_s: float | None = None,
     ) -> list[dict]:
         """Extract segment annotations from MCAP metadata.
 
@@ -116,9 +120,18 @@ class AnnotationExtractor:
         - Old format: 'segments' metadata with segment_map, 'episode_rating' for start time
         - New format: 'pw_episode_info' with segments list and episode.start_time
 
+        If raw_frame_kept and sync_abs_start_s are provided, annotations are
+        remapped to account for pauses that were skipped during conversion. This
+        ensures annotation timestamps match the actual dataset frame indices.
+
         Args:
             episode_path: Path to the MCAP episode file
             episode_idx: Episode index in the output dataset
+            raw_frame_kept: List of booleans, one per synced frame, indicating
+                whether the frame was kept (True) or skipped as a pause (False).
+            sync_abs_start_s: Absolute Unix timestamp of the first synced frame.
+                Used together with the MCAP episode start time to compute the
+                offset between raw annotation time and synced frame indices.
 
         Returns:
             List of segment dicts with start_seconds, end_seconds, rating, subtask_id
@@ -151,6 +164,10 @@ class AnnotationExtractor:
             # Try new format first (pw_episode_info)
             if pw_episode_info is not None:
                 annotations = self._extract_from_pw_episode_info(pw_episode_info, episode_path)
+                # Get episode start time for remapping
+                ep_start_str = pw_episode_info.get("episode", {}).get("start_time")
+                if ep_start_str:
+                    episode_start_time = self._parse_iso_timestamp(ep_start_str)
             # Fall back to old format
             elif episode_start_time is not None and segment_map is not None:
                 annotations = self._extract_from_legacy_format(
@@ -164,6 +181,18 @@ class AnnotationExtractor:
 
         except (OSError, ValueError, json.JSONDecodeError) as e:
             print(f"  Warning: Failed to read annotations from {episode_path}: {e}")
+
+        # Remap annotations to account for pause removal and sync offset
+        if annotations and raw_frame_kept is not None and sync_abs_start_s is not None:
+            if episode_start_time is not None:
+                annotations = self._remap_annotations_for_pauses(
+                    annotations,
+                    raw_frame_kept,
+                    sync_abs_start_s=sync_abs_start_s,
+                    mcap_episode_start_s=episode_start_time,
+                )
+            else:
+                print("  Warning: Cannot remap annotations - no episode start time found")
 
         # Store annotations for this episode
         if annotations:
@@ -267,6 +296,112 @@ class AnnotationExtractor:
                 }
             )
             prev_seconds = end_seconds
+
+        return annotations
+
+    def _remap_annotations_for_pauses(
+        self,
+        annotations: list[dict],
+        raw_frame_kept: list[bool],
+        sync_abs_start_s: float,
+        mcap_episode_start_s: float,
+    ) -> list[dict]:
+        """Remap annotation timestamps to account for sync offset and pause removal.
+
+        Raw annotations use timestamps relative to the MCAP episode metadata start.
+        The actual dataset frames start at a later time (sync offset) and skip
+        paused frames. This method remaps annotation boundaries so they reference
+        the correct dataset time.
+
+        The mapping works as follows:
+        1. Each raw synced frame i has raw time = sync_offset + i / fps
+           (where sync_offset = sync_abs_start_s - mcap_episode_start_s)
+        2. Kept frames are numbered sequentially as dataset frames 0, 1, 2, ...
+        3. For an annotation boundary at raw time t, find the raw frame index,
+           then look up how many frames were kept up to that point to get dataset time.
+
+        Uses linear interpolation within frames for sub-frame precision.
+
+        Args:
+            annotations: List of annotation dicts with start_seconds / end_seconds
+            raw_frame_kept: Boolean per synced frame, True if kept
+            sync_abs_start_s: Absolute timestamp of the first synced frame
+            mcap_episode_start_s: Absolute timestamp of MCAP episode metadata start
+
+        Returns:
+            Remapped annotations list (modified in place and returned)
+        """
+        import numpy as np
+
+        if not raw_frame_kept:
+            return annotations
+
+        fps = self.fps
+        interval = 1.0 / fps
+        n_raw_frames = len(raw_frame_kept)
+
+        # Offset from MCAP episode start to first synced frame (in seconds)
+        sync_offset = sync_abs_start_s - mcap_episode_start_s
+
+        # Build cumulative count of kept frames at each raw frame index
+        # cum_kept[i] = number of kept frames in raw_frame_kept[0..i] (inclusive)
+        kept_arr = np.array(raw_frame_kept, dtype=np.int32)
+        cum_kept = np.cumsum(kept_arr)
+        total_kept = int(cum_kept[-1])
+
+        def raw_time_to_dataset_time(raw_time_s: float) -> float:
+            """Convert raw annotation time to dataset time accounting for pauses.
+
+            For a raw time t:
+            1. Compute the fractional raw frame index: fi = (t - sync_offset) / interval
+            2. Clamp to valid range [0, n_raw_frames - 1]
+            3. Interpolate the cumulative kept-frame count at fi
+            4. Dataset time = interpolated_kept_count / fps
+            """
+            # Raw frame index (fractional)
+            fi = (raw_time_s - sync_offset) * fps
+
+            # Clamp to valid range
+            if fi <= 0:
+                return 0.0
+            if fi >= n_raw_frames - 1:
+                return total_kept / fps
+
+            # Integer frame index and fraction
+            i = int(fi)
+            frac = fi - i
+
+            # Cumulative kept count at frames i and i+1
+            ck_i = cum_kept[i]
+            ck_next = cum_kept[min(i + 1, n_raw_frames - 1)]
+
+            # Linear interpolation
+            interpolated = ck_i + frac * (ck_next - ck_i)
+            return round(interpolated / fps, 3)
+
+        # Remap each annotation
+        for ann in annotations:
+            old_start = ann["start_seconds"]
+            old_end = ann["end_seconds"]
+            ann["start_seconds"] = raw_time_to_dataset_time(old_start)
+            ann["end_seconds"] = raw_time_to_dataset_time(old_end)
+
+        # Drop zero-duration segments (e.g., segments entirely outside the sync window)
+        original_count = len(annotations)
+        annotations = [a for a in annotations if a["end_seconds"] > a["start_seconds"]]
+        dropped = original_count - len(annotations)
+
+        # Log summary
+        if annotations:
+            dataset_dur = total_kept / fps
+            msg = (
+                f"  Remapped annotations: {total_kept} kept frames "
+                f"({n_raw_frames - total_kept} pauses removed), "
+                f"dataset duration {dataset_dur:.3f}s"
+            )
+            if dropped:
+                msg += f", dropped {dropped} segment(s) outside sync window"
+            print(msg)
 
         return annotations
 
