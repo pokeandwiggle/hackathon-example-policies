@@ -116,7 +116,7 @@ class DiTFlowConfig(PreTrainedConfig):
     vision_backbone: str = "resnet18"
     crop_shape: tuple[int, int] | None = None
     crop_is_random: bool = False
-    pretrained_backbone_weights: str | None = None
+    pretrained_backbone_weights: str | None = "IMAGENET1K_V1"
     use_group_norm: bool = True
     spatial_softmax_num_keypoints: int = 32
     use_separate_rgb_encoder_per_camera: bool = True

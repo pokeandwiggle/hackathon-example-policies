@@ -413,6 +413,10 @@ class DiTFlowConfig(PolicyConfigBase):
     crop_shape: tuple[int, int] = (224, 224)
     crop_is_random: bool = True  # Random crop during training, center crop during eval
 
+    # Vision backbone
+    pretrained_backbone_weights: str | None = "IMAGENET1K_V1"  # Pretrained ImageNet weights
+    use_group_norm: bool = True  # Replace BatchNorm with GroupNorm (Stanford approach)
+
     # # Weight for SO3 Aware Trajectory integration loss. Recommended: 0.0 to disable. 0.01 to start.
     # integrated_so3_loss_weight: float = 0.0
     # # Weight for focal loss on termination signal. Recommended: 0.0 to disable. 10.0 to start.
@@ -431,6 +435,8 @@ class DiTFlowConfig(PolicyConfigBase):
             "n_action_steps": self.n_action_steps,
             "crop_shape": self.crop_shape,
             "crop_is_random": self.crop_is_random,
+            "pretrained_backbone_weights": self.pretrained_backbone_weights,
+            "use_group_norm": self.use_group_norm,
             # "integrated_so3_loss_weight": self.integrated_so3_loss_weight,
             # "termination_focal_loss_weight": self.termination_focal_loss_weight,
             # "termination_focal_loss_index": self.termination_focal_loss_index,

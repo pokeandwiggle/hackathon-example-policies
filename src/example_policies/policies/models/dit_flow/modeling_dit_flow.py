@@ -22,6 +22,8 @@ from lerobot.utils.constants import ACTION, OBS_ENV_STATE, OBS_IMAGES, OBS_STATE
 from lerobot.policies.diffusion.modeling_diffusion import DiffusionRgbEncoder
 from lerobot.policies.pretrained import PreTrainedPolicy
 
+from .rgb_encoder import PretrainedGroupNormRgbEncoder
+
 from lerobot.policies.utils import (
     get_device_from_parameters,
     get_dtype_from_parameters,
@@ -450,12 +452,18 @@ class DiTFlowModel(nn.Module):
         global_cond_dim = self.config.robot_state_feature.shape[0]
         if self.config.image_features:
             num_images = len(self.config.image_features)
+            # Use the Stanford approach (pretrained + GroupNorm) when both are configured,
+            # otherwise fall back to LeRobot's original DiffusionRgbEncoder.
+            if config.pretrained_backbone_weights and config.use_group_norm:
+                _encoder_cls = PretrainedGroupNormRgbEncoder
+            else:
+                _encoder_cls = DiffusionRgbEncoder
             if self.config.use_separate_rgb_encoder_per_camera:
-                encoders = [DiffusionRgbEncoder(config) for _ in range(num_images)]
+                encoders = [_encoder_cls(config) for _ in range(num_images)]
                 self.rgb_encoder = nn.ModuleList(encoders)
                 global_cond_dim += encoders[0].feature_dim * num_images
             else:
-                self.rgb_encoder = DiffusionRgbEncoder(config)
+                self.rgb_encoder = _encoder_cls(config)
                 global_cond_dim += self.rgb_encoder.feature_dim * num_images
         if self.config.env_state_feature:
             global_cond_dim += self.config.env_state_feature.shape[0]
