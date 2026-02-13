@@ -14,10 +14,15 @@
 
 import torch
 
-from .action_mode import ActionMode
+from example_policies.utils.action_order import ActionMode
+from example_policies.utils.constants import OBSERVATION_STATE
 
 ACTION_MODE_STATE_MAP = {
-    ActionMode.ABS_TCP: [f"tcp_left_pos_{i}" for i in "xyz"]
+    ActionMode.TCP: [f"tcp_left_pos_{i}" for i in "xyz"]
+    + [f"tcp_left_quat_{i}" for i in "xyzw"]
+    + [f"tcp_right_pos_{i}" for i in "xyz"]
+    + [f"tcp_right_quat_{i}" for i in "xyzw"],
+    ActionMode.TELEOP: [f"tcp_left_pos_{i}" for i in "xyz"]
     + [f"tcp_left_quat_{i}" for i in "xyzw"]
     + [f"tcp_right_pos_{i}" for i in "xyz"]
     + [f"tcp_right_quat_{i}" for i in "xyzw"],
@@ -25,14 +30,19 @@ ACTION_MODE_STATE_MAP = {
     + [f"tcp_left_quat_{i}" for i in "xyzw"]
     + [f"tcp_right_pos_{i}" for i in "xyz"]
     + [f"tcp_right_quat_{i}" for i in "xyzw"],
-    ActionMode.ABS_JOINT: [f"joint_pos_left_{i}" for i in range(7)]
+    ActionMode.JOINT: [f"joint_pos_left_{i}" for i in range(7)]
     + [f"joint_pos_right_{i}" for i in range(7)],
     ActionMode.DELTA_JOINT: [f"joint_pos_left_{i}" for i in range(7)]
     + [f"joint_pos_right_{i}" for i in range(7)],
 }
 
 ACTION_MODE_ACTION_MAP = {
-    ActionMode.ABS_TCP: [f"tcp_left_pos_{i}" for i in "xyz"]
+    ActionMode.TCP: [f"tcp_left_pos_{i}" for i in "xyz"]
+    + [f"tcp_left_quat_{i}" for i in "xyzw"]
+    + [f"tcp_right_pos_{i}" for i in "xyz"]
+    + [f"tcp_right_quat_{i}" for i in "xyzw"]
+    + ["gripper_left", "gripper_right"],
+    ActionMode.TELEOP: [f"tcp_left_pos_{i}" for i in "xyz"]
     + [f"tcp_left_quat_{i}" for i in "xyzw"]
     + [f"tcp_right_pos_{i}" for i in "xyz"]
     + [f"tcp_right_quat_{i}" for i in "xyzw"]
@@ -42,7 +52,7 @@ ACTION_MODE_ACTION_MAP = {
     + [f"tcp_right_dpos_{i}" for i in "xyz"]
     + [f"tcp_right_daa_{i}" for i in "xyz"]
     + ["gripper_left", "gripper_right"],
-    ActionMode.ABS_JOINT: [f"joint_pos_left_{i}" for i in range(7)]
+    ActionMode.JOINT: [f"joint_pos_left_{i}" for i in range(7)]
     + [f"joint_pos_right_{i}" for i in range(7)]
     + ["gripper_left", "gripper_right"],
     ActionMode.DELTA_JOINT: [f"joint_pos_left_{i}" for i in range(7)]
@@ -68,7 +78,7 @@ def build_obs_indices(cfg, feature_filters: list[str]):
     Returns:
         list[int]: Indices of features whose names contain any of the filter strings.
     """
-    names: list[str] = cfg.metadata["features"]["observation.state"]["names"]
+    names: list[str] = cfg.metadata["features"][OBSERVATION_STATE]["names"]
     indices = [i for i, n in enumerate(names) if any(f in n for f in feature_filters)]
     return indices
 
@@ -87,7 +97,7 @@ class InfoPrinter:
         action: torch.Tensor,
         raw_action: bool = True,
     ):
-        obs = observation.get("observation.state")
+        obs = observation.get(OBSERVATION_STATE)
         if obs is not None and isinstance(obs, torch.Tensor) and obs.ndim == 2:
             obs = obs[0, self.obs_indices]
         if raw_action:
@@ -97,10 +107,14 @@ class InfoPrinter:
             if self.action_mode == ActionMode.DELTA_JOINT:
                 print_joint_delta(step, obs, action)
                 return
-        if self.action_mode in (ActionMode.ABS_TCP, ActionMode.DELTA_TCP):
+        if self.action_mode in (
+            ActionMode.TCP,
+            ActionMode.TELEOP,
+            ActionMode.DELTA_TCP,
+        ):
             print_tcp_abs(step, obs, action)
             return
-        if self.action_mode in (ActionMode.ABS_JOINT, ActionMode.DELTA_JOINT):
+        if self.action_mode in (ActionMode.JOINT, ActionMode.DELTA_JOINT):
             print_joint_abs(step, obs, action)
             return
         print(f"=== Step {step} | Unknown Action Mode {self.action_mode} ===")

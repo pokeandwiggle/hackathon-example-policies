@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # Copyright 2025 Nur Muhammad Mahi Shafiullah,
 # and The HuggingFace Inc. team. All rights reserved.
 #
@@ -14,6 +12,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+# From https://github.com/huggingface/lerobot/pull/680
+
 from dataclasses import dataclass, field
 
 from lerobot.configs.policies import PreTrainedConfig
@@ -113,11 +114,9 @@ class DiTFlowConfig(PreTrainedConfig):
     # Architecture / modeling.
     # Vision backbone.
     vision_backbone: str = "resnet18"
-    crop_shape: tuple[int, int] | None = (224, 224)
-    crop_is_random: bool = True
-    # If True, only use image features for conditioning (no state features)
-    image_only: bool = False
-    pretrained_backbone_weights: str | None = None
+    crop_shape: tuple[int, int] | None = None
+    crop_is_random: bool = False
+    pretrained_backbone_weights: str | None = "IMAGENET1K_V1"
     use_group_norm: bool = True
     spatial_softmax_num_keypoints: int = 32
     use_separate_rgb_encoder_per_camera: bool = True
@@ -132,14 +131,12 @@ class DiTFlowConfig(PreTrainedConfig):
     activation: str = "gelu"
 
     # Noise scheduler.
-    training_noise_sampling: str = (
-        "uniform"  # "uniform" or "beta", from pi0 https://www.physicalintelligence.company/download/pi0.pdf
-    )
+    training_noise_sampling: str = "uniform"  # "uniform" or "beta", from pi0 https://www.physicalintelligence.company/download/pi0.pdf
     clip_sample: bool = True
     clip_sample_range: float = 1.0
 
     # Inference
-    num_inference_steps: int | None = 100
+    num_inference_steps: int | None = 10
 
     # Loss computation
     do_mask_loss_for_padding: bool = False

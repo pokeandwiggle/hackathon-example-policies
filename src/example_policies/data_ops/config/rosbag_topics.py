@@ -23,7 +23,7 @@ class RosSchemaEnum(Enum):
     POSE = "geometry_msgs/msg/PoseStamped"
     ARRAY = "std_msgs/msg/Float64MultiArray"
 
-    JOINT_WAYPOINT = "trajectory_msgs/msg/JointTrajectory"
+    JOINT_TARGET = "trajectory_msgs/msg/JointTrajectory"
 
     # Currently unused topics
     STRING = "std_msgs/msg/String"
@@ -64,16 +64,16 @@ class RosTopicEnum(Enum):
     DES_GRIPPER_RIGHT = "/desired_gripper_values_right"
 
     # Desired Teleop Pose
-    DES_TELEOP_LEFT = "/desired_pose_left"
-    DES_TELEOP_RIGHT = "/desired_pose_right"
+    DES_TELEOP_LEFT = "/cartesian_waypoint_left"
+    DES_TELEOP_RIGHT = "/cartesian_waypoint_right"
 
     # Desired TCP Action
-    DES_TCP_LEFT = "/desired_pose_twist_left"
-    DES_TCP_RIGHT = "/desired_pose_twist_right"
+    DES_TCP_LEFT = "/cartesian_target_left"
+    DES_TCP_RIGHT = "/cartesian_target_right"
 
     # Desired Joint Action
-    DES_JOINT_LEFT = "/left_desired_joint_waypoint"
-    DES_JOINT_RIGHT = "/right_desired_joint_waypoint"
+    DES_JOINT_LEFT = "/joint_target_left"
+    DES_JOINT_RIGHT = "/joint_target_right"
 
     # Actual States
     ACTUAL_JOINT_STATE = "/joint_states"

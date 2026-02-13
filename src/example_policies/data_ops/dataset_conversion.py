@@ -31,7 +31,6 @@ from mcap.reader import NonSeekingReader
 
 from example_policies.data_ops.config import pipeline_config
 from example_policies.data_ops.pipeline.episode_converter import EpisodeConverter
-from example_policies.data_ops.pipeline.post_lerobot_ops import PostLerobotPipeline
 from example_policies.data_ops.utils.conversion_utils import (
     get_selected_episodes,
     save_metadata,
@@ -56,7 +55,6 @@ def convert_episodes(
     """
     features = pipeline_config.build_features(config)
     converter = EpisodeConverter(output_dir, config, features)
-    post_pipeline = PostLerobotPipeline(config)
 
     for ep_idx, episode_path in enumerate(episode_paths):
         print(f"Processing {episode_path}...")
@@ -86,12 +84,6 @@ def convert_episodes(
         converter.blacklist,
         config,
     )
-
-    # Only run post-processing if episodes were successfully converted
-    if len(converter.episode_mapping) > 0:
-        post_pipeline.process_lerobot(output_dir)
-    else:
-        print("\nNo episodes were successfully converted.")
 
     return {
         "episode_mapping": converter.episode_mapping,
@@ -160,7 +152,7 @@ def main():
     print(f"  - Target FPS: {config.target_fps}")
     print(f"  - Task: {config.task_name}")
 
-    episode_paths = get_selected_episodes(config.episodes_dir, success_only=True)
+    episode_paths = get_selected_episodes(config.episodes_dir)
     result = convert_episodes(episode_paths, config.output, config)
     print_conversion_result(result)
 

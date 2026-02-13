@@ -25,10 +25,10 @@ readme = "README.md"
 dependencies = [
     "grpcio>=1.74.0",
     "grpcio-tools>=1.74.0",
-    "lerobot[smolvla]",
+    "lerobot @ git+https://github.com/pokeandwiggle/lerobot.git@fix/output-features-guard",
     "mcap>=1.3.0",
     "opencv-python>=4.12.0.88",
-    "rosbags>=0.10.11",
+    "rosbags==0.10.11",
     "scipy>=1.15.3",
     "torch>=2.8.0",
     "torchcodec>=0.6.0",
@@ -36,7 +36,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-lerobot = { git = "https://github.com/LiXiling/lerobot.git" }
+lerobot = { git = "https://github.com/pokeandwiggle/lerobot.git", branch = "fix/output-features-guard" }
 
 
 [dependency-groups]

@@ -8,6 +8,8 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+# From https://github.com/huggingface/lerobot/pull/680
+
 import copy
 from collections import deque
 
@@ -16,10 +18,12 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F  # noqa: N812
-from lerobot.constants import ACTION, OBS_ENV_STATE, OBS_IMAGES, OBS_STATE
+from lerobot.utils.constants import ACTION, OBS_ENV_STATE, OBS_IMAGES, OBS_STATE
 from lerobot.policies.diffusion.modeling_diffusion import DiffusionRgbEncoder
-from lerobot.policies.normalize import Normalize, Unnormalize
 from lerobot.policies.pretrained import PreTrainedPolicy
+
+from .rgb_encoder import PretrainedGroupNormRgbEncoder
+
 from lerobot.policies.utils import (
     get_device_from_parameters,
     get_dtype_from_parameters,
@@ -326,6 +330,7 @@ class DiTFlowPolicy(PreTrainedPolicy):
         self,
         config: DiTFlowConfig,
         dataset_stats: dict[str, dict[str, torch.Tensor]] | None = None,
+        dataset_meta=None,  # New lerobot API, not used but must accept
     ):
         """
         Args:
@@ -333,20 +338,27 @@ class DiTFlowPolicy(PreTrainedPolicy):
                 the configuration class is used.
             dataset_stats: Dataset statistics to be used for normalization. If not passed here, it is expected
                 that they will be passed with a call to `load_state_dict` before the policy is used.
+            dataset_meta: Dataset metadata (new lerobot API, unused here).
         """
         super().__init__(config)
 
         config.validate_features()
         self.config = config
 
+        # NOTE: Normalization is now handled by the processor pipeline (processor_dit_flow.py)
+        # for both training and inference. These modules are kept for backward compatibility
+        # with old checkpoints that have stats saved in the model state dict.
+        # They are NOT used in forward/select_action - the processor pipeline handles normalization.
+        from example_policies.compat import Normalize, Unnormalize
         self.normalize_inputs = Normalize(
-            config.input_features, config.normalization_mapping, dataset_stats
-        )
-        self.normalize_targets = Normalize(
-            config.output_features, config.normalization_mapping, dataset_stats
+            config.input_features,
+            config.normalization_mapping,
+            dataset_stats,
         )
         self.unnormalize_outputs = Unnormalize(
-            config.output_features, config.normalization_mapping, dataset_stats
+            config.output_features,
+            config.normalization_mapping,
+            dataset_stats,
         )
 
         # queues are populated during rollout of the policy, they contain the n latest observations and actions
@@ -383,17 +395,23 @@ class DiTFlowPolicy(PreTrainedPolicy):
         # batch = {k: torch.stack(list(self._queues[k]), dim=1) for k in batch if k in self._queues}
         actions = self.dit_flow.generate_actions(batch)
 
-        # TODO(rcadene): make above methods return output dictionary?
-        actions = self.unnormalize_outputs({ACTION: actions})[ACTION]
-
+        # Note: Unnormalization is now handled by the postprocessor pipeline
         return actions
 
     @torch.no_grad()
     def select_action(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
         if "action" in batch:
             batch.pop("action")  # remove action if present in the input batch
-
-        batch = self.normalize_inputs(batch)
+        
+        # Note: Normalization is now handled by the preprocessor pipeline
+        
+        # FIX: Clamp normalized state to [-1, 1] to prevent OOD values
+        # Features with tiny normalization ranges (e.g., unused gripper) can produce
+        # extreme values that break inference. See investigation in compare_dataset_vs_live.
+        if OBS_STATE in batch:
+            batch = dict(batch)  # shallow copy
+            batch[OBS_STATE] = torch.clamp(batch[OBS_STATE], -1.0, 1.0)
+        
         if self.config.image_features:
             batch = dict(
                 batch
@@ -413,7 +431,7 @@ class DiTFlowPolicy(PreTrainedPolicy):
 
     def forward(self, batch: dict[str, torch.Tensor]) -> tuple[torch.Tensor, None]:
         """Run the batch through the model and compute the loss for training or validation."""
-        batch = self.normalize_inputs(batch)
+        # Note: Normalization is now handled by the preprocessor pipeline
         if self.config.image_features:
             batch = dict(
                 batch
@@ -421,7 +439,6 @@ class DiTFlowPolicy(PreTrainedPolicy):
             batch["observation.images"] = torch.stack(
                 [batch[key] for key in self.config.image_features], dim=-4
             )
-        batch = self.normalize_targets(batch)
         loss = self.dit_flow.compute_loss(batch)
         return loss, None
 
@@ -432,16 +449,21 @@ class DiTFlowModel(nn.Module):
         self.config = config
 
         # Build observation encoders (depending on which observations are provided).
-        # If image_only, don't include state features in conditioning
-        global_cond_dim = 0 if self.config.image_only else self.config.robot_state_feature.shape[0]
+        global_cond_dim = self.config.robot_state_feature.shape[0]
         if self.config.image_features:
             num_images = len(self.config.image_features)
+            # Use the Stanford approach (pretrained + GroupNorm) when both are configured,
+            # otherwise fall back to LeRobot's original DiffusionRgbEncoder.
+            if config.pretrained_backbone_weights and config.use_group_norm:
+                _encoder_cls = PretrainedGroupNormRgbEncoder
+            else:
+                _encoder_cls = DiffusionRgbEncoder
             if self.config.use_separate_rgb_encoder_per_camera:
-                encoders = [DiffusionRgbEncoder(config) for _ in range(num_images)]
+                encoders = [_encoder_cls(config) for _ in range(num_images)]
                 self.rgb_encoder = nn.ModuleList(encoders)
                 global_cond_dim += encoders[0].feature_dim * num_images
             else:
-                self.rgb_encoder = DiffusionRgbEncoder(config)
+                self.rgb_encoder = _encoder_cls(config)
                 global_cond_dim += self.rgb_encoder.feature_dim * num_images
         if self.config.env_state_feature:
             global_cond_dim += self.config.env_state_feature.shape[0]
@@ -512,8 +534,7 @@ class DiTFlowModel(nn.Module):
     ) -> torch.Tensor:
         """Encode image features and concatenate them all together along with the state vector."""
         batch_size, n_obs_steps = batch[OBS_STATE].shape[:2]
-        # If image_only, don't include state features in conditioning
-        global_cond_feats = [] if self.config.image_only else [batch[OBS_STATE]]
+        global_cond_feats = [batch[OBS_STATE]]
         # Extract image features.
         if self.config.image_features:
             if self.config.use_separate_rgb_encoder_per_camera:
@@ -642,4 +663,5 @@ class DiTFlowModel(nn.Module):
             in_episode_bound = ~batch["action_is_pad"]
             loss = loss * in_episode_bound.unsqueeze(-1)
 
+        # Compute mean MSE loss
         return loss.mean()

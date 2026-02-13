@@ -1,133 +1,111 @@
-# Copyright 2025 Poke & Wiggle GmbH. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+#!/usr/bin/env python
 
-import argparse
-import time
 from pathlib import Path
-
-import grpc
-
-# Lerobot Environment Bug
-import numpy as np
 import torch
 
-from example_policies.robot_deploy.action_translator import ActionTranslator
-from example_policies.robot_deploy.policy_loader import load_policy
+from example_policies.robot_deploy.deploy_argument_parser import DeployArgumentParser
+from example_policies.robot_deploy.deploy_core.deployment_structures import (
+    InferenceConfig,
+)
+from example_policies.robot_deploy.deploy_core.inference_runner import InferenceRunner
+from example_policies.robot_deploy.deploy_core.policy_manager import PolicyManager
+from example_policies.robot_deploy.robot_io.connection import RobotConnection
 from example_policies.robot_deploy.robot_io.robot_interface import (
     RobotClient,
     RobotInterface,
 )
-from example_policies.robot_deploy.robot_io.robot_service import (
-    robot_service_pb2,
-    robot_service_pb2_grpc,
-)
-from example_policies.robot_deploy.utils import print_info
-from example_policies.robot_deploy.utils.action_mode import ActionMode
+from example_policies.utils.state_order import CANONICAL_ARM_JOINTS
+
+# Home pose configs for different robot mounts
+HOME_CONFIGS = {
+    "table": Path(__file__).parent / "panda_tum_config" / "dual_panda_table.yaml",
+    "wall": Path(__file__).parent / "panda_tum_config" / "dual_panda_wall.yaml",
+}
+
+# Gripper open width in meters
+GRIPPER_OPEN_WIDTH = 0.08
+GRIPPER_SPEED = 0.1  # m/s
+GRIPPER_FORCE = 50.0  # N
 
 
-def inference_loop(
-    policy,
-    cfg,
-    hz: float,
-    service_stub: robot_service_pb2_grpc.RobotServiceStub,
-    controller=None,
-):
+def move_home(robot_interface: RobotInterface, mount: str = "wall") -> None:
+    """Move the robot to home pose and open grippers.
 
-    if controller is None:
-        controller = RobotClient.CART_WAYPOINT
+    Args:
+        robot_interface: The robot interface to use for commands
+        mount: Robot mount type ("table" or "wall")
+    """
+    import numpy as np
+    import yaml
 
-    robot_interface = RobotInterface(service_stub, cfg)
-    model_to_action_trans = ActionTranslator(cfg)
-    dbg_printer = print_info.InfoPrinter(cfg)
+    config_path = HOME_CONFIGS.get(mount)
+    if config_path is None:
+        raise ValueError(f"Unknown mount type: {mount}. Valid options: {list(HOME_CONFIGS.keys())}")
 
-    step = 0
-    done = False
+    if not config_path.exists():
+        raise FileNotFoundError(f"Home config not found: {config_path}")
 
-    # Inference Loop
-    print("Starting inference loop...")
-    period = 1.0 / hz
+    with open(config_path) as f:
+        config = yaml.safe_load(f)
 
-    while not done:
-        start_time = time.time()
-        print(policy.config.input_features)
-        observation = robot_interface.get_observation(cfg.device, show=False)
+    # Validate presence of home_joint_configuration in the YAML
+    if "home_joint_configuration" not in config:
+        raise KeyError(
+            f"Missing 'home_joint_configuration' in home config YAML: {config_path}"
+        )
+    home_config = config["home_joint_configuration"]
 
-        if observation:
-            # Predict the next action with respect to the current observation
-            with torch.inference_mode():
-                action = policy.select_action(observation)
-                print(f"\n=== RAW MODEL PREDICTION ===")
-                dbg_printer.print(step, observation, action, raw_action=True)
-                print()
-            action = model_to_action_trans.translate(action, observation)
+    # Validate that all expected joint names are present
+    missing_joints = [joint_name for joint_name in CANONICAL_ARM_JOINTS if joint_name not in home_config]
+    if missing_joints:
+        raise KeyError(
+            f"Missing joint configuration(s) {missing_joints} in 'home_joint_configuration' "
+            f"for config file: {config_path}"
+        )
 
-            print(f"\n=== ABSOLUTE ROBOT COMMANDS ===")
-            dbg_printer.print(step, observation, action, raw_action=False)
+    # Extract joint angles in canonical order (left arm first, then right arm)
+    joint_angles = np.array([home_config[joint_name] for joint_name in CANONICAL_ARM_JOINTS])
 
-            robot_interface.send_action(
-                action, model_to_action_trans.action_mode, controller
-            )
-            # policy._queues["action"].clear()
+    print(f"Moving to home pose ({mount} mount)...")
+    robot_interface.move_to_joint_goal(joint_angles, CANONICAL_ARM_JOINTS)
 
-        # wait for execution to finish
-        elapsed_time = time.time() - start_time
-        sleep_duration = period - elapsed_time
-        print(sleep_duration)
-        # wait for input
-        # input("Press Enter to continue...")
-        time.sleep(max(0.0, sleep_duration))
+    print("Opening grippers...")
+    robot_interface.set_gripper_state("left", GRIPPER_OPEN_WIDTH, GRIPPER_SPEED, GRIPPER_FORCE)
+    robot_interface.set_gripper_state("right", GRIPPER_OPEN_WIDTH, GRIPPER_SPEED, GRIPPER_FORCE)
 
-        step += 1
+    print("Robot at home position with grippers open.")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Robot service client")
-    parser.add_argument(
-        "--checkpoint",
-        type=Path,
-        required=True,
-        help="Path to the policy checkpoint directory.",
-    )
-
-    parser.add_argument(
-        "--server",
-        default="localhost:50051",
-        help="Robot service server address (default: localhost:50051)",
-    )
+    parser = DeployArgumentParser.create_single_policy_parser()
     args = parser.parse_args()
 
-    # Select your device
+    # Load policy
     device = "cpu" if not torch.cuda.is_available() else "cuda"
+    policy_bundle = PolicyManager.load_single(args.checkpoint, device)
 
-    policy, cfg = load_policy(args.checkpoint)
-    policy.to(device)
-    deploy_policy(policy, cfg, 10, args.server)
+    # Setup inference configuration
+    config = InferenceConfig(
+        hz=args.hertz,
+        device=device,
+        controller=RobotClient.CART_WAYPOINT,
+    )
 
+    # Run inference loop
+    print("Starting single-policy inference loop...")
+    with RobotConnection(args.robot_server) as stub:
+        robot_interface = RobotInterface(stub, policy_bundle.config)
 
-def deploy_policy(policy, cfg, hz: float, server: str, controller=None):
-    if controller is None:
-        controller = RobotClient.CART_WAYPOINT
-    channel = grpc.insecure_channel(server)
-    stub = robot_service_pb2_grpc.RobotServiceStub(channel)
-    try:
-        inference_loop(policy, cfg, hz, stub, controller)
-    except Exception as e:
-        print(f"Error occurred: {e}")
-        raise e
-    finally:
-        channel.close()
-        print("Connection closed.")
+        # Move to home position if requested
+        if args.move_home:
+            move_home(robot_interface, args.mount)
+            print("Press Enter to start inference...")
+            input()
+
+        runner = InferenceRunner(robot_interface, config)
+
+        while True:
+            runner.run_step(policy_bundle)
 
 
 if __name__ == "__main__":

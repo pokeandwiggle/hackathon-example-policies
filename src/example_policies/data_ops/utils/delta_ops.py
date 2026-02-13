@@ -14,15 +14,19 @@
 
 import numpy as np
 
-from example_policies import data_constants as dc
+from example_policies.utils.action_order import (
+    ACTION_ARRAY_POS_IDXS,
+    ACTION_ARRAY_QUAT_IDXS,
+    ACTION_ARRAY_ROT_IDXS,
+)
 
 from .geometric import quaternion_to_delta_axis_angle
 
 
 def pos_quat_delta(last_pos_quat, des_pos_quat):
-    pos_idx = dc.ACTION_ARRAY_POS_IDXS
-    quat_idx = dc.ACTION_ARRAY_QUAT_IDXS
-    axis_angle_idx = dc.ACTION_ARRAY_ROT_IDXS
+    pos_idx = ACTION_ARRAY_POS_IDXS
+    quat_idx = ACTION_ARRAY_QUAT_IDXS
+    axis_angle_idx = ACTION_ARRAY_ROT_IDXS
 
     delta = np.zeros(6, dtype=np.float32)
     delta[pos_idx] = des_pos_quat[pos_idx] - last_pos_quat[pos_idx]

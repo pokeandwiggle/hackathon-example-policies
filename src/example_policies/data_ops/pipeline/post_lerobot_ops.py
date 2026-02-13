@@ -88,4 +88,3 @@ def termination_processor(config: PipelineConfig, df: pd.DataFrame) -> pd.DataFr
         df.at[idx, ACTION] = action
 
     return df
-    

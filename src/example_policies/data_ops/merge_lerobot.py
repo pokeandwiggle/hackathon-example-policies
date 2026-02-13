@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # Copyright 2025 Poke & Wiggle GmbH. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,12 +32,18 @@ def merge_datasets(dataset_paths: List[pathlib.Path], output_path: pathlib.Path)
 
 
 if __name__ == "__main__":
-    # input a list of paths
-    parser = argparse.ArgumentParser(description="Merge LeRobot data")
-    parser.add_argument("paths", nargs="+", help="List of paths to merge")
-
-    # Single Output path
-    parser.add_argument("--output", type=str, help="Path to the output file")
+    parser = argparse.ArgumentParser(description="Merge LeRobot datasets")
+    parser.add_argument(
+        "paths", nargs="+", metavar="PATH", help="Paths to datasets to merge"
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        required=True,
+        metavar="PATH",
+        help="Path to the output directory",
+    )
 
     args = parser.parse_args()
     dataset_paths = [pathlib.Path(p) for p in args.paths]

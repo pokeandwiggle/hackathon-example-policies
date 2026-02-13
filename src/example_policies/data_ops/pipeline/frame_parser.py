@@ -12,24 +12,42 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
 
 from ..config.pipeline_config import PipelineConfig
-from ...utils.action_order import ActionMode
 from ..config.rosbag_topics import RosTopicEnum
-from ..utils import message_parsers as rmp
-from ..utils.geometric import positive_quat
+from ..utils.geometric import continuous_quat
+from . import message_parsers as rmp
 from .frame_buffer import FrameBuffer
 
 
 class FrameParser:
     """
-    A stateless parser that converts a raw FrameBuffer into a structured
-    dictionary of absolute data values.
+    Parser that converts a raw FrameBuffer into a structured dictionary
+    of absolute data values with quaternion continuity tracking.
+
+    Tracks previous quaternion values to ensure smooth transitions between
+    frames, preventing jumps when rotations pass through w ≈ 0 configurations.
+    Only tracks quaternions for features that are enabled in the config.
     """
 
     def __init__(self, config: PipelineConfig):
         self.config = config
+        # Only track quaternions for enabled features
+        self._track_actual_tcp = config.requires_tcp_poses()
+        self._track_des_tcp = config.is_tcp_action()
+        self._prev_actual_tcp_left = None
+        self._prev_actual_tcp_right = None
+        self._prev_des_tcp_left = None
+        self._prev_des_tcp_right = None
+
+    def reset(self):
+        """Reset quaternion tracking state for a new episode."""
+        if self._track_actual_tcp:
+            self._prev_actual_tcp_left = None
+            self._prev_actual_tcp_right = None
+        if self._track_des_tcp:
+            self._prev_des_tcp_left = None
+            self._prev_des_tcp_right = None
 
     def parse_velocities(self, frame_buffer: FrameBuffer):
         """Parses only the joint velocities for quick pause detection."""
@@ -60,18 +78,20 @@ class FrameParser:
         state_frame["joint_data"] = joint_data
         state_frame["gripper_state"] = gripper_state
 
-        if self.config.include_tcp_poses or self.config.action_level in [
-            ActionMode.TCP,
-            ActionMode.TELEOP,
-            ActionMode.DELTA_TCP,
-        ]:
+        if self.config.requires_tcp_poses():
             msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.ACTUAL_TCP_LEFT)
             raw_pose = rmp.parse_pose(self.config, msg_data, schema_name)
-            state_frame["actual_tcp_left"] = positive_quat(raw_pose)
+            state_frame["actual_tcp_left"] = continuous_quat(
+                raw_pose, self._prev_actual_tcp_left
+            )
+            self._prev_actual_tcp_left = state_frame["actual_tcp_left"].copy()
 
             msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.ACTUAL_TCP_RIGHT)
             raw_pose = rmp.parse_pose(self.config, msg_data, schema_name)
-            state_frame["actual_tcp_right"] = positive_quat(raw_pose)
+            state_frame["actual_tcp_right"] = continuous_quat(
+                raw_pose, self._prev_actual_tcp_right
+            )
+            self._prev_actual_tcp_right = state_frame["actual_tcp_right"].copy()
         return state_frame
 
     def _parse_desired(self, frame_buffer) -> dict:
@@ -86,20 +106,22 @@ class FrameParser:
             self.config, msg_data, schema_name
         )
 
-        if self.config.action_level in [
-            ActionMode.TCP,
-            ActionMode.TELEOP,
-            ActionMode.DELTA_TCP,
-        ]:
+        if self.config.is_tcp_action():
             msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DES_TCP_LEFT)
             raw_pose = rmp.parse_desired_tcp(self.config, msg_data, schema_name)
-            desired_frame["des_tcp_left"] = positive_quat(raw_pose)
+            desired_frame["des_tcp_left"] = continuous_quat(
+                raw_pose, self._prev_des_tcp_left
+            )
+            self._prev_des_tcp_left = desired_frame["des_tcp_left"].copy()
 
             msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DES_TCP_RIGHT)
             raw_pose = rmp.parse_desired_tcp(self.config, msg_data, schema_name)
-            desired_frame["des_tcp_right"] = positive_quat(raw_pose)
+            desired_frame["des_tcp_right"] = continuous_quat(
+                raw_pose, self._prev_des_tcp_right
+            )
+            self._prev_des_tcp_right = desired_frame["des_tcp_right"].copy()
 
-        elif self.config.action_level in [ActionMode.JOINT, ActionMode.DELTA_JOINT]:
+        elif self.config.is_joint_action():
             msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DES_JOINT_LEFT)
             desired_frame["des_joint_left"] = rmp.parse_joint_waypoint(
                 self.config, msg_data, schema_name, "left"
@@ -133,28 +155,6 @@ class FrameParser:
 
             msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.RGB_RIGHT_IMAGE)
             images["observation.images.rgb_right"] = rmp.parse_image(
-                self.config, msg_data, schema_name
-            )
-
-        if self.config.include_depth_images:
-            msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DEPTH_LEFT_IMAGE)
-            images["observation.images.depth_left"] = rmp.parse_image(
-                self.config, msg_data, schema_name
-            )
-
-            msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DEPTH_RIGHT_IMAGE)
-            images["observation.images.depth_right"] = rmp.parse_image(
-                self.config, msg_data, schema_name
-            )
-
-        if self.config.include_depth_images:
-            msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DEPTH_LEFT_IMAGE)
-            images["observation.images.depth_left"] = rmp.parse_image(
-                self.config, msg_data, schema_name
-            )
-
-            msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DEPTH_RIGHT_IMAGE)
-            images["observation.images.depth_right"] = rmp.parse_image(
                 self.config, msg_data, schema_name
             )
 

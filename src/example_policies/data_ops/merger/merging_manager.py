@@ -15,7 +15,7 @@
 import pathlib
 import shutil
 
-from . import constants as c
+from ...utils.constants import EPISODE_DIR, META_DIR, VIDEO_DIR
 from .lerobot_pseudo_dataset import LerobotPseudoDataset
 from .meta_manager import MetaManager
 
@@ -37,9 +37,9 @@ class MergingManager:
         if self.output_path.exists():
             raise FileExistsError(f"Output path {self.output_path} already exists.")
         self.output_path.mkdir(parents=True, exist_ok=False)
-        (self.output_path / c.EPISODE_DIR).mkdir(parents=True, exist_ok=False)
-        (self.output_path / c.META_DIR).mkdir(parents=True, exist_ok=False)
-        (self.output_path / c.VIDEO_DIR).mkdir(parents=True, exist_ok=False)
+        (self.output_path / EPISODE_DIR).mkdir(parents=True, exist_ok=False)
+        (self.output_path / META_DIR).mkdir(parents=True, exist_ok=False)
+        (self.output_path / VIDEO_DIR).mkdir(parents=True, exist_ok=False)
 
     def add_dataset(self, dataset: LerobotPseudoDataset):
         self.create_video_dirs(dataset)
@@ -88,7 +88,7 @@ class MergingManager:
 
         ep_parquet.to_parquet(
             self.output_path
-            / c.EPISODE_DIR
+            / EPISODE_DIR
             / f"episode_{orig_ep_idx + self.dataset_episode_offset:06d}.parquet"
         )
 
@@ -104,9 +104,7 @@ class MergingManager:
         video_paths = dataset.video_paths
         for camera in video_paths:
             cam_name = camera.name
-            (self.output_path / c.VIDEO_DIR / cam_name).mkdir(
-                parents=True, exist_ok=True
-            )
+            (self.output_path / VIDEO_DIR / cam_name).mkdir(parents=True, exist_ok=True)
 
     def add_videos(self, episode_meta_dict: dict, dataset: LerobotPseudoDataset):
         orig_ep_idx = episode_meta_dict["episode_index"]
@@ -115,12 +113,10 @@ class MergingManager:
         for camera in video_paths:
             cam_name = camera.name
 
-            video_file = camera / f"episode_{orig_ep_idx:06d}.mp4"
-
             src = camera / f"episode_{orig_ep_idx:06d}.mp4"
             dst = (
                 self.output_path
-                / c.VIDEO_DIR
+                / VIDEO_DIR
                 / cam_name
                 / f"episode_{orig_ep_idx + self.dataset_episode_offset:06d}.mp4"
             )

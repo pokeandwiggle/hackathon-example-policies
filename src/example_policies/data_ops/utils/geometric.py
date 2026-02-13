@@ -81,6 +81,36 @@ def positive_quat(pose: np.ndarray) -> np.ndarray:
     return pose
 
 
+def continuous_quat(
+    current_pose: np.ndarray, prev_pose: np.ndarray | None
+) -> np.ndarray:
+    """Ensure quaternion continuity by choosing sign closest to previous frame.
+
+    This prevents quaternion jumps that occur when rotations pass through
+    configurations where w ≈ 0 (near 180° rotations). The positive_quat approach
+    fails in these cases because small noise causes w to flip sign repeatedly.
+
+    Args:
+        current_pose: Current pose array, shape 4 (xyzw) or 7 (xyz xyzw)
+        prev_pose: Previous frame's pose array (same shape), or None for first frame
+
+    Returns:
+        Pose array with quaternion sign chosen for continuity
+    """
+    if prev_pose is None:
+        # First frame: fall back to positive_quat convention
+        return positive_quat(current_pose)
+
+    current_quat = current_pose[-4:]
+    prev_quat = prev_pose[-4:]
+
+    # Choose sign that minimizes distance to previous quaternion
+    if np.dot(current_quat, prev_quat) < 0:
+        current_pose[-4:] = -current_quat
+
+    return current_pose
+
+
 def axis_angle_to_quat_torch(aa: torch.Tensor, eps: float = 1e-3) -> torch.Tensor:
     """Convert axis-angle (...,3) to quaternions (...,4) in xyzw format."""
     angle = aa.norm(dim=-1, keepdim=True)
@@ -125,3 +155,16 @@ def quat_mul_torch(q1: torch.Tensor, q2: torch.Tensor) -> torch.Tensor:
         ],
         dim=-1,
     )
+
+
+def add_delta_quaternion(q: torch.Tensor, delta_q: torch.Tensor) -> torch.Tensor:
+    """Add delta quaternion to quaternion q.
+
+    Args:
+        q (torch.Tensor): Quaternion (...,4) in xyzw format.
+        delta_q (torch.Tensor): Delta quaternion (...,4) in xyzw format.
+
+    Returns:
+        torch.Tensor: Resulting quaternion (...,4) in xyzw format.
+    """
+    return quat_mul_torch(q, delta_q)

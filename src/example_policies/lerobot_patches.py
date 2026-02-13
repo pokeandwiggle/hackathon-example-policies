@@ -12,39 +12,82 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
-import os
+"""
+Monkey patches for lerobot compatibility.
+
+Patches Status (lerobot v0.4.x from pokeandwiggle fork):
+- monkey_patch_video_query: NEEDED - Preserves temporal dimension for n_obs_steps=1
+- monkey_patch_policy_factory: NEEDED - Registers custom policies (ditflow, xditflow)
+- monkey_patch_save_checkpoint: NEEDED - Copies dataset_info.json for deployment
+"""
+
 import pathlib
 import shutil
+import torch
 
-from lerobot.constants import PRETRAINED_MODEL_DIR
+from lerobot.utils.constants import PRETRAINED_MODEL_DIR
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
+from lerobot.datasets import video_utils
 from lerobot.policies import factory as lerobot_factory
-from lerobot.utils import train_utils, wandb_utils
+from lerobot.utils import train_utils
 
 from .policies.factory import get_policy
+from .utils.constants import INFO_FILE, META_DIR
 
 
-def monkey_patch_dataset():
-    original_fn = LeRobotDataset._get_query_indices
+def monkey_patch_video_query():
+    """
+    Patch _query_videos to avoid squeezing the temporal dimension when n_obs_steps=1.
+    
+    The original code uses `frames.squeeze(0)` which removes the temporal dimension
+    when there's only 1 frame. This causes shape mismatches in the policy's forward
+    pass which expects shape (B, n_obs_steps, C, H, W).
+    
+    The original squeeze(0) was likely intended for a different purpose but is harmful
+    when n_obs_steps=1. We simply don't squeeze at all - the temporal dimension should
+    always be preserved.
+    """
 
-    def patched_get_query_indices(
-        self, idx: int, ep_idx: int
-    ) -> tuple[dict[str, list[int | bool]]]:
-        if self.episodes is not None:
-            ep_idx = self.episodes.index(ep_idx)
-        return original_fn(self, idx, ep_idx)
+    def patched_query_videos(
+        self, query_timestamps: dict[str, list[float]], ep_idx: int
+    ) -> dict[str, torch.Tensor]:
+        # Get episode metadata for timestamp offset
+        ep = self.meta.episodes[ep_idx]
+        item = {}
+        for vid_key, query_ts in query_timestamps.items():
+            # Episodes are stored sequentially on a single mp4 to reduce the number of files.
+            # Thus we load the start timestamp of the episode on this mp4 and,
+            # shift the query timestamp accordingly.
+            from_timestamp = ep[f"videos/{vid_key}/from_timestamp"]
+            shifted_query_ts = [from_timestamp + ts for ts in query_ts]
+            
+            video_path = self.root / self.meta.get_video_file_path(ep_idx, vid_key)
+            frames = video_utils.decode_video_frames(
+                video_path, shifted_query_ts, self.tolerance_s, self.video_backend
+            )
+            # Don't squeeze - preserve temporal dimension for all cases
+            # Original code did frames.squeeze(0) which breaks n_obs_steps=1
+            item[vid_key] = frames  # Shape: (n_obs_steps, C, H, W)
 
-    LeRobotDataset._get_query_indices = patched_get_query_indices
+        return item
+
+    LeRobotDataset._query_videos = patched_query_videos
 
 
 def monkey_patch_policy_factory():
+    """
+    Extend lerobot's policy factory to include custom policies.
+    
+    This allows training with custom policies (ditflow, xditflow) via lerobot's
+    training script by falling back to our policy registry when lerobot doesn't
+    recognize the policy name.
+    """
     original_lerobot_factory_fn = lerobot_factory.get_policy_class
 
     def extended_get_policy_cls(name: str):
         try:
             return original_lerobot_factory_fn(name)
-        except NotImplementedError:
+        except (NotImplementedError, ValueError):
             return get_policy(name)
         except Exception as e:
             raise e
@@ -53,88 +96,32 @@ def monkey_patch_policy_factory():
 
 
 def monkey_patch_save_checkpoint():
+    """
+    Extend save_checkpoint to copy dataset metadata for deployment.
+    
+    This copies dataset_info.json to the pretrained model directory so that
+    deployment code can access dataset metadata (e.g., action feature names)
+    without needing the original dataset.
+    """
     original_save_fn = train_utils.save_checkpoint
 
     def patched_save_checkpoint(
-        checkpoint_dir: pathlib.Path, step: int, cfg, policy, optimizer, scheduler
+        checkpoint_dir: pathlib.Path, step: int, cfg, policy, optimizer, scheduler,
+        preprocessor=None, postprocessor=None
     ):
-        original_save_fn(checkpoint_dir, step, cfg, policy, optimizer, scheduler)
+        original_save_fn(checkpoint_dir, step, cfg, policy, optimizer, scheduler,
+                        preprocessor=preprocessor, postprocessor=postprocessor)
         pretrained_dir = checkpoint_dir / PRETRAINED_MODEL_DIR
-        meta_json = pathlib.Path(cfg.dataset.root) / "meta" / "info.json"
+        meta_json = pathlib.Path(cfg.dataset.root) / META_DIR / INFO_FILE
         # Copy Metadata for deployment data selection
-        shutil.copy(meta_json, pretrained_dir / "dataset_info.json")
+        if meta_json.exists():
+            shutil.copy(meta_json, pretrained_dir / "dataset_info.json")
 
     train_utils.save_checkpoint = patched_save_checkpoint
 
 
-def monkey_patch_wandb():
-    "Hacky way to resume training with allow instead of must"
-    orig_class = wandb_utils.WandBLogger
-
-    class PatchedWandBLogger(orig_class):
-        """A helper class to log object using wandb."""
-
-        def __init__(self, cfg):
-            self.cfg = cfg.wandb
-            self.log_dir = cfg.output_dir
-            self.job_name = cfg.job_name
-            self.env_fps = cfg.env.fps if cfg.env else None
-            self._group = wandb_utils.cfg_to_group(cfg)
-
-            # Set up WandB.
-            os.environ["WANDB_SILENT"] = "True"
-            import wandb
-
-            wandb_run_id = (
-                cfg.wandb.run_id
-                if cfg.wandb.run_id
-                else (
-                    wandb_utils.get_wandb_run_id_from_filesystem(self.log_dir)
-                    if cfg.resume
-                    else None
-                )
-            )
-            wandb.init(
-                id=wandb_run_id,
-                project=self.cfg.project,
-                entity=self.cfg.entity,
-                name=self.job_name,
-                notes=self.cfg.notes,
-                tags=wandb_utils.cfg_to_group(cfg, return_list=True),
-                dir=self.log_dir,
-                config=cfg.to_dict(),
-                # TODO(rcadene): try set to True
-                save_code=False,
-                # TODO(rcadene): split train and eval, and run async eval with job_type="eval"
-                job_type="train_eval",
-                resume="allow" if cfg.resume else None,
-                mode=(
-                    self.cfg.mode
-                    if self.cfg.mode in ["online", "offline", "disabled"]
-                    else "online"
-                ),
-            )
-            run_id = wandb.run.id
-            # NOTE: We will override the cfg.wandb.run_id with the wandb run id.
-            # This is because we want to be able to resume the run from the wandb run id.
-            cfg.wandb.run_id = run_id
-            # Handle custom step key for rl asynchronous training.
-            self._wandb_custom_step_key: set[str] | None = None
-            print(
-                wandb_utils.colored(
-                    "Logs will be synced with wandb.", "blue", attrs=["bold"]
-                )
-            )
-            logging.info(
-                f"Track this run --> {wandb_utils.colored(wandb.run.get_url(), 'yellow', attrs=['bold'])}"
-            )
-            self._wandb = wandb
-
-    wandb_utils.WandBLogger = PatchedWandBLogger
-
-
 def apply_patches():
+    """Apply all required monkey patches for lerobot compatibility."""
     monkey_patch_policy_factory()
-    monkey_patch_dataset()
+    monkey_patch_video_query()
     monkey_patch_save_checkpoint()
-    monkey_patch_wandb()

@@ -79,7 +79,7 @@ class PipelineConfig:
     include_joint_velocities: bool = False
     include_joint_efforts: bool = False
     include_tcp_poses: bool = True
-    include_last_command: bool = False
+    include_last_command: bool = True
 
     include_rgb_images: bool = True
     include_depth_images: bool = False
@@ -95,7 +95,7 @@ class PipelineConfig:
     right_gripper: GripperType = GripperType.PANDA
 
     # Termination Signal Processing
-    termination_horizon_seconds: float = 0.5
+    termination_horizon_seconds: float = 0.0
 
     # Task name
     task_name: str = ""
@@ -103,18 +103,18 @@ class PipelineConfig:
     # Pauses
     max_pause_seconds: float = 0.2
     pause_velocity: float = 0.03
-    save_pauses: bool = False
+    save_pauses: bool = False  # Old dataset pipeline only
 
-    # Speedup
-    gripper_active_speed: float = 0.05
-    boost_factor: int = 1
-    grace_period_seconds: float = 0.2
-    save_normal: bool = False
+    # Speedup - Old dataset pipeline only
+    gripper_active_speed: float = 0.05  # Old dataset pipeline only
+    boost_factor: int = 1  # Old dataset pipeline only
+    grace_period_seconds: float = 0.2  # Old dataset pipeline only
+    save_normal: bool = False  # Old dataset pipeline only
 
     # Subsampling
-    recording_fps: int = 30
+    recording_fps: int = 30  # Old dataset pipeline only
     target_fps: int = 10
-    subsample_offset: int = 0
+    subsample_offset: int = 0  # Old dataset pipeline only
 
     min_episode_seconds: int = 8
 

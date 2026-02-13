@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # Copyright 2025 Poke & Wiggle GmbH. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,18 +23,17 @@ import grpc
 # Lerobot Environment Bug
 import numpy as np
 import torch
-from lerobot.configs.default import DatasetConfig
-from lerobot.datasets.lerobot_dataset import LeRobotDataset, LeRobotDatasetMetadata
+from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
-from example_policies.robot_deploy.action_translator import ActionTranslator
-from example_policies.robot_deploy.policy_loader import load_metadata
+from example_policies.robot_deploy.deploy_core.action_translator import ActionTranslator
+from example_policies.robot_deploy.deploy_core.policy_loader import load_metadata
 from example_policies.robot_deploy.robot_io.robot_interface import RobotInterface
 from example_policies.robot_deploy.robot_io.robot_service import (
-    robot_service_pb2,
     robot_service_pb2_grpc,
 )
 from example_policies.robot_deploy.utils import print_info
-from example_policies.robot_deploy.utils.action_mode import ActionMode
+from example_policies.utils.action_order import ActionMode
+from example_policies.utils.constants import ACTION, OBSERVATION_STATE
 
 
 class FakeConfig:
@@ -40,10 +41,10 @@ class FakeConfig:
         self.metadata = m
         self.output_features = {}
         self.input_features = {}
-        self.input_features["observation.state"] = np.asarray(
-            m["features"]["observation.state"]["names"]
+        self.input_features[OBSERVATION_STATE] = np.asarray(
+            m["features"][OBSERVATION_STATE]["names"]
         )
-        self.output_features["action"] = np.asarray(m["features"]["action"]["names"])
+        self.output_features[ACTION] = np.asarray(m["features"][ACTION]["names"])
 
     def get_tcp_from_state(self, state: np.ndarray) -> np.ndarray:
         state_names = []
@@ -53,7 +54,7 @@ class FakeConfig:
         state_names.extend([f"tcp_right_quat_{i}" for i in "xyzw"])
 
         state_indices = [
-            np.where(self.input_features["observation.state"] == name)[0][0]
+            np.where(self.input_features[OBSERVATION_STATE] == name)[0][0]
             for name in state_names
         ]
         return state[:, state_indices]
@@ -114,7 +115,6 @@ def inference_loop(
         time.sleep(0.1)
 
     input("Press Enter to move robot to start...")
-    robot_interface.move_home()
 
     if model_to_action_trans.action_mode in (ActionMode.DELTA_TCP, ActionMode.ABS_TCP):
         state = batch["observation.state"]
@@ -171,27 +171,33 @@ def main():
         help="Path to the data directory",
     )
     parser.add_argument(
+        "-s",
         "--server",
         default="localhost:50051",
+        metavar="ADDR",
         help="Robot service server address (default: localhost:50051)",
     )
-
     parser.add_argument(
+        "-e",
         "--episode",
         type=int,
         default=0,
+        metavar="N",
         help="Episode index to run (default: 0)",
     )
     parser.add_argument(
+        "-f",
         "--replay-frequency",
         type=float,
         default=10.0,
+        metavar="HZ",
         help="Frequency to replay the data (default: 10.0 Hz)",
     )
     parser.add_argument(
+        "-c",
         "--continuous-replay",
         action="store_true",
-        help="Whether to continuously loop over the episode and not ask for user input at each action (default: False)",
+        help="Continuously loop without user input (default: False)",
     )
 
     args = parser.parse_args()
