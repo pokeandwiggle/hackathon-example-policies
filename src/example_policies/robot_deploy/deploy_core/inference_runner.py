@@ -7,6 +7,7 @@ from example_policies.robot_deploy.deploy_core.deployment_structures import (
     InferenceConfig,
     PolicyBundle,
 )
+from example_policies.robot_deploy.deploy_core.rollout_recorder import StepResult
 from example_policies.robot_deploy.robot_io.robot_interface import RobotInterface
 from example_policies.utils.action_order import GET_TERMINATION_IDX
 
@@ -26,6 +27,11 @@ class InferenceRunner:
 
     def run_step(self, policy_bundle: PolicyBundle) -> Optional[float]:
         """Execute one inference step. Returns termination signal if present."""
+        result = self.run_step_recorded(policy_bundle)
+        return result.termination_signal
+
+    def run_step_recorded(self, policy_bundle: PolicyBundle) -> StepResult:
+        """Execute one inference step. Returns full StepResult with observation, action, and termination signal."""
         start_time = time.monotonic()
 
         # Reset policy at the very first step
@@ -37,7 +43,7 @@ class InferenceRunner:
 
         if not observation:
             self._wait_for_period(start_time)
-            return None
+            return StepResult()
 
         with torch.inference_mode():
             action, termination_signal = self._process_action(
@@ -61,7 +67,11 @@ class InferenceRunner:
 
         self._wait_for_period(start_time)
         self.step += 1
-        return termination_signal
+        return StepResult(
+            observation=observation,
+            action=action,
+            termination_signal=termination_signal,
+        )
 
     def _process_action(
         self, policy_bundle: PolicyBundle, observation: dict
