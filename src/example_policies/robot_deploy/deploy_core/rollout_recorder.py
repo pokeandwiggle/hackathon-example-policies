@@ -26,6 +26,7 @@ Usage:
 
 from __future__ import annotations
 
+import os
 import pathlib
 from dataclasses import dataclass, field
 from typing import Any
@@ -69,8 +70,11 @@ class RolloutRecorder:
         self._episode_active = False
         self._frame_count = 0
         self._total_episodes = 0
+        self._outcomes: list[str] = []  # per-episode outcome labels
 
         # Create the LeRobot v3.0 dataset
+        # Use threads only (no subprocesses) — multiprocessing image writers
+        # deadlock in Jupyter notebooks after KeyboardInterrupt.
         self.dataset = LeRobotDataset.create(
             repo_id="local_only",
             fps=fps,
@@ -78,7 +82,7 @@ class RolloutRecorder:
             robot_type="panda_bimanual",
             use_videos=True,
             image_writer_threads=4,
-            image_writer_processes=2,
+            image_writer_processes=0,
             features=features,
             vcodec="libsvtav1",
         )
@@ -162,7 +166,7 @@ class RolloutRecorder:
             self.end_episode()
         self._episode_active = True
         self._frame_count = 0
-        print(f"Recording episode {self._total_episodes}...")
+        print(f"Recording episode {self._total_episodes + 1}...")
 
     def record_step(self, step_result: StepResult) -> None:
         """Record a single inference step (observation + action) as one frame.
@@ -208,21 +212,62 @@ class RolloutRecorder:
             n = len(self.dataset.episode_buffer["task"])
             self.dataset.episode_buffer["task"] = [task_label] * n
 
-        self.dataset.save_episode()
+        self._total_episodes += 1
+        print(f"Encoding episode {self._total_episodes} ({self._frame_count} frames)...")
+        self._save_episode_quiet()
         label = f" [{outcome}]" if outcome else ""
         print(f"Saved episode {self._total_episodes} ({self._frame_count} frames){label}")
-        self._total_episodes += 1
+        if outcome:
+            self._outcomes.append(outcome)
         return True
+
+    @property
+    def outcomes(self) -> list[str]:
+        """List of outcome labels (e.g. 'success', 'failure') for each saved episode."""
+        return list(self._outcomes)
+
+    @property
+    def success_rate(self) -> float:
+        """Fraction of episodes rated as 'success'. Returns 0.0 if no outcomes recorded."""
+        if not self._outcomes:
+            return 0.0
+        return sum(1 for o in self._outcomes if o == "success") / len(self._outcomes)
 
     def close(self) -> None:
         """Finalize the dataset. Call this when all rollouts are done."""
         if self._episode_active:
             self.end_episode()
-        self.dataset.finalize()
+        self._run_quiet(self.dataset.finalize)
         print(
             f"RolloutRecorder: dataset finalized at {self.output_dir} "
             f"({self._total_episodes} episodes)"
         )
+
+    # ------------------------------------------------------------------
+    # Helpers to suppress native ffmpeg / SVT-AV1 stderr spam
+    # ------------------------------------------------------------------
+
+    def _run_quiet(self, fn, *args, **kwargs):
+        """Call *fn* while redirecting native stderr to /dev/null.
+
+        SVT-AV1 and ffmpeg write info/warning banners directly to file
+        descriptor 2 (stderr), bypassing Python's logging. Temporarily
+        pointing fd 2 at /dev/null silences them.
+        """
+        stderr_fd = 2
+        saved_fd = os.dup(stderr_fd)
+        try:
+            devnull = os.open(os.devnull, os.O_WRONLY)
+            os.dup2(devnull, stderr_fd)
+            os.close(devnull)
+            return fn(*args, **kwargs)
+        finally:
+            os.dup2(saved_fd, stderr_fd)
+            os.close(saved_fd)
+
+    def _save_episode_quiet(self):
+        """Save episode with video encoding noise suppressed."""
+        self._run_quiet(self.dataset.save_episode, parallel_encoding=False)
 
     def _build_frame(self, step_result: StepResult) -> dict:
         """Convert a StepResult into a flat dict suitable for LeRobotDataset.add_frame()."""

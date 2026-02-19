@@ -19,11 +19,13 @@ class InferenceRunner:
         self,
         robot_interface: RobotInterface,
         config: InferenceConfig,
+        verbose: bool = True,
     ):
         self.robot_interface = robot_interface
         self.config = config
         self.period = 1.0 / config.hz
         self.step = 0
+        self.verbose = verbose
 
     def run_step(self, policy_bundle: PolicyBundle) -> Optional[float]:
         """Execute one inference step. Returns termination signal if present."""
@@ -36,7 +38,8 @@ class InferenceRunner:
 
         # Reset policy at the very first step
         if self.step == 0:
-            print("\n=== RESETTING POLICY ===")
+            if self.verbose:
+                print("\n=== RESETTING POLICY ===")
             policy_bundle.policy.reset()
             
         observation = self.robot_interface.get_observation(policy_bundle.config.device)
@@ -50,14 +53,16 @@ class InferenceRunner:
                 policy_bundle, observation
             )
 
-            print("\n=== RAW MODEL PREDICTION ===")
-            policy_bundle.printer.print(self.step, observation, action, raw_action=True)
+            if self.verbose:
+                print("\n=== RAW MODEL PREDICTION ===")
+                policy_bundle.printer.print(self.step, observation, action, raw_action=True)
 
         action_translated = policy_bundle.translator.translate(action, observation)
-        print("\n=== ABSOLUTE ROBOT COMMANDS ===")
-        policy_bundle.printer.print(
-            self.step, observation, action_translated, raw_action=False
-        )
+        if self.verbose:
+            print("\n=== ABSOLUTE ROBOT COMMANDS ===")
+            policy_bundle.printer.print(
+                self.step, observation, action_translated, raw_action=False
+            )
 
         self.robot_interface.send_action(
             action_translated,
@@ -91,7 +96,8 @@ class InferenceRunner:
         if policy_bundle.has_termination:
             term_index = GET_TERMINATION_IDX(policy_bundle.translator.action_mode)
             termination_signal = action[0, term_index].item()
-            print(f"Termination signal: {termination_signal:.4f}")
+            if self.verbose:
+                print(f"Termination signal: {termination_signal:.4f}")
 
         return action, termination_signal
 
@@ -100,6 +106,7 @@ class InferenceRunner:
         elapsed = time.monotonic() - start_time
         sleep_time = self.period - elapsed
         if sleep_time < 0:
-            print(f"Warning: cannot maintain desired frequency of {self.config.hz} Hz")
+            if self.verbose:
+                print(f"Warning: cannot maintain desired frequency of {self.config.hz} Hz")
         else:
             time.sleep(sleep_time)
