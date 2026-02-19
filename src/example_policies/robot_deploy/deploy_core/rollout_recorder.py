@@ -181,8 +181,13 @@ class RolloutRecorder:
         self.dataset.add_frame(frame)
         self._frame_count += 1
 
-    def end_episode(self) -> bool:
+    def end_episode(self, outcome: str | None = None) -> bool:
         """End the current episode and save it.
+
+        Args:
+            outcome: Optional label like ``"success"`` or ``"failure"``.
+                If provided, the task string for every frame in this episode
+                is updated to ``"{task_name} ({outcome})"`` before saving.
 
         Returns:
             True if the episode was saved (had frames), False otherwise.
@@ -197,8 +202,15 @@ class RolloutRecorder:
             print("Episode had no frames, skipping save.")
             return False
 
+        # Relabel task with outcome before saving
+        if outcome and self.dataset.episode_buffer is not None:
+            task_label = f"{self.task_name} ({outcome})"
+            n = len(self.dataset.episode_buffer["task"])
+            self.dataset.episode_buffer["task"] = [task_label] * n
+
         self.dataset.save_episode()
-        print(f"Saved episode {self._total_episodes} ({self._frame_count} frames)")
+        label = f" [{outcome}]" if outcome else ""
+        print(f"Saved episode {self._total_episodes} ({self._frame_count} frames){label}")
         self._total_episodes += 1
         return True
 
