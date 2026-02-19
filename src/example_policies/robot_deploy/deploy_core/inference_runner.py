@@ -7,6 +7,7 @@ from example_policies.robot_deploy.deploy_core.deployment_structures import (
     InferenceConfig,
     PolicyBundle,
 )
+from example_policies.robot_deploy.deploy_core.rollout_recorder import StepResult
 from example_policies.robot_deploy.robot_io.robot_interface import RobotInterface
 from example_policies.utils.action_order import GET_TERMINATION_IDX
 
@@ -18,40 +19,50 @@ class InferenceRunner:
         self,
         robot_interface: RobotInterface,
         config: InferenceConfig,
+        verbose: bool = True,
     ):
         self.robot_interface = robot_interface
         self.config = config
         self.period = 1.0 / config.hz
         self.step = 0
+        self.verbose = verbose
 
     def run_step(self, policy_bundle: PolicyBundle) -> Optional[float]:
         """Execute one inference step. Returns termination signal if present."""
+        result = self.run_step_recorded(policy_bundle)
+        return result.termination_signal
+
+    def run_step_recorded(self, policy_bundle: PolicyBundle) -> StepResult:
+        """Execute one inference step. Returns full StepResult with observation, action, and termination signal."""
         start_time = time.monotonic()
 
         # Reset policy at the very first step
         if self.step == 0:
-            print("\n=== RESETTING POLICY ===")
+            if self.verbose:
+                print("\n=== RESETTING POLICY ===")
             policy_bundle.policy.reset()
             
         observation = self.robot_interface.get_observation(policy_bundle.config.device)
 
         if not observation:
             self._wait_for_period(start_time)
-            return None
+            return StepResult()
 
         with torch.inference_mode():
             action, termination_signal = self._process_action(
                 policy_bundle, observation
             )
 
-            print("\n=== RAW MODEL PREDICTION ===")
-            policy_bundle.printer.print(self.step, observation, action, raw_action=True)
+            if self.verbose:
+                print("\n=== RAW MODEL PREDICTION ===")
+                policy_bundle.printer.print(self.step, observation, action, raw_action=True)
 
         action_translated = policy_bundle.translator.translate(action, observation)
-        print("\n=== ABSOLUTE ROBOT COMMANDS ===")
-        policy_bundle.printer.print(
-            self.step, observation, action_translated, raw_action=False
-        )
+        if self.verbose:
+            print("\n=== ABSOLUTE ROBOT COMMANDS ===")
+            policy_bundle.printer.print(
+                self.step, observation, action_translated, raw_action=False
+            )
 
         self.robot_interface.send_action(
             action_translated,
@@ -61,7 +72,11 @@ class InferenceRunner:
 
         self._wait_for_period(start_time)
         self.step += 1
-        return termination_signal
+        return StepResult(
+            observation=observation,
+            action=action,
+            termination_signal=termination_signal,
+        )
 
     def _process_action(
         self, policy_bundle: PolicyBundle, observation: dict
@@ -81,7 +96,8 @@ class InferenceRunner:
         if policy_bundle.has_termination:
             term_index = GET_TERMINATION_IDX(policy_bundle.translator.action_mode)
             termination_signal = action[0, term_index].item()
-            print(f"Termination signal: {termination_signal:.4f}")
+            if self.verbose:
+                print(f"Termination signal: {termination_signal:.4f}")
 
         return action, termination_signal
 
@@ -90,6 +106,7 @@ class InferenceRunner:
         elapsed = time.monotonic() - start_time
         sleep_time = self.period - elapsed
         if sleep_time < 0:
-            print(f"Warning: cannot maintain desired frequency of {self.config.hz} Hz")
+            if self.verbose:
+                print(f"Warning: cannot maintain desired frequency of {self.config.hz} Hz")
         else:
             time.sleep(sleep_time)

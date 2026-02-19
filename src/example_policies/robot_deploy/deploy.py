@@ -23,7 +23,7 @@ HOME_CONFIGS = {
 }
 
 # Gripper open width in meters
-GRIPPER_OPEN_WIDTH = 0.08
+GRIPPER_OPEN_WIDTH = 1.0
 GRIPPER_SPEED = 0.1  # m/s
 GRIPPER_FORCE = 50.0  # N
 

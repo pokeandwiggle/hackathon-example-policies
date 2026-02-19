@@ -108,7 +108,8 @@ class DatasetWriter:
                     # Lazily parse the frame only if it's needed for at least one dataset
                     frame = self.frame_parser.parse_frame(frame_buffer)
                     frame = self.frame_assembler.assemble(frame)
-                self.datasets[target].add_frame(frame, task=self.cfg.task_name)
+                frame["task"] = self.cfg.task_name
+                self.datasets[target].add_frame(frame)
                 self.dataset_frame_counter[target] += 1
                 performed_save = True
         return performed_save
