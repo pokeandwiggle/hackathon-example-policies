@@ -34,6 +34,10 @@ ACTION_MODE_STATE_MAP = {
     + [f"joint_pos_right_{i}" for i in range(7)],
     ActionMode.DELTA_JOINT: [f"joint_pos_left_{i}" for i in range(7)]
     + [f"joint_pos_right_{i}" for i in range(7)],
+    ActionMode.UMI_DELTA_TCP: [f"tcp_left_pos_{i}" for i in "xyz"]
+    + [f"tcp_left_quat_{i}" for i in "xyzw"]
+    + [f"tcp_right_pos_{i}" for i in "xyz"]
+    + [f"tcp_right_quat_{i}" for i in "xyzw"],
 }
 
 ACTION_MODE_ACTION_MAP = {
@@ -57,6 +61,11 @@ ACTION_MODE_ACTION_MAP = {
     + ["gripper_left", "gripper_right"],
     ActionMode.DELTA_JOINT: [f"joint_pos_left_{i}" for i in range(7)]
     + [f"joint_pos_right_{i}" for i in range(7)]
+    + ["gripper_left", "gripper_right"],
+    ActionMode.UMI_DELTA_TCP: [f"umi_delta_tcp_left_dpos_{i}" for i in "xyz"]
+    + [f"umi_delta_tcp_left_rot6d_{i}" for i in range(6)]
+    + [f"umi_delta_tcp_right_dpos_{i}" for i in "xyz"]
+    + [f"umi_delta_tcp_right_rot6d_{i}" for i in range(6)]
     + ["gripper_left", "gripper_right"],
 }
 
@@ -107,10 +116,14 @@ class InfoPrinter:
             if self.action_mode == ActionMode.DELTA_JOINT:
                 print_joint_delta(step, obs, action)
                 return
+            if self.action_mode == ActionMode.UMI_DELTA_TCP:
+                print_umi_delta_tcp(step, obs, action)
+                return
         if self.action_mode in (
             ActionMode.TCP,
             ActionMode.TELEOP,
             ActionMode.DELTA_TCP,
+            ActionMode.UMI_DELTA_TCP,
         ):
             print_tcp_abs(step, obs, action)
             return
@@ -203,6 +216,25 @@ def print_tcp_abs(step: int, state: torch.Tensor, action: torch.Tensor):
         " Pred",
         _format_tensor(r_quat_a),
     )
+    print(" Grippers (L,R)", _format_tensor(grips))
+
+
+def print_umi_delta_tcp(step: int, state: torch.Tensor, action: torch.Tensor):
+    """Pretty print UMI-delta TCP raw model output (20-dim).
+
+    Layout: L dpos(3) + L rot6d(6) + R dpos(3) + R rot6d(6) + grip_L + grip_R
+    """
+    print(f"=== Step {step} | UMI Delta TCP ===")
+    l_dpos = action[0, 0:3]
+    l_rot6d = action[0, 3:9]
+    r_dpos = action[0, 9:12]
+    r_rot6d = action[0, 12:18]
+    grips = action[0, 18:20]
+
+    print(" Left  ΔPos  ", _format_tensor(l_dpos))
+    print(" Left  Rot6D ", _format_tensor(l_rot6d))
+    print(" Right ΔPos  ", _format_tensor(r_dpos))
+    print(" Right Rot6D ", _format_tensor(r_rot6d))
     print(" Grippers (L,R)", _format_tensor(grips))
 
 

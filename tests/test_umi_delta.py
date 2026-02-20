@@ -562,6 +562,7 @@ class TestActionModeUMIDelta:
     def test_parse_umi_delta_tcp(self):
         """Should correctly parse action mode from feature names."""
         cfg = Mock()
+        cfg.use_chunk_relative_actions = False
         cfg.output_features = {"action": Mock()}
         cfg.output_features["action"].shape = [20]
         cfg.metadata = {
@@ -596,9 +597,36 @@ class TestActionModeUMIDelta:
         mode = ActionMode.parse_action_mode(cfg)
         assert mode == ActionMode.UMI_DELTA_TCP
 
+    def test_parse_chunk_relative_config_flag(self):
+        """Should detect UMI-delta from use_chunk_relative_actions config flag.
+        
+        When trained with use_chunk_relative_actions=True on an abs TCP dataset,
+        the saved config has output_features.action.shape=[16] and tcp_* names
+        from the original dataset, but the model actually outputs 20-dim UMI-delta.
+        """
+        cfg = Mock()
+        cfg.use_chunk_relative_actions = True
+        cfg.output_features = {"action": Mock()}
+        cfg.output_features["action"].shape = [16]  # original dataset shape
+        cfg.metadata = {
+            "features": {
+                "action": {
+                    "names": [f"tcp_left_pos_{c}" for c in "xyz"]
+                        + [f"tcp_left_quat_{c}" for c in "xyzw"]
+                        + [f"tcp_right_pos_{c}" for c in "xyz"]
+                        + [f"tcp_right_quat_{c}" for c in "xyzw"]
+                        + ["left_gripper", "right_gripper"],
+                }
+            }
+        }
+
+        mode = ActionMode.parse_action_mode(cfg)
+        assert mode == ActionMode.UMI_DELTA_TCP
+
     def test_umi_delta_not_confused_with_delta_tcp(self):
         """UMI delta should not be parsed as regular delta TCP."""
         cfg = Mock()
+        cfg.use_chunk_relative_actions = False
         cfg.output_features = {"action": Mock()}
         cfg.output_features["action"].shape = [20]
         cfg.metadata = {
@@ -616,6 +644,7 @@ class TestActionModeUMIDelta:
     def test_delta_tcp_still_works(self):
         """Regular delta TCP should still parse correctly."""
         cfg = Mock()
+        cfg.use_chunk_relative_actions = False
         cfg.output_features = {"action": Mock()}
         cfg.output_features["action"].shape = [14]
         cfg.metadata = {

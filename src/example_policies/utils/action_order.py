@@ -36,6 +36,12 @@ class ActionMode(Enum):
     def parse_action_mode(cfg):
         action_shape = cfg.output_features[ACTION].shape[0]
 
+        # Check config flag first — most reliable for chunk-relative models
+        # where the dataset has abs TCP names/shape but the model outputs
+        # UMI-delta (20-dim) actions.
+        if getattr(cfg, "use_chunk_relative_actions", False):
+            return ActionMode.UMI_DELTA_TCP
+
         # Fallback for early legacy models
         if not getattr(cfg, "metadata", None):
             action_mode = ActionMode.DELTA_TCP if action_shape == 14 else ActionMode.TCP
@@ -44,6 +50,11 @@ class ActionMode(Enum):
         names: list[str] = cfg.metadata["features"][ACTION]["names"]
 
         if any("umi_delta_tcp" in n for n in names):
+            action_mode = ActionMode.UMI_DELTA_TCP
+        elif action_shape == UMI_ACTION_DIM and any(n.startswith("tcp_") for n in names):
+            # Pre-converted UMI-delta dataset: shape is 20 but metadata
+            # still has tcp_* names (from the original dataset info copied
+            # into the checkpoint by monkey_patch_save_checkpoint).
             action_mode = ActionMode.UMI_DELTA_TCP
         elif any("delta_tcp" in n for n in names):
             action_mode = ActionMode.DELTA_TCP

@@ -120,8 +120,16 @@ def monkey_patch_save_checkpoint():
     train_utils.save_checkpoint = patched_save_checkpoint
 
 
+def _register_custom_processor_steps():
+    """Import custom processor modules so their @ProcessorStepRegistry.register()
+    decorators fire before any from_pretrained() call tries to resolve them."""
+    import example_policies.utils.stepwise_processor  # noqa: F401
+    import example_policies.utils.chunk_relative_processor  # noqa: F401
+
+
 def apply_patches():
     """Apply all required monkey patches for lerobot compatibility."""
     monkey_patch_policy_factory()
     monkey_patch_video_query()
     monkey_patch_save_checkpoint()
+    _register_custom_processor_steps()

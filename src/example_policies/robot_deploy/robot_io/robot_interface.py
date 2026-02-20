@@ -61,7 +61,7 @@ class RobotInterface:
             )
         ]
 
-        if action_mode in (ActionMode.DELTA_TCP, ActionMode.TCP, ActionMode.TELEOP):
+        if action_mode in (ActionMode.DELTA_TCP, ActionMode.TCP, ActionMode.TELEOP, ActionMode.UMI_DELTA_TCP):
             target = _build_cart_target(numpy_action, action_mode)
 
             if ctrl_mode == RobotClient.CART_DIRECT:
