@@ -287,6 +287,7 @@ class _DiTNoiseNet(nn.Module):
         activation="gelu",
         clip_sample=False,
         clip_sample_range=1.0,
+        clip_sample_skip_indices: list[int] | None = None,
     ):
         super().__init__()
         self.ac_dim, self.ac_chunk = ac_dim, ac_chunk
@@ -323,6 +324,10 @@ class _DiTNoiseNet(nn.Module):
         # clip the output samples
         self.clip_sample = clip_sample
         self.clip_sample_range = clip_sample_range
+        # Feature indices to skip during clipping (e.g. 6D rotation columns
+        # which live in [-1,1] and should not be clamped — consistent with TRI
+        # LBM §4.4.2 which excludes rotation features from normalization/clipping).
+        self.clip_sample_skip_indices = clip_sample_skip_indices
 
         print(
             "Number of flow params: {:.2f}M".format(
@@ -374,7 +379,20 @@ class _DiTNoiseNet(nn.Module):
             t = t_all[:, k]
             x_0 = x_0 + dt * self.forward(x_0, t, condition)
             if self.clip_sample:
-                x_0 = torch.clamp(x_0, -self.clip_sample_range, self.clip_sample_range)
+                if self.clip_sample_skip_indices:
+                    # Build a mask for features that should be clipped
+                    # (skip rotation features to avoid corrupting their geometry)
+                    clip_mask = torch.ones(self.ac_dim, device=device, dtype=torch.bool)
+                    clip_mask[self.clip_sample_skip_indices] = False
+                    x_0[:, :, clip_mask] = torch.clamp(
+                        x_0[:, :, clip_mask],
+                        -self.clip_sample_range,
+                        self.clip_sample_range,
+                    )
+                else:
+                    x_0 = torch.clamp(
+                        x_0, -self.clip_sample_range, self.clip_sample_range
+                    )
         return x_0
 
     def sample_noise(
@@ -554,6 +572,11 @@ class DiTFlowModel(nn.Module):
             activation=config.activation,
             clip_sample=config.clip_sample,
             clip_sample_range=config.clip_sample_range,
+            clip_sample_skip_indices=(
+                list(config.stepwise_skip_feature_indices)
+                if config.stepwise_skip_feature_indices
+                else None
+            ),
         )
 
         self.num_inference_steps = config.num_inference_steps or 100
