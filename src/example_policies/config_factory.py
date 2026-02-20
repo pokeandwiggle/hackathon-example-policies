@@ -41,6 +41,7 @@ class PolicyConfigBase(ABC):
     wandb_enable: bool = True
     wandb_entity: Optional[str] = None
     wandb_project: str = "lerobot"
+    video_backend: str = "pyav"  # "torchcodec" or "pyav"
     policy_kwargs: dict = field(default_factory=dict)
     pretrained_actions: bool = False
     build_exp_name_dir: bool = True
@@ -126,6 +127,8 @@ class PolicyConfigBase(ABC):
         cfg.wandb.disable_artifact = True
         cfg.wandb.project = self.wandb_project
         cfg.wandb.entity = self.wandb_entity
+
+        cfg.dataset.video_backend = self.video_backend
 
         if self.lr is not None:
             cfg.policy.optimizer_lr = self.lr
@@ -399,7 +402,13 @@ class Pi0FastConfig(PolicyConfigBase):
 
 @dataclass
 class DiTFlowConfig(PolicyConfigBase):
-    """DiT Flow Policy Configuration."""
+    """DiT Flow Policy Configuration.
+
+    Set ``use_chunk_relative_actions=True`` to convert absolute TCP actions
+    to chunk-relative UMI-delta (20-dim) at training time.  When enabled,
+    stepwise normalization is also applied and statistics are computed from
+    the dataset parquet files using the configured ``horizon``.
+    """
 
     batch_size: int = 64
     lr: float = 2e-4
@@ -408,7 +417,10 @@ class DiTFlowConfig(PolicyConfigBase):
     n_obs_steps: int = 2
     horizon: int = 16
     n_action_steps: int = 8
-    
+
+    # Chunk-relative UMI-delta conversion (opt-in)
+    use_chunk_relative_actions: bool = False
+
     # Image preprocessing
     crop_shape: tuple[int, int] = (224, 224)
     crop_is_random: bool = True  # Random crop during training, center crop during eval
@@ -417,19 +429,58 @@ class DiTFlowConfig(PolicyConfigBase):
     pretrained_backbone_weights: str | None = "IMAGENET1K_V1"  # Pretrained ImageNet weights
     use_group_norm: bool = True  # Replace BatchNorm with GroupNorm (Stanford approach)
 
-    # # Weight for SO3 Aware Trajectory integration loss. Recommended: 0.0 to disable. 0.01 to start.
-    # integrated_so3_loss_weight: float = 0.0
-    # # Weight for focal loss on termination signal. Recommended: 0.0 to disable. 10.0 to start.
-    # termination_focal_loss_weight: float = 0.0
-    # termination_focal_loss_index: int = -1
-
     @property
     def model_name(self) -> str:
         return "ditflow"
 
+    def _is_abs_tcp_dataset(self) -> bool:
+        """Check whether the dataset uses absolute TCP actions.
+
+        Returns ``True`` if the action feature names contain "tcp_"
+        prefixed names (e.g. ``tcp_left_pos_x``).
+        """
+        import json
+
+        info_path = pathlib.Path(self.dataset_root_dir) / "meta" / "info.json"
+        if not info_path.exists():
+            return False
+        info = json.loads(info_path.read_text())
+        names = info.get("features", {}).get("action", {}).get("names", [])
+        return any(n.startswith("tcp_") for n in names)
+
+    def _get_obs_tcp_indices(self) -> dict[str, list[int]]:
+        """Look up TCP pose indices in observation.state from info.json.
+
+        Returns a dict with keys ``obs_tcp_{left,right}_{pos,quat}_indices``,
+        each mapping to a list of integer indices into the state vector.
+        """
+        import json
+
+        info_path = pathlib.Path(self.dataset_root_dir) / "meta" / "info.json"
+        info = json.loads(info_path.read_text())
+        state_names = (
+            info.get("features", {}).get("observation.state", {}).get("names", [])
+        )
+        if not state_names:
+            raise ValueError(
+                "observation.state feature names not found in info.json. "
+                "Cannot determine TCP pose indices for chunk-relative conversion."
+            )
+
+        def _find_indices(prefix: str, count: int) -> list[int]:
+            start = state_names.index(prefix)
+            return list(range(start, start + count))
+
+        return {
+            "obs_tcp_left_pos_indices": _find_indices("tcp_left_pos_x", 3),
+            "obs_tcp_left_quat_indices": _find_indices("tcp_left_quat_x", 4),
+            "obs_tcp_right_pos_indices": _find_indices("tcp_right_pos_x", 3),
+            "obs_tcp_right_quat_indices": _find_indices("tcp_right_quat_x", 4),
+        }
+
     @property
     def default_policy_kwargs(self) -> dict:
-        return {
+        base = {
             "n_obs_steps": self.n_obs_steps,
             "horizon": self.horizon,
             "n_action_steps": self.n_action_steps,
@@ -437,7 +488,41 @@ class DiTFlowConfig(PolicyConfigBase):
             "crop_is_random": self.crop_is_random,
             "pretrained_backbone_weights": self.pretrained_backbone_weights,
             "use_group_norm": self.use_group_norm,
-            # "integrated_so3_loss_weight": self.integrated_so3_loss_weight,
-            # "termination_focal_loss_weight": self.termination_focal_loss_weight,
-            # "termination_focal_loss_index": self.termination_focal_loss_index,
         }
+
+        if self.use_chunk_relative_actions:
+            if not self._is_abs_tcp_dataset():
+                raise ValueError(
+                    "use_chunk_relative_actions=True requires a dataset with "
+                    "absolute TCP actions (feature names starting with 'tcp_')."
+                )
+            # ── Absolute TCP dataset → chunk-relative conversion at training time ──
+            from .utils.action_order import UMI_ROTATION_FEATURE_INDICES
+            from .utils.compute_stepwise_stats import (
+                compute_stepwise_stats_from_parquet,
+            )
+
+            tcp_indices = self._get_obs_tcp_indices()
+
+            stats_path = compute_stepwise_stats_from_parquet(
+                self.dataset_root_dir,
+                horizon=self.horizon,
+                obs_tcp_left_pos_indices=tcp_indices["obs_tcp_left_pos_indices"],
+                obs_tcp_left_quat_indices=tcp_indices["obs_tcp_left_quat_indices"],
+                obs_tcp_right_pos_indices=tcp_indices["obs_tcp_right_pos_indices"],
+                obs_tcp_right_quat_indices=tcp_indices["obs_tcp_right_quat_indices"],
+            )
+
+            base.update(
+                {
+                    "use_chunk_relative_actions": True,
+                    **tcp_indices,
+                    "use_stepwise_normalization": True,
+                    "stepwise_stats_path": stats_path,
+                    "stepwise_skip_feature_indices": list(UMI_ROTATION_FEATURE_INDICES),
+                    "stepwise_clip_min": -1.5,
+                    "stepwise_clip_max": 1.5,
+                    "clip_sample_range": 1.5,
+                }
+            )
+        return base

@@ -85,6 +85,7 @@ class ActionAssembler:
 
             # UPDATE history to current absolute
             new_last = LastCommand(left=left_abs.copy(), right=right_abs.copy())
+
         else:
             raise NotImplementedError(f"Unsupported action level: {action_level}")
 

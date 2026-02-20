@@ -387,7 +387,6 @@ def main():
     print(f"  - Action level: {config.action_level}")
     print(f"  - Image resolution: {config.image_resolution}")
     print(f"  - Task: {config.task_name}")
-
     # Validate push_to_hub requires repo_id
     if config.push_to_hub and not config.repo_id:
         raise ValueError("--repo_id is required when using --push_to_hub")

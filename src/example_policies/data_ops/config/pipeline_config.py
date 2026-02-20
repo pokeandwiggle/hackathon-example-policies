@@ -39,6 +39,11 @@ class PipelineConfig:
           Dim = 14. rotvec = axis * angle (radians), magnitude = rotation angle. Integration downstream
           must consistently apply either left-multiplication on SO(3) via exp(rotvec) ⊗ quat_prev or
           right-multiplication; mixing conventions degrades policy quality.
+      - UMI_DELTA_TCP:
+          Same storage layout as TCP (absolute TCP poses, dim = 16).  At training time
+          the chunk-relative processor converts to 20-dim UMI deltas (pos-delta + 6D-rot
+          per arm + grippers) and stepwise percentile normalization is applied
+          automatically by the config factory.
       - JOINT:
           Action = [ left_joint_0..6 (7), right_joint_0..6 (7), gripper_left(1), gripper_right(1) ]
           Dim = 16. Absolute target joint angles (radians).
@@ -93,6 +98,11 @@ class PipelineConfig:
     # Gripper type
     left_gripper: GripperType = GripperType.PANDA
     right_gripper: GripperType = GripperType.PANDA
+
+    # When True, store only 1 gripper value per side in observation.state
+    # (e.g. finger_joint1 position).  Legacy TCP / DELTA_TCP modes use 2
+    # finger‐joint positions per side, so this should remain False for those.
+    use_single_gripper_value: bool = False
 
     # Termination Signal Processing
     termination_horizon_seconds: float = 0.0
@@ -149,6 +159,7 @@ class PipelineConfig:
             ActionMode.TCP,
             ActionMode.DELTA_TCP,
             ActionMode.TELEOP,
+            ActionMode.UMI_DELTA_TCP,
         ]
 
     def is_joint_action(self) -> bool:
@@ -190,6 +201,7 @@ def build_features(config: PipelineConfig) -> Dict[str, Any]:
         left_gripper=config.left_gripper,
         right_gripper=config.right_gripper,
         include_last_command=config.include_last_command,
+        use_single_gripper_value=config.use_single_gripper_value,
     )
     state_names = state_spec.get_feature_names()
 
@@ -200,7 +212,7 @@ def build_features(config: PipelineConfig) -> Dict[str, Any]:
     }
 
     # Build action features (always TCP poses for now)
-    if config.action_level in [ActionMode.TCP, ActionMode.TELEOP]:
+    if config.action_level in [ActionMode.TCP, ActionMode.TELEOP, ActionMode.UMI_DELTA_TCP]:
         names = [f"tcp_left_{i}" for i in "xyz"]
         names += [f"tcp_left_quat_{i}" for i in "xyzw"]
         names += [f"tcp_right_{i}" for i in "xyz"]

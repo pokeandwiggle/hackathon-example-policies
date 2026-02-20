@@ -68,6 +68,13 @@ def parse_args():
         metavar="PATH",
         help="Output path for the figure (default: actions_episode<E>.png)",
     )
+    parser.add_argument(
+        "--video_backend",
+        type=str,
+        default="pyav",
+        choices=["torchcodec", "pyav"],
+        help="Video decoding backend (default: pyav)",
+    )
     args = parser.parse_args()
     return args
 
@@ -84,15 +91,7 @@ def main():
     dataset = LeRobotDataset(
         repo_id=args.dataset,
         root=args.dataset,
-    )
-
-    dataloader = torch.utils.data.DataLoader(
-        dataset,
-        num_workers=8,
-        batch_size=1,
-        shuffle=False,  # Not shuffling, so processing sequential batches from the dataset
-        pin_memory=device != "cpu",
-        drop_last=False,
+        video_backend=args.video_backend,
     )
 
     ep = args.episode
@@ -102,14 +101,11 @@ def main():
     action_dim = None
     episode_started = False
 
-    def _fmt(v: torch.Tensor, w=9, p=3):
-        return f"{float(v):{w}.{p}f}"
-
-    for batch in dataloader:
-        b_ep = batch.get("episode_index")
-        if b_ep is None:
-            raise KeyError("Expected key 'episode_index' in batch.")
-        b_ep = int(b_ep.view(-1)[0].item())
+    # Iterate samples directly (no DataLoader) so images stay (C, H, W)
+    # matching the deployment pattern that select_action expects.
+    for idx in range(len(dataset)):
+        sample = dataset[idx]
+        b_ep = int(sample["episode_index"].item())
 
         if b_ep < ep:
             continue
@@ -121,23 +117,22 @@ def main():
             policy.reset()
             episode_started = True
 
-        batch = to_device_batch(
-            batch, device, non_blocking=True
-        )  # Push all tensors of the batch to the GPU
+        sample = to_device_batch(sample, device, non_blocking=True)
 
-        tgt = batch["action"].detach().float().view(-1)
+        tgt = sample["action"].detach().float().view(-1)
         if action_dim is None:
-            action_dim = tgt.numel()  # Only load the action dimension once
-        
+            action_dim = tgt.numel()
+
+        # Remove action from batch before preprocessing — during deployment
+        # the observation dict never contains actions.
+        obs = {k: v for k, v in sample.items() if k != "action"}
+
         # Apply preprocessor if available (normalization)
-        obs = batch
         if preprocessor is not None:
-            obs = preprocessor(batch)
-        
-        action = policy.select_action(
-            obs
-        )  # This is the output of the action chunk. Could be more or less.
-        
+            obs = preprocessor(obs)
+
+        action = policy.select_action(obs)
+
         # Apply postprocessor if available (unnormalization)
         if postprocessor is not None:
             action = postprocessor(action)
@@ -149,7 +144,7 @@ def main():
         preds.append(pred.cpu())
 
         # append the time
-        t = float(batch["timestamp"].view(-1)[0].detach().cpu().item())
+        t = float(sample["timestamp"].detach().cpu().item())
         times.append(t)
 
     # stack T x D
@@ -170,7 +165,7 @@ def main():
         ax.grid(True, linestyle="--", alpha=0.3)
         if d == 0:
             ax.set_title(f"Episode {ep}: action targets vs. predictions")
-    axes[-1].set_xlabel("time (s)" if "timestamp" in batch else "step")
+    axes[-1].set_xlabel("time (s)")
 
     # single legend outside if many dims
     handles, labels = axes[0].get_legend_handles_labels()
