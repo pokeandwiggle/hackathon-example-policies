@@ -127,6 +127,12 @@ def main():
         # the observation dict never contains actions.
         obs = {k: v for k, v in sample.items() if k != "action"}
 
+        # Detect whether a new action chunk will be predicted this step.
+        _queues = getattr(policy, "_queues", None)
+        is_new_chunk = (
+            _queues is not None and len(_queues.get("action", [])) == 0
+        )
+
         # Apply preprocessor if available (normalization)
         if preprocessor is not None:
             obs = preprocessor(obs)
@@ -134,9 +140,25 @@ def main():
         action = policy.select_action(obs)
 
         # Apply postprocessor if available (unnormalization)
+        # For stepwise unnormalizers we must unnormalize the full chunk at once
+        # so each timestep gets its correct per-step stats (p02[k], p98[k]).
         if postprocessor is not None:
-            action = postprocessor(action)
-        
+            if is_new_chunk and _queues is not None:
+                queue = policy._queues["action"]
+                remaining = list(queue)
+                full_chunk = torch.stack([action] + remaining, dim=1)
+                full_chunk = postprocessor(full_chunk)
+                action = full_chunk[:, 0]
+                queue.clear()
+                for t in range(1, full_chunk.shape[1]):
+                    queue.append(full_chunk[:, t])
+            elif not is_new_chunk and _queues is not None:
+                # Already unnormalized when the chunk was processed.
+                pass
+            else:
+                # No queue (e.g. ACT) — unnormalize individually.
+                action = postprocessor(action)
+
         pred = action.detach().float().view(-1)
 
         # collect
