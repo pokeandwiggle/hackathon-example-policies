@@ -125,12 +125,31 @@ class RolloutRecorder:
         }
 
         # -- action --
-        action_info = features_meta["action"]
-        features["action"] = {
-            "dtype": "float32",
-            "shape": tuple(action_info["shape"]),
-            "names": action_info["names"],
-        }
+        # When chunk-relative actions are enabled the model outputs 20-dim
+        # UMI-delta actions, but the checkpoint metadata still stores the
+        # original 16-dim TCP shape.  Override to match the actual output.
+        if getattr(cfg, "use_chunk_relative_actions", False):
+            from example_policies.utils.action_order import UMI_ACTION_DIM
+
+            umi_action_names = (
+                [f"umi_delta_tcp_left_dpos_{i}" for i in "xyz"]
+                + [f"umi_delta_tcp_left_rot6d_{i}" for i in range(6)]
+                + [f"umi_delta_tcp_right_dpos_{i}" for i in "xyz"]
+                + [f"umi_delta_tcp_right_rot6d_{i}" for i in range(6)]
+                + ["gripper_left", "gripper_right"]
+            )
+            features["action"] = {
+                "dtype": "float32",
+                "shape": (UMI_ACTION_DIM,),
+                "names": umi_action_names,
+            }
+        else:
+            action_info = features_meta["action"]
+            features["action"] = {
+                "dtype": "float32",
+                "shape": tuple(action_info["shape"]),
+                "names": action_info["names"],
+            }
 
         # -- images (video features) --
         for key, info in features_meta.items():
