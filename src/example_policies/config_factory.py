@@ -519,7 +519,7 @@ class DiTFlowConfig(PolicyConfigBase):
                     **tcp_indices,
                     "use_stepwise_normalization": True,
                     "stepwise_stats_path": stats_path,
-                    "stepwise_skip_feature_indices": list(UMI_ROTATION_FEATURE_INDICES),
+                    "stepwise_skip_feature_indices": [], #list(UMI_ROTATION_FEATURE_INDICES),
                     "stepwise_clip_min": -1.5,
                     "stepwise_clip_max": 1.5,
                     "clip_sample_range": 1.5,
