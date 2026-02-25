@@ -324,10 +324,12 @@ class _DiTNoiseNet(nn.Module):
         # clip the output samples
         self.clip_sample = clip_sample
         self.clip_sample_range = clip_sample_range
-        # Feature indices to skip during clipping (e.g. 6D rotation columns
-        # which live in [-1,1] and should not be clamped — consistent with TRI
-        # LBM §4.4.2 which excludes rotation features from normalization/clipping).
-        self.clip_sample_skip_indices = clip_sample_skip_indices
+        # NOTE: We clip ALL features uniformly (including 6D rotation columns).
+        # TRI LBM §4.4.2 excludes rotations from *normalization* only, not from
+        # ODE sample clipping.  Since rotation values are in [-1,1] and the clip
+        # range is 1.5, the clamp never affects converged values but constrains
+        # wild intermediate ODE states.
+        self.clip_sample_skip_indices = None
 
         print(
             "Number of flow params: {:.2f}M".format(
@@ -572,11 +574,7 @@ class DiTFlowModel(nn.Module):
             activation=config.activation,
             clip_sample=config.clip_sample,
             clip_sample_range=config.clip_sample_range,
-            clip_sample_skip_indices=(
-                list(config.stepwise_skip_feature_indices)
-                if config.stepwise_skip_feature_indices
-                else None
-            ),
+            clip_sample_skip_indices=None,  # clip all features uniformly during ODE integration
         )
 
         self.num_inference_steps = config.num_inference_steps or 100

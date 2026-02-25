@@ -131,10 +131,16 @@ def make_ditflow_pre_post_processors(
             clip_min=config.stepwise_clip_min,
             clip_max=config.stepwise_clip_max,
         )
+        # At inference, generate_actions() slices model output at
+        # [:, n_obs_steps-1 :] to discard the "backwards" action positions.
+        # The unnormalizer must use the same stats offset so each action gets
+        # the per-step stats it was normalised with during training.
+        unnorm_start_step = config.n_obs_steps - 1
         stepwise_unnormalizer = StepwiseUnnormalizerProcessorStep(
             p_low=p_low,
             p_high=p_high,
             skip_feature_indices=config.stepwise_skip_feature_indices,
+            start_step=unnorm_start_step,
         )
 
     # ── Preprocessor (training & eval input) ─────────────────────────────

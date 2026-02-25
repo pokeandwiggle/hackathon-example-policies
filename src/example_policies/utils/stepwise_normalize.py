@@ -164,6 +164,11 @@ class StepwisePercentileUnnormalize(nn.Module):
         p02: 2nd-percentile statistic per (timestep, feature). Shape ``(H, D)``.
         p98: 98th-percentile statistic per (timestep, feature). Shape ``(H, D)``.
         skip_feature_indices: Feature-dimension indices that were left un-normalised.
+        start_step: Offset into the stats horizon to account for the action
+            chunk slice at inference time.  When ``generate_actions`` discards
+            the first ``n_obs_steps - 1`` positions, the unnormalizer must use
+            ``p02[start_step : start_step + H]`` so that each action gets the
+            same per-step stats it was normalised with during training.
     """
 
     def __init__(
@@ -171,6 +176,7 @@ class StepwisePercentileUnnormalize(nn.Module):
         p02: Tensor,
         p98: Tensor,
         skip_feature_indices: Sequence[int] | None = None,
+        start_step: int = 0,
     ) -> None:
         super().__init__()
         assert p02.shape == p98.shape
@@ -178,6 +184,7 @@ class StepwisePercentileUnnormalize(nn.Module):
 
         self.register_buffer("p02", p02.clone().float())
         self.register_buffer("p98", p98.clone().float())
+        self.start_step = start_step
 
         mask = torch.ones(p02.shape[-1], dtype=torch.bool)
         if skip_feature_indices is not None:
@@ -205,11 +212,15 @@ class StepwisePercentileUnnormalize(nn.Module):
             squeeze = True
 
         B, H, D = x.shape
-        assert H <= self.p02.shape[0]
+        s = self.start_step
+        assert s + H <= self.p02.shape[0], (
+            f"start_step ({s}) + sequence length ({H}) = {s + H} "
+            f"exceeds stats horizon {self.p02.shape[0]}"
+        )
         assert D == self.p02.shape[1]
 
-        lo = self.p02[:H]
-        hi = self.p98[:H]
+        lo = self.p02[s : s + H]
+        hi = self.p98[s : s + H]
 
         out = x.clone()
         mask = self.normalize_mask

@@ -199,6 +199,7 @@ class StepwiseUnnormalizerProcessorStep(ProcessorStep):
     p_low: Tensor | None = None
     p_high: Tensor | None = None
     skip_feature_indices: list[int] = field(default_factory=list)
+    start_step: int = 0
 
     _unnormalizer: StepwisePercentileUnnormalize | None = field(
         default=None, init=False, repr=False
@@ -213,6 +214,7 @@ class StepwiseUnnormalizerProcessorStep(ProcessorStep):
             p02=self.p_low,
             p98=self.p_high,
             skip_feature_indices=self.skip_feature_indices or None,
+            start_step=self.start_step,
         )
 
     def __call__(self, transition: EnvTransition) -> EnvTransition:
@@ -237,6 +239,7 @@ class StepwiseUnnormalizerProcessorStep(ProcessorStep):
     def get_config(self) -> dict[str, Any]:
         return {
             "skip_feature_indices": self.skip_feature_indices,
+            "start_step": self.start_step,
         }
 
     def state_dict(self) -> dict[str, Tensor]:
