@@ -88,13 +88,16 @@ class SyncedEpisodeConverter:
         features: dict,
         tolerance_ms: float,
         robot_type: str = "panda_bimanual",
+        causal: bool = False,
     ):
         self.config = config
         self.output_dir = output_dir
         self.tolerance_ms = tolerance_ms
 
         # Sync components
-        self.frame_synchronizer = FrameSynchronizer(config, tolerance_ms=tolerance_ms)
+        self.frame_synchronizer = FrameSynchronizer(
+            config, tolerance_ms=tolerance_ms, causal=causal
+        )
 
         # Parsing and assembly (reuse existing pipeline)
         self.frame_parser = FrameParser(config)
@@ -210,6 +213,7 @@ def convert_episodes_synced(
     config: pipeline_config.PipelineConfig,
     tolerance_ms: float,
     with_annotations: bool = False,
+    causal: bool = False,
 ) -> dict:
     """Convert episodes using sensor-timestamp synchronization.
 
@@ -219,6 +223,8 @@ def convert_episodes_synced(
         config: Pipeline configuration (uses config.target_fps for output frequency)
         tolerance_ms: Maximum time difference for sync (milliseconds).
         with_annotations: If True, extract segment annotations from /annotation topic.
+        causal: If True, only use past messages (timestamp <= target) for sync.
+            This matches real-time inference where future data is unavailable.
 
     Returns:
         Dict with keys: episode_mapping, blacklist, episodes_saved, total_time,
@@ -238,6 +244,7 @@ def convert_episodes_synced(
         features,
         tolerance_ms=tolerance_ms,
         robot_type=robot_type,
+        causal=causal,
     )
 
     # Initialize annotation extractor if requested
@@ -312,6 +319,7 @@ class ScriptArgs:
     # Sync-specific parameters
     tolerance_ms: float | None = None  # Auto-computed from target_fps if None
     max_episodes: int | None = None  # Stop after N episodes (None = no limit)
+    causal: bool = True  # Only use past messages for sync (no future lookahead)
 
     # Episode filtering
     success_only: bool = True  # Include only successful episodes (based on MCAP metadata)
@@ -377,6 +385,8 @@ def main():
     print("Sync config:")
     print(f"  - Target FPS: {config.target_fps}Hz")
     print(f"  - Tolerance: {tolerance_ms:.1f}ms {'(auto)' if config.tolerance_ms is None else ''}")
+    if config.causal:
+        print("  - Causal sync: enabled (past-only, no future lookahead)")
     if config.with_annotations:
         print("  - Annotations: enabled")
         if config.skip_failed_segments:
@@ -410,6 +420,7 @@ def main():
         config,
         tolerance_ms=tolerance_ms,
         with_annotations=config.with_annotations,
+        causal=config.causal,
     )
 
     # Save annotations if extracted
