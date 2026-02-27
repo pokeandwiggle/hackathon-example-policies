@@ -46,6 +46,11 @@ class StateFeatureSpec:
     left_gripper: GripperType = GripperType.PANDA
     right_gripper: GripperType = GripperType.PANDA
 
+    # Single gripper value per side (width only, e.g. for UMI delta).
+    # When False (legacy default), Panda grippers report 2 finger‐joint
+    # positions per side (gripper_left_0/1, gripper_right_0/1).
+    use_single_gripper_value: bool = False
+
     # Last command (for temporal context in delta policies)
     include_last_command: bool = False
 
@@ -91,17 +96,23 @@ class StateFeatureSpec:
             state_names.extend([f"tcp_right_pos_{i}" for i in "xyz"])
             state_names.extend([f"tcp_right_quat_{i}" for i in "xyzw"])
 
-        # Left gripper (2 or 6 elements depending on type)
+        # Left gripper
         if self.left_gripper == GripperType.PANDA:
-            state_names.extend([f"gripper_left_{i}" for i in range(2)])
+            if self.use_single_gripper_value:
+                state_names.append("gripper_left")
+            else:
+                state_names.extend([f"gripper_left_{i}" for i in range(2)])
         elif self.left_gripper == GripperType.ROBOTIQ:
             state_names.extend([f"robotiq_left_{i}" for i in range(6)])
         else:
             raise NotImplementedError(f"Unsupported gripper type {self.left_gripper}")
 
-        # Right gripper (2 or 6 elements depending on type)
+        # Right gripper
         if self.right_gripper == GripperType.PANDA:
-            state_names.extend([f"gripper_right_{i}" for i in range(2)])
+            if self.use_single_gripper_value:
+                state_names.append("gripper_right")
+            else:
+                state_names.extend([f"gripper_right_{i}" for i in range(2)])
         elif self.right_gripper == GripperType.ROBOTIQ:
             state_names.extend([f"robotiq_right_{i}" for i in range(6)])
         else:
@@ -152,5 +163,11 @@ class StateFeatureSpec:
             spec.right_gripper = GripperType.ROBOTIQ
         else:
             spec.right_gripper = GripperType.PANDA
+
+        # Detect single vs multi gripper value.
+        # "gripper_left" (no suffix) → single; "gripper_left_0" → multi.
+        has_single = "gripper_left" in feature_names
+        has_multi = "gripper_left_0" in feature_names
+        spec.use_single_gripper_value = has_single and not has_multi
 
         return spec

@@ -41,7 +41,25 @@ class StateAssembler:
             state_components.append(parsed_frame["actual_tcp_left"])
             state_components.append(parsed_frame["actual_tcp_right"])
 
-        state_components.append(parsed_frame["gripper_state"])
+        # gripper_state layout: [left_joints..., right_joints...]
+        # For Panda: [left_finger1, left_finger2, right_finger1, right_finger2]
+        gs = parsed_frame["gripper_state"]
+        from example_policies.utils.state_builder import GripperType
+
+        raw_left_n = 2 if self.config.left_gripper == GripperType.PANDA else 6
+        raw_right_n = 2 if self.config.right_gripper == GripperType.PANDA else 6
+        left_raw = gs[:raw_left_n]
+        right_raw = gs[raw_left_n : raw_left_n + raw_right_n]
+
+        if self.config.use_single_gripper_value:
+            # Sum both finger-joint positions into a single gripper-width scalar.
+            left_gs = np.array([left_raw.sum()], dtype=gs.dtype)
+            right_gs = np.array([right_raw.sum()], dtype=gs.dtype)
+        else:
+            left_gs = left_raw
+            right_gs = right_raw
+        state_components.append(left_gs)
+        state_components.append(right_gs)
 
         if self.config.include_last_command:
             state_components.append(

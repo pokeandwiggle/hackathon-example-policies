@@ -73,7 +73,6 @@ class DiTFlowConfig(PreTrainedConfig):
             `None` means no pretrained weights.
         use_group_norm: Whether to replace batch normalization with group normalization in the backbone.
             The group sizes are set to be about 16 (to be precise, feature_dim // 16).
-        spatial_softmax_num_keypoints: Number of keypoints for SpatialSoftmax.
         use_separate_rgb_encoders_per_camera: Whether to use a separate RGB encoder for each camera view.
 
         frequency_embedding_dim: The embedding dimension for the time value embedding in the flow model.
@@ -111,14 +110,34 @@ class DiTFlowConfig(PreTrainedConfig):
     # which avoids excessive padding and leads to improved training results.
     drop_n_last_frames: int = 7  # horizon - n_action_steps - n_obs_steps + 1
 
+    # ── Chunk-relative UMI-delta conversion (LBM-style, arXiv:2507.05331) ──
+    # When enabled, absolute TCP actions (16-dim) in the dataset are converted
+    # to chunk-relative UMI-delta actions (20-dim) at training time.  Each
+    # action step k is expressed relative to the TCP at the start of the chunk.
+    use_chunk_relative_actions: bool = False
+    obs_tcp_left_pos_indices: list[int] = field(default_factory=list)
+    obs_tcp_left_quat_indices: list[int] = field(default_factory=list)
+    obs_tcp_right_pos_indices: list[int] = field(default_factory=list)
+    obs_tcp_right_quat_indices: list[int] = field(default_factory=list)
+
+    # ── Stepwise percentile normalization (LBM-style, arXiv:2507.05331) ──
+    # When enabled, actions are normalised per-timestep-index using p2/p98
+    # percentile stats to [-1.5, 1.5] instead of the standard min-max/mean-std.
+    # The standard normalizer is set to IDENTITY for actions, and the stepwise
+    # processor handles them instead.
+    use_stepwise_normalization: bool = False
+    stepwise_stats_path: str | None = None
+    stepwise_skip_feature_indices: list[int] = field(default_factory=list)
+    stepwise_clip_min: float = -1.5
+    stepwise_clip_max: float = 1.5
+
     # Architecture / modeling.
     # Vision backbone.
     vision_backbone: str = "resnet18"
     crop_shape: tuple[int, int] | None = None
-    crop_is_random: bool = False
+    crop_is_random: bool = True
     pretrained_backbone_weights: str | None = "IMAGENET1K_V1"
     use_group_norm: bool = True
-    spatial_softmax_num_keypoints: int = 32
     use_separate_rgb_encoder_per_camera: bool = True
 
     # Diffusion Transformer (DiT) parameters.
@@ -162,6 +181,18 @@ class DiTFlowConfig(PreTrainedConfig):
             raise ValueError(
                 f"`training_noise_sampling` must be either 'uniform' or 'beta'. Got {self.training_noise_sampling}."
             )
+
+        # When stepwise normalization is enabled, the standard normalizer must
+        # use IDENTITY for actions (the stepwise processor handles them instead)
+        # and clip_sample_range should accommodate the wider [-1.5, 1.5] range.
+        if self.use_stepwise_normalization:
+            self.normalization_mapping = {
+                **self.normalization_mapping,
+                "ACTION": NormalizationMode.IDENTITY,
+            }
+            # Default clip range for stepwise is 1.5 (if still at default 1.0)
+            if self.clip_sample_range == 1.0:
+                self.clip_sample_range = self.stepwise_clip_max
 
     def get_optimizer_preset(self) -> AdamConfig:
         return AdamConfig(

@@ -76,9 +76,11 @@ class FrameSynchronizer:
         self,
         config: PipelineConfig,
         tolerance_ms: float | None = None,
+        causal: bool = True,
     ):
         self.config = config
         self.target_frequency = config.target_fps
+        self.causal = causal
         
         # Default tolerance to 100% of frame interval (100ms at 10Hz)
         if tolerance_ms is None:
@@ -357,12 +359,22 @@ class FrameSynchronizer:
         # Binary search for insertion point
         idx = bisect.bisect_left(timestamps, target_time)
 
-        # Check both neighbors to find closest
-        candidates = []
-        if idx > 0:
-            candidates.append((idx - 1, abs(timestamps[idx - 1] - target_time)))
-        if idx < len(timestamps):
-            candidates.append((idx, abs(timestamps[idx] - target_time)))
+        if self.causal:
+            # Causal mode: only consider messages at or before target_time
+            # bisect_left gives us the first index >= target_time
+            # So idx is an exact match, idx-1 is the last message before target_time
+            candidates = []
+            if idx < len(timestamps) and timestamps[idx] == target_time:
+                candidates.append((idx, 0.0))  # exact match
+            if idx > 0:
+                candidates.append((idx - 1, target_time - timestamps[idx - 1]))
+        else:
+            # Default: check both past and future neighbors to find closest
+            candidates = []
+            if idx > 0:
+                candidates.append((idx - 1, abs(timestamps[idx - 1] - target_time)))
+            if idx < len(timestamps):
+                candidates.append((idx, abs(timestamps[idx] - target_time)))
 
         if not candidates:
             return None, None

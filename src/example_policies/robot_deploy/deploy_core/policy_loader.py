@@ -87,10 +87,16 @@ def load_policy(checkpoint_dir: pathlib.Path):
 
     # Load preprocessor and postprocessor for inference
     # Try loading from pretrained path first, fall back to creating new ones
+    #
+    # Override the device_processor to use the actual device (the saved config
+    # may reference 'cuda' even when running inference on CPU, or vice-versa).
+    device_override = {"device_processor": {"device": str(cfg.device)}}
     try:
         preprocessor, postprocessor = make_pre_post_processors(
             policy_cfg=cfg,
             pretrained_path=checkpoint_dir,
+            preprocessor_overrides=device_override,
+            postprocessor_overrides={"device_processor": {"device": "cpu"}},
         )
     except Exception:
         # Old checkpoint without processor configs - extract stats from policy's

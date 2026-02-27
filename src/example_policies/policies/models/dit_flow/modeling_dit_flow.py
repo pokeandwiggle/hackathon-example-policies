@@ -18,11 +18,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F  # noqa: N812
+import torchvision
 from lerobot.utils.constants import ACTION, OBS_ENV_STATE, OBS_IMAGES, OBS_STATE
-from lerobot.policies.diffusion.modeling_diffusion import DiffusionRgbEncoder
 from lerobot.policies.pretrained import PreTrainedPolicy
-
-from .rgb_encoder import PretrainedGroupNormRgbEncoder
 
 from lerobot.policies.utils import (
     get_device_from_parameters,
@@ -32,6 +30,77 @@ from lerobot.policies.utils import (
 
 from ...factory import register_policy
 from .configuration_dit_flow import DiTFlowConfig
+
+
+# ---------------------------------------------------------------------------
+# Vision encoder – Cheng Chi style (diffusion_policy/model/vision/model_getter.py)
+# Uses the full torchvision ResNet with fc replaced by Identity(), so the
+# output is the global-average-pooled feature vector (512-dim for ResNet18/34,
+# 2048-dim for ResNet50/101/152).  No SpatialSoftmax.
+# ---------------------------------------------------------------------------
+
+
+class RgbEncoder(nn.Module):
+    """Encode an RGB image into a 1D feature vector.
+
+    Uses a torchvision ResNet backbone with its final ``fc`` layer replaced by
+    ``nn.Identity()`` (following Cheng Chi's Diffusion Policy).  The built-in
+    ``AdaptiveAvgPool2d(1)`` in the ResNet produces a ``(B, C)`` feature.
+
+    Optionally applies random/center cropping and replaces BatchNorm with
+    GroupNorm (useful when training with small batch sizes).
+    """
+
+    def __init__(self, config: "DiTFlowConfig"):
+        super().__init__()
+
+        # Optional preprocessing (crop).
+        if config.crop_shape is not None:
+            self.do_crop = True
+            self.center_crop = torchvision.transforms.CenterCrop(config.crop_shape)
+            if config.crop_is_random:
+                self.maybe_random_crop = torchvision.transforms.RandomCrop(config.crop_shape)
+            else:
+                self.maybe_random_crop = self.center_crop
+        else:
+            self.do_crop = False
+
+        # Build backbone – full ResNet, replace fc with Identity.
+        backbone = getattr(torchvision.models, config.vision_backbone)(
+            weights=config.pretrained_backbone_weights
+        )
+        self.feature_dim = backbone.fc.in_features  # 512 for resnet18/34
+        backbone.fc = nn.Identity()
+
+        # Optionally replace BatchNorm → GroupNorm.
+        if config.use_group_norm:
+            backbone = _replace_batchnorm_with_groupnorm(backbone)
+
+        self.backbone = backbone
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Args: x - (B, C, H, W) image tensor with pixel values in [0, 1].
+        Returns: (B, D) feature vector."""
+        if self.do_crop:
+            x = self.maybe_random_crop(x) if self.training else self.center_crop(x)
+        return self.backbone(x)
+
+
+def _replace_batchnorm_with_groupnorm(module: nn.Module) -> nn.Module:
+    """Recursively replace every ``BatchNorm2d`` with ``GroupNorm``."""
+    for name, child in module.named_children():
+        if isinstance(child, nn.BatchNorm2d):
+            setattr(
+                module,
+                name,
+                nn.GroupNorm(
+                    num_groups=child.num_features // 16,
+                    num_channels=child.num_features,
+                ),
+            )
+        else:
+            _replace_batchnorm_with_groupnorm(child)
+    return module
 
 
 def _get_activation_fn(activation: str):
@@ -218,6 +287,7 @@ class _DiTNoiseNet(nn.Module):
         activation="gelu",
         clip_sample=False,
         clip_sample_range=1.0,
+        clip_sample_skip_indices: list[int] | None = None,
     ):
         super().__init__()
         self.ac_dim, self.ac_chunk = ac_dim, ac_chunk
@@ -254,6 +324,12 @@ class _DiTNoiseNet(nn.Module):
         # clip the output samples
         self.clip_sample = clip_sample
         self.clip_sample_range = clip_sample_range
+        # NOTE: We clip ALL features uniformly (including 6D rotation columns).
+        # TRI LBM §4.4.2 excludes rotations from *normalization* only, not from
+        # ODE sample clipping.  Since rotation values are in [-1,1] and the clip
+        # range is 1.5, the clamp never affects converged values but constrains
+        # wild intermediate ODE states.
+        self.clip_sample_skip_indices = None
 
         print(
             "Number of flow params: {:.2f}M".format(
@@ -305,7 +381,20 @@ class _DiTNoiseNet(nn.Module):
             t = t_all[:, k]
             x_0 = x_0 + dt * self.forward(x_0, t, condition)
             if self.clip_sample:
-                x_0 = torch.clamp(x_0, -self.clip_sample_range, self.clip_sample_range)
+                if self.clip_sample_skip_indices:
+                    # Build a mask for features that should be clipped
+                    # (skip rotation features to avoid corrupting their geometry)
+                    clip_mask = torch.ones(self.ac_dim, device=device, dtype=torch.bool)
+                    clip_mask[self.clip_sample_skip_indices] = False
+                    x_0[:, :, clip_mask] = torch.clamp(
+                        x_0[:, :, clip_mask],
+                        -self.clip_sample_range,
+                        self.clip_sample_range,
+                    )
+                else:
+                    x_0 = torch.clamp(
+                        x_0, -self.clip_sample_range, self.clip_sample_range
+                    )
         return x_0
 
     def sample_noise(
@@ -448,28 +537,32 @@ class DiTFlowModel(nn.Module):
         super().__init__()
         self.config = config
 
+        # When chunk-relative actions are enabled, the preprocessor converts
+        # abs TCP (16-dim) → UMI delta (20-dim) *before* the model sees them.
+        # The model must use the post-preprocessing dimension.
+        if config.use_chunk_relative_actions:
+            from example_policies.utils.action_order import UMI_ACTION_DIM
+
+            ac_dim = UMI_ACTION_DIM
+        else:
+            ac_dim = config.action_feature.shape[0]
+
         # Build observation encoders (depending on which observations are provided).
         global_cond_dim = self.config.robot_state_feature.shape[0]
         if self.config.image_features:
             num_images = len(self.config.image_features)
-            # Use the Stanford approach (pretrained + GroupNorm) when both are configured,
-            # otherwise fall back to LeRobot's original DiffusionRgbEncoder.
-            if config.pretrained_backbone_weights and config.use_group_norm:
-                _encoder_cls = PretrainedGroupNormRgbEncoder
-            else:
-                _encoder_cls = DiffusionRgbEncoder
             if self.config.use_separate_rgb_encoder_per_camera:
-                encoders = [_encoder_cls(config) for _ in range(num_images)]
+                encoders = [RgbEncoder(config) for _ in range(num_images)]
                 self.rgb_encoder = nn.ModuleList(encoders)
                 global_cond_dim += encoders[0].feature_dim * num_images
             else:
-                self.rgb_encoder = _encoder_cls(config)
+                self.rgb_encoder = RgbEncoder(config)
                 global_cond_dim += self.rgb_encoder.feature_dim * num_images
         if self.config.env_state_feature:
             global_cond_dim += self.config.env_state_feature.shape[0]
 
         self.velocity_net = _DiTNoiseNet(
-            ac_dim=config.action_feature.shape[0],
+            ac_dim=ac_dim,
             ac_chunk=config.horizon,
             cond_dim=global_cond_dim * config.n_obs_steps,
             time_dim=config.frequency_embedding_dim,
@@ -481,6 +574,7 @@ class DiTFlowModel(nn.Module):
             activation=config.activation,
             clip_sample=config.clip_sample,
             clip_sample_range=config.clip_sample_range,
+            clip_sample_skip_indices=None,  # clip all features uniformly during ODE integration
         )
 
         self.num_inference_steps = config.num_inference_steps or 100
