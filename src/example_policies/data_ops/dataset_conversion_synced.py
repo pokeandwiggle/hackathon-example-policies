@@ -170,6 +170,11 @@ class SyncedEpisodeConverter:
             # Parse and assemble using existing pipeline
             parsed = self.frame_parser.parse_frame(frame_buffer)
             assembled = self.frame_assembler.assemble(parsed)
+            if assembled is None:
+                # Delta-action alignment buffers the first frame so action[t]
+                # represents transition t -> t+1.
+                raw_frame_kept.append(False)
+                continue
 
             # Add to dataset (v3.0 API: task goes in frame dict, not as kwarg)
             assembled["task"] = self.config.task_name

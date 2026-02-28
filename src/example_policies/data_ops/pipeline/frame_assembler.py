@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from ..config.pipeline_config import PipelineConfig
+from ...utils.action_order import ActionMode
 from .assembly.action_assembler import ActionAssembler
 from .assembly.state_assembler import StateAssembler
 
@@ -25,15 +26,28 @@ class FrameAssembler:
         self.action_assembler = ActionAssembler(config)
         self.state_assembler = StateAssembler(config)
         self.last_abs_action = None
+        self._pending_delta_frame = None
 
     def reset(self):
         self.action_assembler.reset()
         self.state_assembler.reset()
 
         self.last_abs_action = None
+        self._pending_delta_frame = None
 
-    def assemble(self, parsed_frame: dict) -> dict:
-        """Assembles the final frame from the parsed components."""
+    def _uses_step_delta_actions(self) -> bool:
+        return self.config.action_level in {
+            ActionMode.DELTA_TCP,
+            ActionMode.DELTA_JOINT,
+        }
+
+    def assemble(self, parsed_frame: dict) -> dict | None:
+        """Assemble a frame.
+
+        For delta action modes, returns a one-step delayed frame so that action at
+        timestep ``t`` corresponds to transition ``t -> t+1``. The very first frame
+        of an episode is buffered and returns ``None``.
+        """
         frame = {}
         action_dict, abs_action = self.action_assembler.assemble(
             parsed_frame, self.last_abs_action
@@ -50,7 +64,19 @@ class FrameAssembler:
         frame.update(img_dict)
 
         self.last_abs_action = abs_action
-        return frame
+
+        if not self._uses_step_delta_actions():
+            return frame
+
+        if self._pending_delta_frame is None:
+            self._pending_delta_frame = frame
+            return None
+
+        # Align actions so frame[t].action is command from t -> t+1.
+        self._pending_delta_frame["action"] = frame["action"]
+        output = self._pending_delta_frame
+        self._pending_delta_frame = frame
+        return output
 
     def select_images(self, parsed_frame: dict):
         # Select observation.images.xxxxx keys
