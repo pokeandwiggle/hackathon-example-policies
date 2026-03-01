@@ -1,10 +1,10 @@
 """Download MCAP episodes from GCS using platform API filters.
 
 Usage:
-  python -m example_policies.download_episodes <output_dir> "<filter_str>" [--env=nonprod|prod]
+  python -m example_policies.data_ops.cloud.download_episodes <output_dir> "<filter_str>" [--env=nonprod|prod]
 
 Example:
-  python -m example_policies.download_episodes ./episodes \
+  python -m example_policies.data_ops.cloud.download_episodes ./episodes \
     "task=pick_red_brick&rating=excellent&date_from=2026-02-19&date_to=2026-02-19&hide_ignored=true"
 """
 
@@ -12,7 +12,7 @@ import os
 import subprocess
 import sys
 
-from example_policies.platform_api_client import fetch_episode_paths
+from example_policies.data_ops.cloud.platform_api_client import fetch_episode_paths
 
 
 def main():

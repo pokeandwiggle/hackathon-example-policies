@@ -734,7 +734,7 @@ def get_selected_episodes(
     episode_paths.sort(key=lambda p: p.stat().st_ctime)
 
     if api_filter is not None:
-        from example_policies.platform_api_client import fetch_episode_paths
+        from example_policies.data_ops.cloud.platform_api_client import fetch_episode_paths
 
         api_episodes = fetch_episode_paths(api_filter)
         api_filenames = {ep["object_storage_path"].rsplit("/", 1)[-1] for ep in api_episodes}
