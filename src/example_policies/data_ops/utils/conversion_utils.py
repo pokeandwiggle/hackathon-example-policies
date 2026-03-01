@@ -707,8 +707,14 @@ def get_selected_episodes(
     success_only: bool = True,
     excellent_only: bool = True,
     complete_subtasks_only: bool = False,
+    api_filter: str | None = None,
 ) -> list[pathlib.Path]:
     """Get episode paths sorted by creation time (oldest first), that fulfil success criteria in the MCAP file.
+
+    When api_filter is provided, filtering is delegated to the platform API:
+    only local files whose filename appears in the API response are returned.
+    The success_only / excellent_only / complete_subtasks_only flags are ignored
+    in that case (the API already applied the equivalent filters).
 
     Args:
         episode_dir: Directory containing .mcap episode files
@@ -716,6 +722,9 @@ def get_selected_episodes(
         excellent_only: If True, include only episodes with "excellent" quality
         complete_subtasks_only: If True, include only episodes where all defined
             subtasks have at least one successful segment
+        api_filter: URL query string from the platform UI (e.g.
+            "task=pick_red_brick&rating=excellent&hide_ignored=true").
+            When set, other filter flags are ignored.
 
     Returns:
         List of episode paths sorted by creation date that fulfil success criteria in the MCAP file
@@ -723,6 +732,14 @@ def get_selected_episodes(
 
     episode_paths = list(episode_dir.rglob("*.mcap"))
     episode_paths.sort(key=lambda p: p.stat().st_ctime)
+
+    if api_filter is not None:
+        from example_policies.data_ops.cloud.platform_api_client import fetch_episode_paths
+
+        api_episodes = fetch_episode_paths(api_filter)
+        api_filenames = {ep["object_storage_path"].rsplit("/", 1)[-1] for ep in api_episodes}
+        return [p for p in episode_paths if p.name in api_filenames]
+
     filtered_episode_paths = []
 
     if success_only is True:
