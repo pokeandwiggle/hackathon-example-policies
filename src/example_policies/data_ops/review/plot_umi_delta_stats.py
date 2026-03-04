@@ -189,9 +189,8 @@ def _normalize_chunks(
     p_high = p_high[:H_chunk]
 
     denom = p_high - p_low
-    denom[denom == 0] = 1.0  # avoid division by zero
 
-    normed = 2.0 * (chunks - p_low[np.newaxis]) / denom[np.newaxis] - 1.0
+    normed = 2.0 * (chunks - p_low[np.newaxis]) / (denom[np.newaxis] + 1e-8) - 1.0
     normed = np.clip(normed, clip_min, clip_max)
 
     # Restore skip features (pass-through)
@@ -279,36 +278,181 @@ def _plot_violins(
     plt.close(fig)
 
 
+def _plot_violins_compare(
+    chunks_a: np.ndarray,
+    chunks_b: np.ndarray,
+    out_path: Path,
+    label_a: str = "Dataset A",
+    label_b: str = "Dataset B",
+    step_stride: int = 1,
+    colormap_a: str = "Blues",
+    colormap_b: str = "Oranges",
+    edge_color_a: str = "#2c3e6e",
+    edge_color_b: str = "#7a3e0d",
+    median_color_a: str = "#1a2540",
+    median_color_b: str = "#4d2200",
+    title_prefix: str = "UMI-delta comparison",
+) -> None:
+    """Overlay two datasets as side-by-side violins on the same axes.
+
+    At each action step, dataset A is drawn slightly left and dataset B
+    slightly right so both distributions are visible.
+
+    Args:
+        chunks_a: (N_a, horizon, action_dim) array for dataset A.
+        chunks_b: (N_b, horizon, action_dim) array for dataset B.
+        out_path: Where to save the figure.
+        label_a / label_b: Legend labels.
+        step_stride: Plot every N-th step.
+        colormap_a / colormap_b: Matplotlib colormap names.
+        edge_color_a / edge_color_b: Edge colors.
+        median_color_a / median_color_b: Median line colors.
+        title_prefix: First part of the figure title.
+    """
+    _, horizon_a, action_dim_a = chunks_a.shape
+    _, horizon_b, action_dim_b = chunks_b.shape
+    horizon = min(horizon_a, horizon_b)
+    assert action_dim_a == action_dim_b, (
+        f"Action dim mismatch: {action_dim_a} vs {action_dim_b}"
+    )
+    action_dim = action_dim_a
+
+    step_indices = list(range(0, horizon, step_stride))
+    n_steps = len(step_indices)
+
+    n_labels = min(action_dim, len(DIM_LABELS))
+    labels = DIM_LABELS[:n_labels] + [f"dim {d}" for d in range(n_labels, action_dim)]
+
+    width = max(0.8, step_stride * 0.8)
+    offset = width * 0.25  # half-violin offset from center
+
+    fig, axes = plt.subplots(
+        action_dim, 1,
+        figsize=(max(8, n_steps * 0.12 + 2), action_dim * 1.6),
+        sharex=True,
+    )
+    if action_dim == 1:
+        axes = [axes]
+
+    cmap_a = plt.get_cmap(colormap_a)
+    cmap_b = plt.get_cmap(colormap_b)
+    colors_a = cmap_a(np.linspace(0.4, 0.85, n_steps))
+    colors_b = cmap_b(np.linspace(0.4, 0.85, n_steps))
+
+    legend_added = False
+    for d, ax in enumerate(axes):
+        data_a = [chunks_a[:, s, d] for s in step_indices]
+        data_b = [chunks_b[:, s, d] for s in step_indices]
+
+        pos_a = [s - offset for s in step_indices]
+        pos_b = [s + offset for s in step_indices]
+
+        parts_a = ax.violinplot(
+            data_a, positions=pos_a, showmedians=True,
+            showextrema=False, widths=width * 0.45,
+        )
+        parts_b = ax.violinplot(
+            data_b, positions=pos_b, showmedians=True,
+            showextrema=False, widths=width * 0.45,
+        )
+
+        for j, pc in enumerate(parts_a["bodies"]):
+            pc.set_facecolor(colors_a[j])
+            pc.set_edgecolor(edge_color_a)
+            pc.set_linewidth(0.4)
+            pc.set_alpha(0.65)
+        parts_a["cmedians"].set_color(median_color_a)
+        parts_a["cmedians"].set_linewidth(1.0)
+
+        for j, pc in enumerate(parts_b["bodies"]):
+            pc.set_facecolor(colors_b[j])
+            pc.set_edgecolor(edge_color_b)
+            pc.set_linewidth(0.4)
+            pc.set_alpha(0.65)
+        parts_b["cmedians"].set_color(median_color_b)
+        parts_b["cmedians"].set_linewidth(1.0)
+
+        # Add legend once (using first subplot)
+        if not legend_added:
+            from matplotlib.patches import Patch
+            ax.legend(
+                handles=[
+                    Patch(facecolor=cmap_a(0.6), edgecolor=edge_color_a, label=label_a),
+                    Patch(facecolor=cmap_b(0.6), edgecolor=edge_color_b, label=label_b),
+                ],
+                loc="upper right", fontsize=7, framealpha=0.8,
+            )
+            legend_added = True
+
+        ax.axhline(0, ls="-", lw=0.5, color="#999999", alpha=0.5)
+        ax.set_ylabel(labels[d], fontsize=8, rotation=0, ha="right", va="center")
+        ax.tick_params(axis="y", labelsize=7)
+
+    axes[-1].set_xlabel("Action step in chunk")
+    axes[-1].tick_params(axis="x", labelsize=8)
+
+    fig.suptitle(title_prefix, fontsize=13, fontweight="bold", y=1.0)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=200, bbox_inches="tight")
+    print(f"Saved plot: {out_path}")
+    plt.close(fig)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Plot UMI-delta per-step action distributions as violins"
     )
-    parser.add_argument(
-        "--dataset", "--stats", type=Path, required=True,
+    sub = parser.add_subparsers(dest="command")
+
+    # --- single dataset mode (default / backward-compatible) ---
+    single = sub.add_parser("single", help="Plot a single dataset")
+    single.add_argument(
+        "--dataset", type=Path, required=True,
         help="LeRobot dataset root directory",
     )
-    parser.add_argument(
-        "--horizon", type=int, default=None,
-        help="Action chunk horizon (auto-detected from stats JSON if omitted)",
+    single.add_argument("--horizon", type=int, default=None)
+    single.add_argument("--stride", type=int, default=1)
+    single.add_argument("--out", type=Path, default=Path("umi_delta_stepwise_stats.png"))
+    single.add_argument("--normalized", action="store_true", default=False)
+    single.add_argument("--out-normalized", type=Path, default=None)
+
+    # --- compare two datasets ---
+    comp = sub.add_parser("compare", help="Compare two datasets on the same plot")
+    comp.add_argument(
+        "--dataset-a", type=Path, required=True,
+        help="First dataset root directory",
     )
-    parser.add_argument(
-        "--stride", type=int, default=1,
-        help="Plot every N-th step (default: 1 = all steps)",
+    comp.add_argument(
+        "--dataset-b", type=Path, required=True,
+        help="Second dataset root directory",
     )
-    parser.add_argument(
-        "--out", type=Path, default=Path("umi_delta_stepwise_stats.png"),
-        help="Output PNG path",
+    comp.add_argument("--horizon", type=int, default=None)
+    comp.add_argument("--stride", type=int, default=1)
+    comp.add_argument(
+        "--out", type=Path, default=Path("umi_delta_compare.png"),
+        help="Output PNG for unnormalized comparison (blue vs orange)",
     )
-    parser.add_argument(
+    comp.add_argument(
         "--normalized", action="store_true", default=False,
-        help="Also produce a normalized plot (green violins) using stepwise percentile stats",
+        help="Also produce a normalized comparison plot (green vs red)",
     )
-    parser.add_argument(
-        "--out-normalized", type=Path, default=None,
-        help="Output PNG path for the normalized plot (default: <out>_normalized.png)",
-    )
+    comp.add_argument("--out-normalized", type=Path, default=None)
+
+    # Support calling without subcommand for backward compatibility
     args = parser.parse_args()
 
+    if args.command is None:
+        # No subcommand given → treat as single-dataset mode
+        args = single.parse_args(__import__("sys").argv[1:])
+        args.command = "single"
+
+    if args.command == "compare":
+        _run_compare(args)
+    else:
+        _run_single(args)
+
+
+def _run_single(args: argparse.Namespace) -> None:
     data_dir = Path(args.dataset)
     if not data_dir.is_dir():
         raise FileNotFoundError(f"Dataset directory not found: {data_dir}")
@@ -349,6 +493,59 @@ def main() -> None:
             edge_color="#1a4d2e",
             median_color="#0d2618",
             title_prefix="UMI-delta per-step distributions (normalized)",
+        )
+
+
+def _run_compare(args: argparse.Namespace) -> None:
+    dir_a = Path(args.dataset_a)
+    dir_b = Path(args.dataset_b)
+    for d in (dir_a, dir_b):
+        if not d.is_dir():
+            raise FileNotFoundError(f"Dataset directory not found: {d}")
+
+    horizon_a = args.horizon or _detect_horizon(dir_a)
+    horizon_b = args.horizon or _detect_horizon(dir_b)
+    horizon = min(horizon_a, horizon_b)
+
+    label_a = dir_a.name
+    label_b = dir_b.name
+
+    chunks_a = _build_chunks(dir_a, horizon)
+    chunks_b = _build_chunks(dir_b, horizon)
+
+    # --- Unnormalized comparison (blue vs orange) ---
+    _plot_violins_compare(
+        chunks_a, chunks_b, args.out,
+        label_a=label_a, label_b=label_b,
+        step_stride=args.stride,
+        colormap_a="Blues", colormap_b="Oranges",
+        edge_color_a="#2c3e6e", edge_color_b="#7a3e0d",
+        median_color_a="#1a2540", median_color_b="#4d2200",
+        title_prefix=f"UMI-delta comparison (unnormalized) — {label_a} vs {label_b}",
+    )
+
+    # --- Normalized comparison (green vs red) ---
+    if args.normalized:
+        stats_a = dir_a / STEPWISE_STATS_FILENAME
+        stats_b = dir_b / STEPWISE_STATS_FILENAME
+        for sp in (stats_a, stats_b):
+            if not sp.exists():
+                raise FileNotFoundError(
+                    f"Stepwise stats not found: {sp}. Cannot produce normalized plot."
+                )
+        normed_a = _normalize_chunks(chunks_a, stats_a)
+        normed_b = _normalize_chunks(chunks_b, stats_b)
+        out_norm = args.out_normalized or args.out.with_name(
+            args.out.stem + "_normalized" + args.out.suffix
+        )
+        _plot_violins_compare(
+            normed_a, normed_b, out_norm,
+            label_a=label_a, label_b=label_b,
+            step_stride=args.stride,
+            colormap_a="Greens", colormap_b="Reds",
+            edge_color_a="#1a4d2e", edge_color_b="#6b1a1a",
+            median_color_a="#0d2618", median_color_b="#3d0d0d",
+            title_prefix=f"UMI-delta comparison (normalized) — {label_a} vs {label_b}",
         )
 
 
