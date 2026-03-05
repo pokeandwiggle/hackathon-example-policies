@@ -33,11 +33,19 @@ import pathlib
 import time
 
 import draccus
+import numpy as np
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
 from example_policies.data_ops.config import pipeline_config
 from example_policies.data_ops.config.dataset_type import DatasetType
 from example_policies.data_ops.config.rosbag_topics import RosTopicEnum
+from example_policies.data_ops.filters import (
+    FilterConfig,
+    FilterPipeline,
+    FrameFilterData,
+    create_filter_pipeline,
+)
+from example_policies.data_ops.filters.base import quality_meets_minimum
 from example_policies.data_ops.pipeline.frame_assembler import FrameAssembler
 from example_policies.data_ops.pipeline.frame_parser import FrameParser
 from example_policies.data_ops.pipeline.frame_synchronizer import (
@@ -89,6 +97,7 @@ class SyncedEpisodeConverter:
         tolerance_ms: float,
         robot_type: str = "panda_bimanual",
         causal: bool = False,
+        filter_config: FilterConfig | None = None,
     ):
         self.config = config
         self.output_dir = output_dir
@@ -103,6 +112,14 @@ class SyncedEpisodeConverter:
         self.frame_parser = FrameParser(config)
         self.frame_assembler = FrameAssembler(config)
         self.frame_targeter = FrameTargeter(config)
+
+        # Filter pipeline (new — replaces FrameTargeter when set)
+        self.filter_pipeline: FilterPipeline | None = None
+        self.filter_config: FilterConfig | None = filter_config
+        if filter_config is not None:
+            self.filter_pipeline = create_filter_pipeline(
+                filter_config, target_fps=config.target_fps
+            )
 
         # Dataset writer
         self.dataset = LeRobotDataset.create(
@@ -120,11 +137,15 @@ class SyncedEpisodeConverter:
         self.episode_counter = 0
         self.episode_mapping: dict[int, str] = {}
         self.blacklist: list[int] = []
+        self.episodes_skipped_quality: int = 0
         self.start_time = time.time()
 
         # Frame mapping for annotation remapping (set after each process_episode)
         self._last_raw_frame_kept: list[bool] = []
         self._last_sync_abs_start_s: float = 0.0
+
+        # Per-episode filter results (populated when filter_pipeline is used)
+        self.episode_filter_results: dict[int, "EpisodeFilterResult"] = {}
 
     def reset_episode_state(self) -> None:
         """Reset state for new episode."""
@@ -149,16 +170,25 @@ class SyncedEpisodeConverter:
         print("  Ingesting messages...")
         self.frame_synchronizer.ingest_episode(episode_path)
 
-        # Pass 2: Generate synchronized frames
-        # Track which raw frame indices were kept vs skipped for annotation remapping
+        if self.filter_pipeline is not None:
+            return self._process_with_filters(episode_path, episode_idx)
+        else:
+            return self._process_legacy(episode_path, episode_idx)
+
+    # ------------------------------------------------------------------
+    # Legacy path (FrameTargeter-based pause skipping)
+    # ------------------------------------------------------------------
+
+    def _process_legacy(
+        self, episode_path: pathlib.Path, episode_idx: int
+    ) -> bool:
+        """Original per-frame FrameTargeter approach."""
         saved_frames = 0
         skipped_pauses = 0
-        raw_frame_kept: list[bool] = []  # True if frame was kept, False if skipped
+        raw_frame_kept: list[bool] = []
         for synced_frame in self.frame_synchronizer.generate_synced_frames():
-            # Wrap synced frame for compatibility with FrameParser
             frame_buffer = SyncedFrameBuffer(synced_frame)
 
-            # Check for pause (skip if robot is idle)
             target_datasets = self.frame_targeter.determine_targets(
                 frame_buffer, self.frame_parser
             )
@@ -167,11 +197,9 @@ class SyncedEpisodeConverter:
                 raw_frame_kept.append(False)
                 continue
 
-            # Parse and assemble using existing pipeline
             parsed = self.frame_parser.parse_frame(frame_buffer)
             assembled = self.frame_assembler.assemble(parsed)
 
-            # Add to dataset (v3.0 API: task goes in frame dict, not as kwarg)
             assembled["task"] = self.config.task_name
             self.dataset.add_frame(assembled)
             saved_frames += 1
@@ -179,21 +207,108 @@ class SyncedEpisodeConverter:
 
         print(f"  Saved {saved_frames} frames (skipped {skipped_pauses} pauses)")
 
-        # Store frame mapping for annotation remapping
-        # sync_abs_start_s: absolute timestamp of first synced frame
+        self._last_raw_frame_kept = raw_frame_kept
+        self._last_sync_abs_start_s = self.frame_synchronizer.get_sync_start_offset()
+        return self._finalize_episode(episode_path, saved_frames)
+
+    # ------------------------------------------------------------------
+    # New path (FilterPipeline-based)
+    # ------------------------------------------------------------------
+
+    def _process_with_filters(
+        self, episode_path: pathlib.Path, episode_idx: int
+    ) -> bool:
+        """Two-pass approach: analyse all frames, then write kept frames."""
+        assert self.filter_pipeline is not None
+
+        # Collect all synced frames
+        synced_frames = list(
+            self.frame_synchronizer.generate_synced_frames()
+        )
+
+        # Extract lightweight filter data from each frame
+        filter_data: list[FrameFilterData] = []
+        target_fps = self.config.target_fps
+        for i, synced_frame in enumerate(synced_frames):
+            fb = SyncedFrameBuffer(synced_frame)
+            raw = self.frame_parser.parse_filter_data(fb)
+            filter_data.append(
+                FrameFilterData(
+                    index=i,
+                    timestamp_s=i / target_fps,
+                    des_gripper_left=float(raw["des_gripper_left"][0]),
+                    des_gripper_right=float(raw["des_gripper_right"][0]),
+                    joint_velocity_norm=float(
+                        np.sum(np.abs(raw["joint_velocity"]))
+                    ),
+                    gripper_state=raw["gripper_state"],
+                )
+            )
+
+        # Run filter pipeline
+        filter_result = self.filter_pipeline.run(filter_data)
+
+        # Report filter events
+        if filter_result.events:
+            print(f"  Filter events ({len(filter_result.events)}):")
+            for ev in filter_result.events:
+                print(f"    [{ev.filter_name}] {ev.description}")
+        print(f"  Episode quality: {filter_result.quality}")
+
+        # Quality gate: skip episode entirely if below min_quality
+        min_q = self.filter_config.min_quality if self.filter_config else "ok"
+        if not quality_meets_minimum(filter_result.quality, min_q):
+            print(
+                f"  Skipping episode (quality '{filter_result.quality}' "
+                f"< min '{min_q}')"
+            )
+            # Store result even for skipped episodes so stats are available
+            self.episode_filter_results[self.episode_counter] = filter_result
+            self._last_raw_frame_kept = [False] * len(synced_frames)
+            self.episodes_skipped_quality += 1
+            return False
+
+        # Write kept frames (full parse + assemble)
+        saved_frames = 0
+        raw_frame_kept: list[bool] = []
+        for i, synced_frame in enumerate(synced_frames):
+            if not filter_result.should_keep(i):
+                raw_frame_kept.append(False)
+                continue
+
+            fb = SyncedFrameBuffer(synced_frame)
+            parsed = self.frame_parser.parse_frame(fb)
+            assembled = self.frame_assembler.assemble(parsed)
+            assembled["task"] = self.config.task_name
+            self.dataset.add_frame(assembled)
+            saved_frames += 1
+            raw_frame_kept.append(True)
+
+        trimmed = filter_result.trimmed_count
+        print(
+            f"  Saved {saved_frames} frames "
+            f"(trimmed {trimmed}, total synced {len(synced_frames)})"
+        )
+
         self._last_raw_frame_kept = raw_frame_kept
         self._last_sync_abs_start_s = self.frame_synchronizer.get_sync_start_offset()
 
+        # Store filter result for this episode
+        ep_idx = self.episode_counter
+        self.episode_filter_results[ep_idx] = filter_result
+
+        return self._finalize_episode(episode_path, saved_frames)
+
+    def _finalize_episode(
+        self, episode_path: pathlib.Path, saved_frames: int
+    ) -> bool:
+        """Shared tail logic for both legacy and filter paths."""
         if saved_frames == 0:
             return False
 
-        # Save episode
         self.dataset.save_episode()
-
-        # Track episode
         self.episode_mapping[self.episode_counter] = str(episode_path)
 
-        # Check if episode is too short
         min_frames = self.config.min_episode_seconds * self.config.target_fps
         if saved_frames < min_frames:
             print(f"  Episode too short ({saved_frames} frames), adding to blacklist")
@@ -214,6 +329,7 @@ def convert_episodes_synced(
     tolerance_ms: float,
     with_annotations: bool = False,
     causal: bool = False,
+    filter_config: FilterConfig | None = None,
 ) -> dict:
     """Convert episodes using sensor-timestamp synchronization.
 
@@ -225,10 +341,13 @@ def convert_episodes_synced(
         with_annotations: If True, extract segment annotations from /annotation topic.
         causal: If True, only use past messages (timestamp <= target) for sync.
             This matches real-time inference where future data is unavailable.
+        filter_config: Optional :class:`FilterConfig` for episode quality
+            filters.  When *None*, the legacy ``FrameTargeter``-based
+            pause handling is used.
 
     Returns:
         Dict with keys: episode_mapping, blacklist, episodes_saved, total_time,
-        and optionally annotation_extractor if with_annotations=True.
+        episode_filter_results, and optionally annotation_extractor.
     """
     features = pipeline_config.build_features(config)
 
@@ -245,6 +364,7 @@ def convert_episodes_synced(
         tolerance_ms=tolerance_ms,
         robot_type=robot_type,
         causal=causal,
+        filter_config=filter_config,
     )
 
     # Initialize annotation extractor if requested
@@ -290,8 +410,10 @@ def convert_episodes_synced(
         "episode_mapping": converter.episode_mapping,
         "blacklist": converter.blacklist,
         "episodes_saved": len(converter.episode_mapping),
+        "episodes_skipped_quality": converter.episodes_skipped_quality,
         "total_time": converter.get_total_time(),
         "dataset": converter.dataset,  # Return dataset for push_to_hub
+        "episode_filter_results": converter.episode_filter_results,
     }
 
     if annotation_extractor:
@@ -305,7 +427,29 @@ def print_conversion_result(result: dict) -> None:
     print("\nConversion complete!")
     print(f"  - Episodes saved: {result['episodes_saved']}")
     print(f"  - Blacklisted episodes: {len(result['blacklist'])}")
+    skipped_q = result.get("episodes_skipped_quality", 0)
+    if skipped_q:
+        print(f"  - Skipped by quality gate: {skipped_q}")
     print(f"  - Total time: {result['total_time']:.2f}s")
+
+    # Print filter quality summary if available
+    filter_results = result.get("episode_filter_results", {})
+    if filter_results:
+        from collections import Counter
+
+        qualities = Counter(
+            fr.quality for fr in filter_results.values()
+        )
+        print("\n  Episode quality breakdown:")
+        for q in ["excellent", "good", "ok", "bad"]:
+            if q in qualities:
+                print(f"    - {q}: {qualities[q]}")
+
+        total_events = sum(
+            len(fr.events) for fr in filter_results.values()
+        )
+        if total_events:
+            print(f"  Total filter events: {total_events}")
 
 
 
@@ -324,6 +468,16 @@ class ScriptArgs:
     # Episode filtering
     success_only: bool = True  # Include only successful episodes (based on MCAP metadata)
     excellent_only: bool = True  # Include only episodes with 'excellent' quality
+
+    # --- Episode quality filters ----------------------------------------
+    enable_filters: bool = False  # Enable the new filter pipeline (replaces FrameTargeter)
+    trim_leading_pauses: bool = True  # Trim idle frames at episode start
+    trim_trailing_pauses: bool = False  # Trim idle frames at episode end
+    gripper_command_threshold: float = 0.5  # Threshold for open/closed classification
+    full_cycle_threshold_s: float = 1.3  # Max off→on→off cycle time
+    min_change_interval_s: float = 0.65  # Min time between gripper changes
+    moving_velocity_threshold: float = 0.03  # Velocity norm for "arm is moving"
+    min_quality: str = "excellent"  # Minimum episode quality to include (excellent/good/ok/bad)
 
     # Annotation extraction (opt-in)
     with_annotations: bool = False  # Extract segment annotations from /annotation topic
@@ -421,6 +575,17 @@ def main():
         tolerance_ms=tolerance_ms,
         with_annotations=config.with_annotations,
         causal=config.causal,
+        filter_config=FilterConfig(
+            max_pause_seconds=config.max_pause_seconds,
+            pause_velocity=config.pause_velocity,
+            trim_leading_pauses=config.trim_leading_pauses,
+            trim_trailing_pauses=config.trim_trailing_pauses,
+            gripper_command_threshold=config.gripper_command_threshold,
+            full_cycle_threshold_s=config.full_cycle_threshold_s,
+            min_change_interval_s=config.min_change_interval_s,
+            moving_velocity_threshold=config.moving_velocity_threshold,
+            min_quality=config.min_quality,
+        ) if config.enable_filters else None,
     )
 
     # Save annotations if extracted

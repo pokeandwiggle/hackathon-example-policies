@@ -58,6 +58,35 @@ class FrameParser:
         )
         return joint_velocity, gripper_states
 
+    def parse_filter_data(self, frame_buffer: FrameBuffer) -> dict:
+        """Extract lightweight data needed by episode quality filters.
+
+        Returns a dict with keys:
+          - ``joint_velocity``: joint velocity array
+          - ``gripper_state``: actual gripper joint positions
+          - ``des_gripper_left``: commanded gripper value (array)
+          - ``des_gripper_right``: commanded gripper value (array)
+        """
+        assert frame_buffer.is_complete(), "Frame buffer is not complete"
+
+        msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.ACTUAL_JOINT_STATE)
+        _, joint_velocity, gripper_state = rmp.parse_joints(
+            self.config, msg_data, schema_name
+        )
+
+        msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DES_GRIPPER_LEFT)
+        des_grip_l = rmp.parse_array(self.config, msg_data, schema_name)
+
+        msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DES_GRIPPER_RIGHT)
+        des_grip_r = rmp.parse_array(self.config, msg_data, schema_name)
+
+        return {
+            "joint_velocity": joint_velocity,
+            "gripper_state": gripper_state,
+            "des_gripper_left": des_grip_l,
+            "des_gripper_right": des_grip_r,
+        }
+
     def parse_frame(self, frame_buffer: FrameBuffer) -> dict:
         """Parses a complete frame buffer into a structured dictionary."""
         assert frame_buffer.is_complete(), "Frame buffer is not complete"
