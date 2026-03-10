@@ -20,16 +20,16 @@ from ..config.rosbag_topics import RosSchemaEnum
 
 
 def extract_sensor_timestamp(
-    msg_data: bytes, schema_name: RosSchemaEnum
+    msg_data: bytes, schema_name: RosSchemaEnum | str
 ) -> float | None:
     """Extract sensor timestamp from a ROS message header.
 
-    Parses the message and looks for a 'header' or 'stamp' field containing
-    the sensor timestamp.
+    Parses the message and looks for a 'header', 'stamp', or 'timestamp'
+    field containing the sensor timestamp.
 
     Args:
         msg_data: Raw message bytes
-        schema_name: ROS schema enum for the message type
+        schema_name: ROS schema enum or string name for the message type
 
     Returns:
         Timestamp in seconds (float), or None if message has no header.
@@ -42,11 +42,15 @@ def extract_sensor_timestamp(
         - teleop_controller_msgs/PoseTwist: has header
         - teleop_controller_msgs/GripperValues: has header
 
+    Message types with 'timestamp' field:
+        - foxglove_msgs/CompressedVideo: has timestamp (not header)
+
     Message types WITHOUT headers (returns None):
         - geometry_msgs/Transform: no header (v1.0 tcp_pose recordings)
         - std_msgs/Float64MultiArray: no header (schema v1.0 gripper values)
     """
-    msg = deserialize_cdr(msg_data, schema_name.value)
+    name = schema_name.value if isinstance(schema_name, RosSchemaEnum) else schema_name
+    msg = deserialize_cdr(msg_data, name)
 
     # Most ROS messages with timestamps have a 'header' field
     if hasattr(msg, "header") and hasattr(msg.header, "stamp"):
