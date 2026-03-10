@@ -105,6 +105,10 @@ class FrameSynchronizer:
         self._invalid_episode = False
         # Absolute timestamp where synced frames begin (set during generate_synced_frames)
         self._sync_episode_start: float | None = None
+        # Raw first-timestamps before video decoding drops pre-keyframe frames
+        self._raw_first_timestamps: dict[RosTopicEnum, float | None] = {
+            topic: None for topic in self.required_topics
+        }
 
     def _build_required_topics(self) -> list[RosTopicEnum]:
         """Build list of required topics based on config."""
@@ -208,6 +212,7 @@ class FrameSynchronizer:
             if self.messages[topic]:
                 self.messages[topic].sort(key=lambda msg: msg.timestamp)
                 self.timestamps[topic] = [msg.timestamp for msg in self.messages[topic]]
+                self._raw_first_timestamps[topic] = self.timestamps[topic][0]
 
     def decode_video_topics(self, width: int, height: int) -> None:
         """Pre-decode all AV1 video frames sequentially for each video topic.
@@ -349,10 +354,17 @@ class FrameSynchronizer:
             print(f"WARNING: Skipping episode - {stats['skip_reason']}")
             return False, stats
 
-        # Check if all sensors are using the same clock by comparing first timestamps
-        if len(first_timestamps) >= 2:
-            clock_spread = max(first_timestamps) - min(first_timestamps)
-            max_clock_spread = 2.0  # Maximum allowed spread in seconds
+        # Check if all sensors are using the same clock by comparing first timestamps.
+        # Use raw (pre-decode) first timestamps so that AV1 keyframe skipping
+        # doesn't inflate the spread — video frames before the first keyframe
+        # are dropped during decode_video_topics(), which can shift the first
+        # decoded timestamp forward by ~1 s and falsely trigger this check.
+        raw_firsts = [
+            ts for ts in self._raw_first_timestamps.values() if ts is not None
+        ]
+        if len(raw_firsts) >= 2:
+            clock_spread = max(raw_firsts) - min(raw_firsts)
+            max_clock_spread = 1.0  # Maximum allowed spread in seconds
             stats["clock_spread_s"] = clock_spread
             if clock_spread > max_clock_spread:
                 stats["skip_reason"] = f"sensors appear to use different clocks (spread: {clock_spread:.2f}s)"
