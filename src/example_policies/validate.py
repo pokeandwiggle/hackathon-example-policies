@@ -219,7 +219,7 @@ def main():
         # Remove action from batch before preprocessing — during deployment
         # the observation dict never contains actions.
         obs = {k: v for k, v in sample.items() if k != "action"}
-        
+
         # Detect whether a new action chunk will be predicted this step.
         _queues = getattr(policy, "_queues", None)
         is_new_chunk = (
@@ -239,7 +239,7 @@ def main():
         action = policy.select_action(
             obs
         )  # This is the output of the action chunk. Could be more or less.
-        
+
         # Apply postprocessor if available (unnormalization)
         # For stepwise unnormalizers we must unnormalize the full chunk at once
         # so each timestep gets its correct per-step stats (p02[k], p98[k]).
@@ -259,7 +259,7 @@ def main():
             else:
                 # No queue (e.g. ACT) — unnormalize individually.
                 action = postprocessor(action)
-        
+
         pred = action.detach().float().view(-1)
 
         # Convert UMI-delta predictions (20-dim) to absolute TCP (16-dim)
@@ -386,9 +386,9 @@ def main():
         else:
             # When run directly, use the script's directory
             output_dir = Path(__file__).parent.resolve()
-        
+
         output_path = output_dir / f"validation_actions_{args.max_episodes}_episodes.png"
-    
+
     fig.savefig(output_path, dpi=150)
     plt.close(fig)
     print(f"Saved abs-TCP plot with {num_episodes} episodes to {output_path}")

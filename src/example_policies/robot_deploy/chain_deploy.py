@@ -4,6 +4,7 @@ import torch
 
 from example_policies.robot_deploy.deploy_argument_parser import DeployArgumentParser
 from example_policies.robot_deploy.deploy import move_home
+from example_policies.utils.embodiment import get_joint_config
 from example_policies.robot_deploy.deploy_core.deployment_structures import (
     InferenceConfig,
 )
@@ -21,6 +22,9 @@ from example_policies.robot_deploy.robot_io.robot_interface import (
 def main():
     parser = DeployArgumentParser.create_multi_policy_parser()
     args = parser.parse_args()
+
+    if args.move_home and args.mount is None:
+        parser.error("--mount is required when --move-home is set")
 
     # Load policies
     device = "cpu" if not torch.cuda.is_available() else "cuda"
@@ -41,7 +45,11 @@ def main():
         print("Periodic prompts disabled (only termination signals will trigger)")
 
     with RobotConnection(args.robot_server) as stub:
-        robot_interface = RobotInterface(stub, policies[0].config)
+        embodiment = get_joint_config(args.embodiment) if args.embodiment else None
+        if embodiment is not None:
+            for pb in policies:
+                pb.config.embodiment = embodiment
+        robot_interface = RobotInterface(stub, policies[0].config, embodiment)
 
         # Move to home position if requested
         if args.move_home:

@@ -16,8 +16,10 @@
 from ..config.pipeline_config import PipelineConfig
 from ..config.rosbag_topics import RosTopicEnum
 from ..utils.geometric import continuous_quat
+from ...utils.embodiment import EmbodimentJointConfig
 from . import message_parsers as rmp
 from .frame_buffer import FrameBuffer
+from .message_parsers import ImageParser
 
 
 class FrameParser:
@@ -30,42 +32,53 @@ class FrameParser:
     Only tracks quaternions for features that are enabled in the config.
     """
 
-    def __init__(self, config: PipelineConfig):
+    def __init__(
+        self,
+        config: PipelineConfig,
+        embodiment: EmbodimentJointConfig | None = None,
+    ):
         self.config = config
-        # Only track quaternions for enabled features
-        self._track_actual_tcp = config.requires_tcp_poses()
-        self._track_des_tcp = config.is_tcp_action()
+        self.embodiment = embodiment
         self._prev_actual_tcp_left = None
         self._prev_actual_tcp_right = None
         self._prev_des_tcp_left = None
         self._prev_des_tcp_right = None
+        self._image_parsers: dict[str, ImageParser] = {}
 
     def reset(self):
         """Reset quaternion tracking state for a new episode."""
-        if self._track_actual_tcp:
-            self._prev_actual_tcp_left = None
-            self._prev_actual_tcp_right = None
-        if self._track_des_tcp:
-            self._prev_des_tcp_left = None
-            self._prev_des_tcp_right = None
+        self._prev_actual_tcp_left = None
+        self._prev_actual_tcp_right = None
+        self._prev_des_tcp_left = None
+        self._prev_des_tcp_right = None
+        for p in self._image_parsers.values():
+            p.reset()
 
     def parse_velocities(self, frame_buffer: FrameBuffer):
         """Parses only the joint velocities for quick pause detection."""
         assert frame_buffer.is_complete(), "Frame buffer is not complete"
         msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.ACTUAL_JOINT_STATE)
         _, joint_velocity, gripper_states = rmp.parse_joints(
-            self.config, msg_data, schema_name
+            self.config, msg_data, schema_name, embodiment=self.embodiment
         )
         return joint_velocity, gripper_states
 
-    def parse_frame(self, frame_buffer: FrameBuffer) -> dict:
-        """Parses a complete frame buffer into a structured dictionary."""
+    def parse_frame(self, frame_buffer: FrameBuffer) -> dict | None:
+        """Parses a complete frame buffer into a structured dictionary.
+
+        Returns None if any image cannot be decoded (e.g. AV1 P-frame
+        received before the first keyframe).
+        """
         assert frame_buffer.is_complete(), "Frame buffer is not complete"
 
         parsed_frame = {}
         parsed_frame.update(self._parse_state(frame_buffer))
         parsed_frame.update(self._parse_desired(frame_buffer))
-        parsed_frame.update(self._parse_images(frame_buffer))
+
+        images = self._parse_images(frame_buffer)
+        if any(v is None for v in images.values()):
+            return None
+        parsed_frame.update(images)
 
         return parsed_frame
 
@@ -73,7 +86,7 @@ class FrameParser:
         state_frame = {}
         msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.ACTUAL_JOINT_STATE)
         joint_data, _, gripper_state = rmp.parse_joints(
-            self.config, msg_data, schema_name
+            self.config, msg_data, schema_name, embodiment=self.embodiment
         )
         state_frame["joint_data"] = joint_data
         state_frame["gripper_state"] = gripper_state
@@ -97,12 +110,12 @@ class FrameParser:
     def _parse_desired(self, frame_buffer) -> dict:
         desired_frame = {}
         msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DES_GRIPPER_LEFT)
-        desired_frame["des_gripper_left"] = rmp.parse_array(
+        desired_frame["des_gripper_left"] = rmp.parse_gripper(
             self.config, msg_data, schema_name
         )
 
         msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DES_GRIPPER_RIGHT)
-        desired_frame["des_gripper_right"] = rmp.parse_array(
+        desired_frame["des_gripper_right"] = rmp.parse_gripper(
             self.config, msg_data, schema_name
         )
 
@@ -123,13 +136,21 @@ class FrameParser:
 
         elif self.config.is_joint_action():
             msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DES_JOINT_LEFT)
-            desired_frame["des_joint_left"] = rmp.parse_joint_waypoint(
-                self.config, msg_data, schema_name, "left"
+            desired_frame["des_joint_left"] = rmp.parse_target(
+                self.config,
+                msg_data,
+                schema_name,
+                "left",
+                embodiment=self.embodiment,
             )
 
             msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DES_JOINT_RIGHT)
-            desired_frame["des_joint_right"] = rmp.parse_joint_waypoint(
-                self.config, msg_data, schema_name, "right"
+            desired_frame["des_joint_right"] = rmp.parse_target(
+                self.config,
+                msg_data,
+                schema_name,
+                "right",
+                embodiment=self.embodiment,
             )
         else:
             raise NotImplementedError(
@@ -143,29 +164,34 @@ class FrameParser:
         images = {}
         # Static camera is always included
         msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.RGB_STATIC_IMAGE)
-        images["observation.images.rgb_static"] = rmp.parse_image(
-            self.config, msg_data, schema_name
-        )
+        images["observation.images.rgb_static"] = self._image_parser(
+            "rgb_static"
+        ).parse(msg_data, schema_name)
 
         if self.config.include_rgb_images:
             msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.RGB_LEFT_IMAGE)
-            images["observation.images.rgb_left"] = rmp.parse_image(
-                self.config, msg_data, schema_name
-            )
+            images["observation.images.rgb_left"] = self._image_parser(
+                "rgb_left"
+            ).parse(msg_data, schema_name)
 
             msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.RGB_RIGHT_IMAGE)
-            images["observation.images.rgb_right"] = rmp.parse_image(
-                self.config, msg_data, schema_name
-            )
+            images["observation.images.rgb_right"] = self._image_parser(
+                "rgb_right"
+            ).parse(msg_data, schema_name)
 
         if self.config.include_depth_images:
             msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DEPTH_LEFT_IMAGE)
-            images["observation.images.depth_left"] = rmp.parse_image(
-                self.config, msg_data, schema_name
-            )
+            images["observation.images.depth_left"] = self._image_parser(
+                "depth_left"
+            ).parse(msg_data, schema_name)
 
             msg_data, schema_name = frame_buffer.get_msg(RosTopicEnum.DEPTH_RIGHT_IMAGE)
-            images["observation.images.depth_right"] = rmp.parse_image(
-                self.config, msg_data, schema_name
-            )
+            images["observation.images.depth_right"] = self._image_parser(
+                "depth_right"
+            ).parse(msg_data, schema_name)
         return images
+
+    def _image_parser(self, key: str) -> ImageParser:
+        if key not in self._image_parsers:
+            self._image_parsers[key] = ImageParser(self.config)
+        return self._image_parsers[key]

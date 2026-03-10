@@ -39,7 +39,7 @@ class ActionMode(Enum):
         # Check config flag first — most reliable for chunk-relative models
         # where the dataset has abs TCP names/shape but the model outputs
         # UMI-delta (20-dim) actions.
-        if getattr(cfg, "use_chunk_relative_actions", False):
+        if getattr(cfg, "use_chunk_relative_actions", None) is True:
             return ActionMode.UMI_DELTA_TCP
 
         # Fallback for early legacy models

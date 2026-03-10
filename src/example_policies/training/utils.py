@@ -50,20 +50,20 @@ def make_episode_white_list(dataset_root_dir: str | pathlib.Path):
     with open(blacklist_path, "r") as f:
         # Use a set for efficient lookup of blacklisted indices.
         blacklisted_indices = set(json.load(f))
-    
+
     # If blacklist is empty, no need to filter
     if not blacklisted_indices:
         return None
 
     all_episodes = []
-    
+
     # Try new format first (info.json with total_episodes)
     if os.path.exists(info_path):
         with open(info_path, "r") as f:
             info = json.load(f)
         if "total_episodes" in info:
             all_episodes = list(range(info["total_episodes"]))
-    
+
     # Fall back to old format (episodes.jsonl)
     if not all_episodes and os.path.exists(episodes_path):
         with open(episodes_path, "r") as f:
@@ -71,7 +71,7 @@ def make_episode_white_list(dataset_root_dir: str | pathlib.Path):
             for line in f:
                 if line.strip():  # Ensure the line is not empty
                     all_episodes.append(json.loads(line)["episode_index"])
-    
+
     if not all_episodes:
         return None
 

@@ -40,7 +40,7 @@ from typing import Any
 import torch
 from torch import Tensor
 
-from lerobot.configs.types import FeatureType, PipelineFeatureType, PolicyFeature
+from lerobot.configs.types import PipelineFeatureType, PolicyFeature
 from lerobot.processor.core import EnvTransition, TransitionKey
 from lerobot.processor.pipeline import ProcessorStep, ProcessorStepRegistry
 

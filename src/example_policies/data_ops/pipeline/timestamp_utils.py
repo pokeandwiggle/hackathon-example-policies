@@ -19,7 +19,9 @@ from rosbags.serde import deserialize_cdr
 from ..config.rosbag_topics import RosSchemaEnum
 
 
-def extract_sensor_timestamp(msg_data: bytes, schema_name: RosSchemaEnum) -> float | None:
+def extract_sensor_timestamp(
+    msg_data: bytes, schema_name: RosSchemaEnum
+) -> float | None:
     """Extract sensor timestamp from a ROS message header.
 
     Parses the message and looks for a 'header' or 'stamp' field containing
@@ -36,11 +38,13 @@ def extract_sensor_timestamp(msg_data: bytes, schema_name: RosSchemaEnum) -> flo
         - sensor_msgs/JointState: has header
         - sensor_msgs/CompressedImage: has header
         - geometry_msgs/PoseStamped: has header
+        - geometry_msgs/TransformStamped: has header
         - teleop_controller_msgs/PoseTwist: has header
+        - teleop_controller_msgs/GripperValues: has header
 
     Message types WITHOUT headers (returns None):
-        - geometry_msgs/Transform: no header
-        - std_msgs/Float64MultiArray: no header
+        - geometry_msgs/Transform: no header (v1.0 tcp_pose recordings)
+        - std_msgs/Float64MultiArray: no header (schema v1.0 gripper values)
     """
     msg = deserialize_cdr(msg_data, schema_name.value)
 
@@ -49,14 +53,14 @@ def extract_sensor_timestamp(msg_data: bytes, schema_name: RosSchemaEnum) -> flo
         stamp = msg.header.stamp
         return stamp.sec + stamp.nanosec * 1e-9
 
-    # Some messages have a direct 'stamp' field
+    # Some messages have a direct 'stamp' field (without header)
     if hasattr(msg, "stamp"):
         stamp = msg.stamp
         return stamp.sec + stamp.nanosec * 1e-9
 
-    # For PoseStamped, the stamp is directly on the message
-    if hasattr(msg, "pose") and hasattr(msg, "header"):
-        stamp = msg.header.stamp
+    # foxglove_msgs/CompressedVideo uses 'timestamp' instead of 'stamp'
+    if hasattr(msg, "timestamp") and hasattr(msg.timestamp, "sec"):
+        stamp = msg.timestamp
         return stamp.sec + stamp.nanosec * 1e-9
 
     # No timestamp available

@@ -14,7 +14,6 @@
 
 import numpy as np
 
-from ...utils.state_order import CANONICAL_ARM_JOINTS
 from .robot_service import robot_service_pb2, robot_service_pb2_grpc
 
 
@@ -42,7 +41,10 @@ class RobotClient:
 
         return state, robot_names
 
-    def send_cart_queue_target(self, cart_target: robot_service_pb2.CartesianTarget):
+    def send_cart_queue_target(
+        self,
+        cart_target: robot_service_pb2.CartesianTarget,
+    ):
         ctrl_mode = RobotClient.CART_QUEUE
 
         if self.control_mode != ctrl_mode:
@@ -53,12 +55,15 @@ class RobotClient:
             response = self.stub.PrepareExecution(prepare_request)
             self.control_mode = ctrl_mode
 
-        queue_target_request = robot_service_pb2.EnqueueCartesianTargetsRequest()
+        queue_target_request = robot_service_pb2.EnqueueCartesianWaypointsRequest()
         queue_target_request.cartesian_targets.append(cart_target)
-        response = self.stub.EnqueueCartesianTargets(queue_target_request)
+        response = self.stub.EnqueueCartesianWaypoints(queue_target_request)
         return response
 
-    def send_cart_waypoint(self, cart_target: robot_service_pb2.CartesianTarget):
+    def send_cart_waypoint(
+        self,
+        cart_target: robot_service_pb2.CartesianTarget,
+    ):
         ctrl_mode = RobotClient.CART_WAYPOINT
 
         if self.control_mode != ctrl_mode:
@@ -74,7 +79,10 @@ class RobotClient:
         response = self.stub.SetCartesianWaypoint(waypoint_request)
         return response
 
-    def send_cart_direct_target(self, cart_target: robot_service_pb2.CartesianTarget):
+    def send_cart_direct_target(
+        self,
+        cart_target: robot_service_pb2.CartesianTarget,
+    ):
         ctrl_mode = RobotClient.CART_DIRECT
 
         if self.control_mode != ctrl_mode:
@@ -92,7 +100,10 @@ class RobotClient:
         response = self.stub.SetCartesianTarget(set_target_request)
         return response
 
-    def send_joint_direct_target(self, joint_target: robot_service_pb2.JointTarget):
+    def send_joint_direct_target(
+        self,
+        joint_target: robot_service_pb2.JointTarget,
+    ):
         ctrl_mode = RobotClient.JOINT_DIRECT
 
         if self.control_mode != ctrl_mode:
@@ -110,16 +121,13 @@ class RobotClient:
         response = self.stub.SetJointTarget(set_target_request)
         return response
 
-    def move_to_joint_goal(
-        self, joint_angles: np.ndarray, joint_names: list[str] = CANONICAL_ARM_JOINTS
-    ):
+    def move_to_joint_goal(self, joint_angles: np.ndarray, joint_names: list[str]):
         """
         Moves the robot to a specific joint configuration using trajectory planning.
 
         Args:
             joint_angles: Array of target joint angles (radians)
-            joint_names: List of joint names corresponding to the angles.
-                        Defaults to CANONICAL_ARM_JOINTS (left + right arm joints)
+            joint_names: List of joint names corresponding to the angles
 
         Returns:
             The response from the MoveToJointGoal gRPC call
@@ -192,7 +200,9 @@ class RobotClient:
         for cart_target in cart_targets:
             for arm_id, pose in cart_target.robot_poses.items():
                 if arm_id not in arm_requests:
-                    request = robot_service_pb2.VisualizeCartesianTargetActionChunkRequest()
+                    request = (
+                        robot_service_pb2.VisualizeCartesianTargetActionChunkRequest()
+                    )
                     request.arm_id = arm_id
                     arm_requests[arm_id] = request
                 arm_requests[arm_id].poses.append(pose)
@@ -201,7 +211,9 @@ class RobotClient:
         responses = {}
         for arm_id, request in arm_requests.items():
             if request.poses:
-                responses[arm_id] = self.stub.VisualizeCartesianTargetActionChunk(request)
+                responses[arm_id] = self.stub.VisualizeCartesianTargetActionChunk(
+                    request
+                )
 
         return responses
 
@@ -227,18 +239,4 @@ class RobotClient:
             request.configurations.append(config)
 
         response = self.stub.VisualizeJointConfigurationPath(request)
-        return response
-    
-    def send_move_home(self):
-        """
-        Sends a request to move the robot to its home position and resets the control mode.
-
-        Returns:
-            The response from the MoveHome gRPC call.
-        """
-        # Reset control_mode because moving home is a special operation that does not use the previous control mode.
-        self.control_mode = None
-
-        move_home_request = robot_service_pb2.MoveHomeRequest()
-        response = self.stub.MoveHome(move_home_request)
         return response

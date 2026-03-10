@@ -264,25 +264,25 @@ class Pi0Config(PolicyConfigBase):
 @dataclass
 class Pi0PretrainedConfig(PolicyConfigBase):
     """Pi0 Policy Configuration with Pretrained Weights.
-    
+
     π0 (Pi-Zero) is a Vision-Language-Action (VLA) model that uses:
     - PaliGemma vision-language backbone (SigLIP + Gemma)
     - Expert Gemma layers for action prediction
     - Flow-matching for action generation
-    
+
     This config is specifically for FINE-TUNING from the pretrained
     `lerobot/pi0` checkpoint on HuggingFace. The pretrained model was
     trained on diverse robot manipulation data.
-    
+
     Requires:
     - CUDA GPU (model runs on GPU only)
     - ~16GB+ VRAM for batch_size=1 (RTX 5090 with 32GB is excellent)
     - Hugging Face token with access to pi0 weights
-    
+
     Action Space:
     - Works with absolute TCP (position + quaternion) action spaces
     - Automatically pads to max_state_dim/max_action_dim (default 32)
-    
+
     Example usage in training notebook:
         config = Pi0PretrainedConfig(pretrained_actions=True)
     """
@@ -291,22 +291,22 @@ class Pi0PretrainedConfig(PolicyConfigBase):
     lr: float = 2.5e-5  # Lower LR for fine-tuning pretrained models
     steps: int = 30_000
     save_freq: int = 5_000
-    
+
     # Action chunking (at 10Hz: 16 steps = 1.6s prediction, execute 8 = 0.8s)
     chunk_size: int = 16  # How many future actions to predict
     n_action_steps: int = 8  # How many to execute before re-planning
-    
+
     # Fine-tuning settings
     freeze_vision_encoder: bool = True  # Freeze SigLIP vision encoder (saves memory)
     train_expert_only: bool = False  # Only train action expert (fastest)
     train_state_proj: bool = True  # Train state projection layer
-    
+
     # Flow matching
     num_steps: int = 10  # Number of denoising steps during inference
-    
+
     # Whether to load pretrained weights from HuggingFace
     pretrained_actions: bool = True  # Default to True for this config
-    
+
     # HuggingFace model path for pretrained weights
     pretrained_model_path: str = "lerobot/pi0"
 
@@ -327,7 +327,7 @@ class Pi0PretrainedConfig(PolicyConfigBase):
 
     def get_pretrained_config(self) -> Optional[PreTrainedConfig]:
         """Load pretrained Pi0 config from HuggingFace.
-        
+
         The pretrained model is at 'lerobot/pi0' on HuggingFace Hub.
         We create a fresh config with our settings and set pretrained_path
         so that make_policy() will load the weights.
@@ -335,7 +335,7 @@ class Pi0PretrainedConfig(PolicyConfigBase):
         if self.pretrained_actions:
             # Import the policy class to use from_pretrained
             from lerobot.policies.pi0.configuration_pi0 import PI0Config
-            
+
             # Create fresh config with our settings (don't load from HF config.json)
             # The weights will be loaded by make_policy() when pretrained_path is set
             config = PI0Config(
@@ -356,15 +356,15 @@ class Pi0PretrainedConfig(PolicyConfigBase):
 @dataclass
 class Pi0FastConfig(PolicyConfigBase):
     """Pi0-FAST Policy Configuration.
-    
+
     Pi0-FAST uses autoregressive token prediction (FAST tokenizer) instead of
     flow matching. Generally faster inference but may require more training.
-    
+
     Key differences from Pi0:
     - Uses FAST tokenizer for action generation
     - Autoregressive decoding instead of flow-matching
     - May be faster at inference time
-    
+
     Requires:
     - CUDA GPU
     - Hugging Face token with access to pi0fast weights
@@ -375,11 +375,11 @@ class Pi0FastConfig(PolicyConfigBase):
     lr: float = 1e-4  # PI0FASTConfig default
     steps: int = 30_000
     save_freq: int = 5_000
-    
+
     # Action chunking (at 10Hz: 10 steps = 1s prediction, execute 5 = 0.5s)
     chunk_size: int = 10  # PI0FASTConfig default
     n_action_steps: int = 5  # PI0FASTConfig default
-    
+
     # Fine-tuning settings
     freeze_vision_encoder: bool = True
 
@@ -497,7 +497,6 @@ class DiTFlowConfig(PolicyConfigBase):
                     "absolute TCP actions (feature names starting with 'tcp_')."
                 )
             # ── Absolute TCP dataset → chunk-relative conversion at training time ──
-            from .utils.action_order import UMI_ROTATION_FEATURE_INDICES
             from .utils.compute_stepwise_stats import (
                 compute_stepwise_stats_from_parquet,
             )

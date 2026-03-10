@@ -114,23 +114,23 @@ def load_policy(checkpoint_dir: pathlib.Path):
 
 def _extract_stats_from_policy(policy) -> dict | None:
     """Extract dataset stats from policy's normalize_inputs module for backward compatibility.
-    
+
     Old checkpoints have stats stored in normalize_inputs.buffer_* parameters.
     This extracts them to create processors dynamically.
     """
     if not hasattr(policy, 'normalize_inputs'):
         return None
-    
+
     stats = {}
     normalize = policy.normalize_inputs
-    
+
     # Iterate through attributes looking for buffer_* ParameterDicts
     for attr_name in dir(normalize):
         if attr_name.startswith('buffer_'):
             # Convert buffer_observation_state back to observation.state
             key = attr_name[7:].replace('_', '.')
             buffer = getattr(normalize, attr_name)
-            
+
             if hasattr(buffer, 'mean') and hasattr(buffer, 'std'):
                 stats[key] = {
                     'mean': buffer['mean'].data,
@@ -141,7 +141,7 @@ def _extract_stats_from_policy(policy) -> dict | None:
                     'min': buffer['min'].data,
                     'max': buffer['max'].data,
                 }
-    
+
     # Also get action stats from unnormalize_outputs
     if hasattr(policy, 'unnormalize_outputs'):
         unnormalize = policy.unnormalize_outputs
@@ -149,7 +149,7 @@ def _extract_stats_from_policy(policy) -> dict | None:
             if attr_name.startswith('buffer_'):
                 key = attr_name[7:].replace('_', '.')
                 buffer = getattr(unnormalize, attr_name)
-                
+
                 if hasattr(buffer, 'mean') and hasattr(buffer, 'std'):
                     stats[key] = {
                         'mean': buffer['mean'].data,
@@ -160,5 +160,5 @@ def _extract_stats_from_policy(policy) -> dict | None:
                         'min': buffer['min'].data,
                         'max': buffer['max'].data,
                     }
-    
+
     return stats if stats else None

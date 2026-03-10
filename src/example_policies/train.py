@@ -103,10 +103,10 @@ def train(cfg):
 
 
 def main():
+    apply_patches()
     cli_config = draccus.parse(config_class=TrainCliArgs)
     train_policy(cli_config)
 
 
 if __name__ == "__main__":
-    apply_patches()
     main()

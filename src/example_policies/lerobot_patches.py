@@ -38,11 +38,11 @@ from .utils.constants import INFO_FILE, META_DIR
 def monkey_patch_video_query():
     """
     Patch _query_videos to avoid squeezing the temporal dimension when n_obs_steps=1.
-    
+
     The original code uses `frames.squeeze(0)` which removes the temporal dimension
     when there's only 1 frame. This causes shape mismatches in the policy's forward
     pass which expects shape (B, n_obs_steps, C, H, W).
-    
+
     The original squeeze(0) was likely intended for a different purpose but is harmful
     when n_obs_steps=1. We simply don't squeeze at all - the temporal dimension should
     always be preserved.
@@ -60,7 +60,7 @@ def monkey_patch_video_query():
             # shift the query timestamp accordingly.
             from_timestamp = ep[f"videos/{vid_key}/from_timestamp"]
             shifted_query_ts = [from_timestamp + ts for ts in query_ts]
-            
+
             video_path = self.root / self.meta.get_video_file_path(ep_idx, vid_key)
             frames = video_utils.decode_video_frames(
                 video_path, shifted_query_ts, self.tolerance_s, self.video_backend
@@ -77,7 +77,7 @@ def monkey_patch_video_query():
 def monkey_patch_policy_factory():
     """
     Extend lerobot's policy factory to include custom policies.
-    
+
     This allows training with custom policies (ditflow, xditflow) via lerobot's
     training script by falling back to our policy registry when lerobot doesn't
     recognize the policy name.
@@ -98,7 +98,7 @@ def monkey_patch_policy_factory():
 def monkey_patch_save_checkpoint():
     """
     Extend save_checkpoint to copy dataset metadata for deployment.
-    
+
     This copies dataset_info.json to the pretrained model directory so that
     deployment code can access dataset metadata (e.g., action feature names)
     without needing the original dataset.

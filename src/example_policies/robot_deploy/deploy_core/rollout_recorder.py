@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import os
 import pathlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np

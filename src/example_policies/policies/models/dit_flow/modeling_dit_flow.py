@@ -329,7 +329,7 @@ class _DiTNoiseNet(nn.Module):
         # ODE sample clipping.  Since rotation values are in [-1,1] and the clip
         # range is 1.5, the clamp never affects converged values but constrains
         # wild intermediate ODE states.
-        self.clip_sample_skip_indices = None
+        self.clip_sample_skip_indices = clip_sample_skip_indices
 
         print(
             "Number of flow params: {:.2f}M".format(
@@ -491,16 +491,16 @@ class DiTFlowPolicy(PreTrainedPolicy):
     def select_action(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
         if "action" in batch:
             batch.pop("action")  # remove action if present in the input batch
-        
+
         # Note: Normalization is now handled by the preprocessor pipeline
-        
+
         # FIX: Clamp normalized state to [-1, 1] to prevent OOD values
         # Features with tiny normalization ranges (e.g., unused gripper) can produce
         # extreme values that break inference. See investigation in compare_dataset_vs_live.
         if OBS_STATE in batch:
             batch = dict(batch)  # shallow copy
             batch[OBS_STATE] = torch.clamp(batch[OBS_STATE], -1.0, 1.0)
-        
+
         if self.config.image_features:
             batch = dict(
                 batch

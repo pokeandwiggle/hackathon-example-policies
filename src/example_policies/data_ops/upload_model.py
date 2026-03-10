@@ -28,8 +28,6 @@ Usage (Python):
 from __future__ import annotations
 
 import pathlib
-import shutil
-import tempfile
 
 from huggingface_hub import HfApi
 

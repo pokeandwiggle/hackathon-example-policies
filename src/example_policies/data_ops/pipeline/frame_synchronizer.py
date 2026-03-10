@@ -22,7 +22,7 @@ synthetic timestamp using nearest-neighbor search.
 import bisect
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator
+from typing import Any, Iterator
 
 from mcap.reader import make_reader
 
@@ -51,7 +51,7 @@ class TimestampedMessage:
     """A message with its sensor timestamp."""
 
     timestamp: float  # seconds
-    data: bytes
+    data: bytes | Any  # bytes for raw messages, np.ndarray for pre-decoded video
     schema_name: RosSchemaEnum
 
 
@@ -81,10 +81,10 @@ class FrameSynchronizer:
         self.config = config
         self.target_frequency = config.target_fps
         self.causal = causal
-        
+
         # Default tolerance to 100% of frame interval (100ms at 10Hz)
         if tolerance_ms is None:
-            tolerance_ms = (1000.0 / self.target_frequency) * 1.0
+            tolerance_ms = 1000.0 / self.target_frequency
         self.tolerance = tolerance_ms / 1000.0  # Convert to seconds
 
         # Build list of required topics
@@ -208,6 +208,61 @@ class FrameSynchronizer:
             if self.messages[topic]:
                 self.messages[topic].sort(key=lambda msg: msg.timestamp)
                 self.timestamps[topic] = [msg.timestamp for msg in self.messages[topic]]
+
+    def decode_video_topics(self, width: int, height: int) -> None:
+        """Pre-decode all AV1 video frames sequentially for each video topic.
+
+        AV1 is stateful: P-frames reference previous frames, so the codec must
+        see every frame in order.  The synchronizer subsamples 30 fps streams to
+        10 Hz *after* ingestion, so if we only decoded the subsampled frames the
+        codec would miss keyframes and most P-frames would fail.
+
+        This method decodes ALL ingested messages for each COMPRESSED_VIDEO topic,
+        replaces ``TimestampedMessage.data`` with the decoded + resized numpy
+        array, and removes messages that failed to decode (mid-GOP P-frames
+        before the first keyframe).
+        """
+        import av
+        from ..utils.image_processor import decode_av1_frame, resize_and_normalize
+        import cv2
+
+        video_topics = [
+            topic for topic in self.required_topics
+            if self.messages[topic]
+            and self.messages[topic][0].schema_name == RosSchemaEnum.COMPRESSED_VIDEO
+        ]
+
+        if not video_topics:
+            return
+
+        from rosbags.serde import deserialize_cdr
+
+        for topic in video_topics:
+            codec = av.codec.CodecContext.create("libdav1d", "r")
+            decoded_messages: list[TimestampedMessage] = []
+            total = len(self.messages[topic])
+            failed = 0
+
+            for msg in self.messages[topic]:
+                video_msg = deserialize_cdr(msg.data, msg.schema_name.value)
+                bgr = decode_av1_frame(bytes(video_msg.data), codec)
+                if bgr is None:
+                    failed += 1
+                    continue
+                rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+                arr = resize_and_normalize(rgb, width, height, is_depth=False)
+                decoded_messages.append(TimestampedMessage(
+                    timestamp=msg.timestamp,
+                    data=arr,
+                    schema_name=msg.schema_name,
+                ))
+
+            self.messages[topic] = decoded_messages
+            self.timestamps[topic] = [m.timestamp for m in decoded_messages]
+            print(
+                f"  {topic.value}: decoded {total - failed}/{total} AV1 frames "
+                f"({failed} skipped before first keyframe)"
+            )
 
     def validate_episode(self) -> tuple[bool, dict]:
         """Validate episode data and compute synchronization statistics.
@@ -464,7 +519,7 @@ class FrameSynchronizer:
             f"over {duration:.2f}s"
         )
 
-    def get_sync_start_offset(self) -> float:
+    def get_sync_start_offset(self) -> float | None:
         """Get the absolute timestamp where synced frames begin.
 
         This is the max of all topics' first timestamps — the point where all
@@ -473,6 +528,7 @@ class FrameSynchronizer:
 
         Returns:
             Absolute Unix timestamp (seconds) of the first synced frame,
-            or 0.0 if generate_synced_frames hasn't been called yet.
+            or None if generate_synced_frames hasn't been called or yielded
+            no frames (e.g. validation failure, no overlap).
         """
-        return self._sync_episode_start if self._sync_episode_start is not None else 0.0
+        return self._sync_episode_start

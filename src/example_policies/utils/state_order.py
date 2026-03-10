@@ -1,56 +1,46 @@
 from typing import List, Optional
 
 from example_policies.data_ops.config.pipeline_config import GripperType, PipelineConfig
+from example_policies.utils.embodiment import EmbodimentJointConfig, get_joint_config
 
-# --- Constants for Joint Parsing (defined once for performance) ---
-LEFT_ARM = [f"panda_left_joint{i}" for i in range(1, 8)]
-RIGHT_ARM = [f"panda_right_joint{i}" for i in range(1, 8)]
-_LEFT_PANDA_GRIPPER = [f"panda_left_finger_joint{i}" for i in range(1, 3)]
-_RIGHT_PANDA_GRIPPER = [f"panda_right_finger_joint{i}" for i in range(1, 3)]
-
-_ROBOTIQ_JOINTS = [
-    "robotiq_85_left_knuckle_joint",
-    "robotiq_85_right_knuckle_joint",
-    "robotiq_85_left_inner_knuckle_joint",
-    "robotiq_85_right_inner_knuckle_joint",
-    "robotiq_85_left_finger_tip_joint",
-    "robotiq_85_right_finger_tip_joint",
-]
-
-_LEFT_ROBOTIQ_GRIPPER = ["panda_left_" + joint for joint in _ROBOTIQ_JOINTS]
-
-_RIGHT_ROBOTIQ_GRIPPER = ["panda_right_" + joint for joint in _ROBOTIQ_JOINTS]
-
-CANONICAL_ARM_JOINTS = LEFT_ARM + RIGHT_ARM
-ARM_JOINT_COUNT = len(LEFT_ARM) + len(RIGHT_ARM)  # Should be 14
+_DEFAULT_EMBODIMENT = get_joint_config("dual_panda_wall")
 
 
-def create_joint_order(cfg: PipelineConfig):
-    joint_order = CANONICAL_ARM_JOINTS.copy()
+def create_joint_order(
+    cfg: PipelineConfig,
+    embodiment: Optional[EmbodimentJointConfig] = None,
+) -> List[str]:
+    if embodiment is None:
+        embodiment = _DEFAULT_EMBODIMENT
+
+    joint_order = embodiment.canonical_arm_joints()
 
     if cfg.left_gripper == GripperType.PANDA:
-        joint_order += _LEFT_PANDA_GRIPPER
+        joint_order += embodiment.left_panda_gripper_joints()
     elif cfg.left_gripper == GripperType.ROBOTIQ:
-        joint_order += _LEFT_ROBOTIQ_GRIPPER
+        joint_order += embodiment.left_robotiq_gripper_joints()
     else:
         raise ValueError(f"Unsupported left gripper type: {cfg.left_gripper}")
 
     if cfg.right_gripper == GripperType.PANDA:
-        joint_order += _RIGHT_PANDA_GRIPPER
+        joint_order += embodiment.right_panda_gripper_joints()
     elif cfg.right_gripper == GripperType.ROBOTIQ:
-        joint_order += _RIGHT_ROBOTIQ_GRIPPER
+        joint_order += embodiment.right_robotiq_gripper_joints()
     else:
         raise ValueError(f"Unsupported right gripper type: {cfg.right_gripper}")
+
     return joint_order
 
 
 def _joint_reorder_indices(
-    cfg: PipelineConfig, names: list[str], joint_order: Optional[List[str]] = None
+    cfg: PipelineConfig,
+    names: list[str],
+    joint_order: Optional[List[str]] = None,
+    embodiment: Optional[EmbodimentJointConfig] = None,
 ) -> List[int]:
     if not joint_order:
-        joint_order = create_joint_order(cfg)
+        joint_order = create_joint_order(cfg, embodiment)
 
-    # Create a mapping from the message's joint order to our canonical order.
     name_to_idx = {name: i for i, name in enumerate(names)}
     reorder_indices = [name_to_idx[name] for name in joint_order]
     return reorder_indices

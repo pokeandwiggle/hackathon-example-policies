@@ -32,8 +32,14 @@ class DeployArgumentParser:
             "--mount",
             type=str,
             choices=["table", "wall"],
-            default="wall",
-            help="Robot mount type for home pose (default: wall)",
+            default=None,
+            help="Robot mount type for home pose (required when --move-home is set)",
+        )
+        parser.add_argument(
+            "--embodiment",
+            type=str,
+            default=None,
+            help="Embodiment name for joint name configuration (e.g. dual_panda_wall, dual_fr3_pedestal)",
         )
 
     @staticmethod

@@ -166,8 +166,27 @@ class StateFeatureSpec:
 
         # Detect single vs multi gripper value.
         # "gripper_left" (no suffix) → single; "gripper_left_0" → multi.
-        has_single = "gripper_left" in feature_names
-        has_multi = "gripper_left_0" in feature_names
-        spec.use_single_gripper_value = has_single and not has_multi
+        has_single_left = "gripper_left" in feature_names
+        has_multi_left = "gripper_left_0" in feature_names
+        has_single_right = "gripper_right" in feature_names
+        has_multi_right = "gripper_right_0" in feature_names
+
+        left_is_single = has_single_left and not has_multi_left
+        right_is_single = has_single_right and not has_multi_right
+
+        # Validate both sides agree (when both are Panda grippers).
+        if (
+            spec.left_gripper == GripperType.PANDA
+            and spec.right_gripper == GripperType.PANDA
+            and left_is_single != right_is_single
+        ):
+            raise ValueError(
+                "Inconsistent gripper mode: left side is "
+                f"{'single' if left_is_single else 'multi'} but right side is "
+                f"{'single' if right_is_single else 'multi'}. "
+                "Both Panda grippers must use the same mode."
+            )
+
+        spec.use_single_gripper_value = left_is_single
 
         return spec

@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-from pathlib import Path
 import torch
 
 from example_policies.robot_deploy.deploy_argument_parser import DeployArgumentParser
@@ -14,16 +13,51 @@ from example_policies.robot_deploy.robot_io.robot_interface import (
     RobotClient,
     RobotInterface,
 )
-from example_policies.utils.state_order import CANONICAL_ARM_JOINTS
+from example_policies.utils.embodiment import get_joint_config
 
-# Home pose configs for different robot mounts
-HOME_CONFIGS = {
-    "table": Path(__file__).parent / "panda_tum_config" / "dual_panda_table.yaml",
-    "wall": Path(__file__).parent / "panda_tum_config" / "dual_panda_wall.yaml",
+# Home joint configurations for different robot mounts
+# Order: left_joint1..7, right_joint1..7 (canonical arm joints)
+HOME_JOINT_ANGLES = {
+    "wall": [
+        # left arm
+        -0.0,
+        -1.6,
+        0.4,
+        -2.38,
+        1.7,
+        2.2,
+        -1.5,
+        # right arm
+        0.0,
+        -1.6,
+        -0.4,
+        -2.38,
+        -1.7,
+        2.2,
+        -0.0,
+    ],
+    "table": [
+        # left arm
+        0.0063710,
+        -0.3389045,
+        0.4691349,
+        -2.5093593,
+        -0.2406735,
+        2.3181225,
+        -1.1294540,
+        # right arm
+        -0.0140383,
+        -0.3523653,
+        -0.4208789,
+        -2.5604102,
+        0.3912430,
+        2.3928931,
+        -0.7659729,
+    ],
 }
 
 # Gripper open width in meters
-GRIPPER_OPEN_WIDTH = 1.0
+GRIPPER_OPEN_WIDTH = 0.08
 GRIPPER_SPEED = 0.1  # m/s
 GRIPPER_FORCE = 50.0  # N
 
@@ -36,42 +70,25 @@ def move_home(robot_interface: RobotInterface, mount: str = "wall") -> None:
         mount: Robot mount type ("table" or "wall")
     """
     import numpy as np
-    import yaml
 
-    config_path = HOME_CONFIGS.get(mount)
-    if config_path is None:
-        raise ValueError(f"Unknown mount type: {mount}. Valid options: {list(HOME_CONFIGS.keys())}")
-
-    if not config_path.exists():
-        raise FileNotFoundError(f"Home config not found: {config_path}")
-
-    with open(config_path) as f:
-        config = yaml.safe_load(f)
-
-    # Validate presence of home_joint_configuration in the YAML
-    if "home_joint_configuration" not in config:
-        raise KeyError(
-            f"Missing 'home_joint_configuration' in home config YAML: {config_path}"
-        )
-    home_config = config["home_joint_configuration"]
-
-    # Validate that all expected joint names are present
-    missing_joints = [joint_name for joint_name in CANONICAL_ARM_JOINTS if joint_name not in home_config]
-    if missing_joints:
-        raise KeyError(
-            f"Missing joint configuration(s) {missing_joints} in 'home_joint_configuration' "
-            f"for config file: {config_path}"
+    angles = HOME_JOINT_ANGLES.get(mount)
+    if angles is None:
+        raise ValueError(
+            f"Unknown mount type: {mount}. Valid options: {list(HOME_JOINT_ANGLES.keys())}"
         )
 
-    # Extract joint angles in canonical order (left arm first, then right arm)
-    joint_angles = np.array([home_config[joint_name] for joint_name in CANONICAL_ARM_JOINTS])
+    joint_angles = np.array(angles)
 
     print(f"Moving to home pose ({mount} mount)...")
-    robot_interface.move_to_joint_goal(joint_angles, CANONICAL_ARM_JOINTS)
+    robot_interface.move_to_joint_goal(joint_angles)
 
     print("Opening grippers...")
-    robot_interface.set_gripper_state("left", GRIPPER_OPEN_WIDTH, GRIPPER_SPEED, GRIPPER_FORCE)
-    robot_interface.set_gripper_state("right", GRIPPER_OPEN_WIDTH, GRIPPER_SPEED, GRIPPER_FORCE)
+    robot_interface.set_gripper_state(
+        "left", GRIPPER_OPEN_WIDTH, GRIPPER_SPEED, GRIPPER_FORCE
+    )
+    robot_interface.set_gripper_state(
+        "right", GRIPPER_OPEN_WIDTH, GRIPPER_SPEED, GRIPPER_FORCE
+    )
 
     print("Robot at home position with grippers open.")
 
@@ -79,6 +96,9 @@ def move_home(robot_interface: RobotInterface, mount: str = "wall") -> None:
 def main():
     parser = DeployArgumentParser.create_single_policy_parser()
     args = parser.parse_args()
+
+    if args.move_home and args.mount is None:
+        parser.error("--mount is required when --move-home is set")
 
     # Load policy
     device = "cpu" if not torch.cuda.is_available() else "cuda"
@@ -94,7 +114,10 @@ def main():
     # Run inference loop
     print("Starting single-policy inference loop...")
     with RobotConnection(args.robot_server) as stub:
-        robot_interface = RobotInterface(stub, policy_bundle.config)
+        embodiment = get_joint_config(args.embodiment) if args.embodiment else None
+        if embodiment is not None:
+            policy_bundle.config.embodiment = embodiment
+        robot_interface = RobotInterface(stub, policy_bundle.config, embodiment)
 
         # Move to home position if requested
         if args.move_home:

@@ -20,8 +20,10 @@ class RosSchemaEnum(Enum):
     JOINT = "sensor_msgs/msg/JointState"
     IMAGE = "sensor_msgs/msg/CompressedImage"
     TRANSFORM = "geometry_msgs/msg/Transform"
+    TRANSFORM_STAMPED = "geometry_msgs/msg/TransformStamped"
     POSE = "geometry_msgs/msg/PoseStamped"
     ARRAY = "std_msgs/msg/Float64MultiArray"
+    GRIPPER_VALUES = "teleop_controller_msgs/msg/GripperValues"
 
     JOINT_TARGET = "trajectory_msgs/msg/JointTrajectory"
 
@@ -31,6 +33,8 @@ class RosSchemaEnum(Enum):
     REALSENSE_EXTRINSICS = "realsense2_camera_msgs/msg/Extrinsics"
 
     POSE_TWIST = "teleop_controller_msgs/msg/PoseTwist"
+
+    COMPRESSED_VIDEO = "foxglove_msgs/msg/CompressedVideo"
 
     @classmethod
     def _missing_(cls, value: object) -> Any:
@@ -77,8 +81,8 @@ class RosTopicEnum(Enum):
 
     # Actual States
     ACTUAL_JOINT_STATE = "/joint_states"
-    ACTUAL_TCP_LEFT = "/panda_left/tcp"
-    ACTUAL_TCP_RIGHT = "/panda_right/tcp"
+    ACTUAL_TCP_LEFT = "/arm_left/tcp_pose"
+    ACTUAL_TCP_RIGHT = "/arm_right/tcp_pose"
 
     # VR
     VR_CAMERA_POSE = "/vr_camera"

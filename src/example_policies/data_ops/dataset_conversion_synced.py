@@ -47,10 +47,15 @@ from example_policies.data_ops.pipeline.frame_synchronizer import (
 from example_policies.data_ops.pipeline.frame_targeter import FrameTargeter
 from example_policies.data_ops.utils.conversion_utils import (
     AnnotationExtractor,
+    extract_embodiment_metadata,
     extract_robot_type_from_mcap,
     get_selected_episodes,
     save_metadata,
     validate_input_dir,
+)
+from example_policies.utils.embodiment import (
+    get_joint_config,
+    gripper_type_from_end_effector,
 )
 
 
@@ -88,7 +93,7 @@ class SyncedEpisodeConverter:
         features: dict,
         tolerance_ms: float,
         robot_type: str = "panda_bimanual",
-        causal: bool = False,
+        causal: bool = True,
     ):
         self.config = config
         self.output_dir = output_dir
@@ -143,16 +148,39 @@ class SyncedEpisodeConverter:
         Returns:
             True if episode was saved, False otherwise
         """
+        # Extract per-episode embodiment from MCAP metadata
+        emb_meta = extract_embodiment_metadata(episode_path)
+        embodiment = None
+        episode_cfg = self.config
+        if emb_meta is not None:
+            embodiment = get_joint_config(emb_meta["embodiment_name"])
+            gripper_overrides = {}
+            ee_left = emb_meta.get("end_effector_left")
+            if ee_left is not None:
+                gripper_overrides["left_gripper"] = gripper_type_from_end_effector(ee_left)
+            ee_right = emb_meta.get("end_effector_right")
+            if ee_right is not None:
+                gripper_overrides["right_gripper"] = gripper_type_from_end_effector(ee_right)
+            if gripper_overrides:
+                episode_cfg = dataclasses.replace(self.config, **gripper_overrides)
+
+        self.frame_parser = FrameParser(episode_cfg, embodiment=embodiment)
         self.reset_episode_state()
 
         # Pass 1: Ingest all messages
         print("  Ingesting messages...")
         self.frame_synchronizer.ingest_episode(episode_path)
 
+        # Pass 1.5: Pre-decode all AV1 video frames sequentially
+        print("  Decoding video topics...")
+        w, h = self.config.image_resolution
+        self.frame_synchronizer.decode_video_topics(w, h)
+
         # Pass 2: Generate synchronized frames
         # Track which raw frame indices were kept vs skipped for annotation remapping
         saved_frames = 0
         skipped_pauses = 0
+        skipped_decode = 0
         raw_frame_kept: list[bool] = []  # True if frame was kept, False if skipped
         for synced_frame in self.frame_synchronizer.generate_synced_frames():
             # Wrap synced frame for compatibility with FrameParser
@@ -169,6 +197,10 @@ class SyncedEpisodeConverter:
 
             # Parse and assemble using existing pipeline
             parsed = self.frame_parser.parse_frame(frame_buffer)
+            if parsed is None:
+                skipped_decode += 1
+                raw_frame_kept.append(False)
+                continue
             assembled = self.frame_assembler.assemble(parsed)
 
             # Add to dataset (v3.0 API: task goes in frame dict, not as kwarg)
@@ -177,7 +209,10 @@ class SyncedEpisodeConverter:
             saved_frames += 1
             raw_frame_kept.append(True)
 
-        print(f"  Saved {saved_frames} frames (skipped {skipped_pauses} pauses)")
+        print(
+            f"  Saved {saved_frames} frames "
+            f"(skipped {skipped_pauses} pauses, {skipped_decode} undecoded)"
+        )
 
         # Store frame mapping for annotation remapping
         # sync_abs_start_s: absolute timestamp of first synced frame
@@ -213,7 +248,7 @@ def convert_episodes_synced(
     config: pipeline_config.PipelineConfig,
     tolerance_ms: float,
     with_annotations: bool = False,
-    causal: bool = False,
+    causal: bool = True,
 ) -> dict:
     """Convert episodes using sensor-timestamp synchronization.
 
@@ -306,7 +341,6 @@ def print_conversion_result(result: dict) -> None:
     print(f"  - Episodes saved: {result['episodes_saved']}")
     print(f"  - Blacklisted episodes: {len(result['blacklist'])}")
     print(f"  - Total time: {result['total_time']:.2f}s")
-
 
 
 @dataclasses.dataclass
@@ -411,7 +445,7 @@ def main():
     elif not config.excellent_only:
         print("  - Including ok/good/excellent episodes (excellent_only=False)")
     if config.max_episodes is not None:
-        episode_paths = episode_paths[:config.max_episodes]
+        episode_paths = episode_paths[: config.max_episodes]
         print(f"  - Limiting to first {config.max_episodes} episodes")
 
     result = convert_episodes_synced(

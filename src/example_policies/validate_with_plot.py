@@ -186,7 +186,7 @@ def main():
             "pos_r": _find_idxs("tcp_right_pos_x", 3),
             "quat_r": _find_idxs("tcp_right_quat_x", 4),
         }
-        print(f"UMI-delta model detected — predictions will be converted to abs TCP")
+        print("UMI-delta model detected — predictions will be converted to abs TCP")
 
     dataset = LeRobotDataset(
         repo_id=args.dataset,

@@ -140,7 +140,7 @@ def main():
     device = "cpu" if not torch.cuda.is_available() else "cuda"
     logging.info(f"Using device: {device}")
 
-    # Load policy and processors
+    # Load policy
     logging.info(f"Loading policy from {args.checkpoint}")
     policy, cfg, preprocessor, postprocessor = load_policy(args.checkpoint)
     policy.to(device)

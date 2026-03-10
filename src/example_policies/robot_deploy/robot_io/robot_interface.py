@@ -22,16 +22,24 @@ from ...utils.action_order import (
     RIGHT_ARM,
     ActionMode,
 )
-from ...utils.state_order import CANONICAL_ARM_JOINTS
+from ...utils.embodiment import EmbodimentJointConfig, get_joint_config
 from .observation_builder import ObservationBuilder
 from .robot_client import RobotClient
 from .robot_service import robot_service_pb2, robot_service_pb2_grpc
+
+_DEFAULT_EMBODIMENT = get_joint_config("dual_panda_wall")
 
 
 class RobotInterface:
     """Handles communication and data conversion with the robot gRPC service."""
 
-    def __init__(self, service_stub: robot_service_pb2_grpc.RobotServiceStub, cfg):
+    def __init__(
+        self,
+        service_stub: robot_service_pb2_grpc.RobotServiceStub,
+        cfg,
+        embodiment: EmbodimentJointConfig | None = None,
+    ):
+        self.embodiment = embodiment if embodiment is not None else _DEFAULT_EMBODIMENT
         self.client = RobotClient(service_stub)
         self.observation_builder = ObservationBuilder(cfg)
         self.robot_names = None
@@ -74,54 +82,20 @@ class RobotInterface:
                 raise RuntimeError(f"Unknown ctrl_mode: {ctrl_mode}")
 
         elif action_mode in (ActionMode.DELTA_JOINT, ActionMode.JOINT):
-            target = _build_joint_target(numpy_action, action_mode)
+            target = _build_joint_target(numpy_action, action_mode, self.embodiment)
             self.client.send_joint_direct_target(target)
         else:
             raise RuntimeError(f"Unknown action mode: {action_mode}")
 
-    def move_home(self):
-        """Sends a command to move the robot to its home position and opens the grippers."""
-        # Move home
-        try:
-            self.client.send_move_home()
-        except Exception as e:
-            # If homing fails due to controller state, try recovery and retry
-            error_msg = str(e).lower()
-            if "trajectory controller" in error_msg or "controller" in error_msg:
-                print("Homing failed, attempting controller recovery...")
-                try:
-                    recover_request = robot_service_pb2.RecoverErrorsRequest()
-                    self.client.stub.RecoverErrors(recover_request)
-                    print("Recovery complete, retrying home...")
-                    self.client.send_move_home()
-                except Exception as recovery_error:
-                    print(f"Recovery failed: {recovery_error}")
-                    raise  # Re-raise the original error
-            else:
-                raise  # Re-raise if it's a different error
-        
-        # Open grippers
-        for _ in range(3):  # Minimum 3 messages required by stability buffer (STABILITY_BUFFER_SIZE)
-            gripper_target = robot_service_pb2.JointTarget()
-            
-            # Set gripper widths to open (normalized 0.0-1.0, where 1.0 = fully open)
-            gripper_target.gripper_widths["left"] = 1.0
-            gripper_target.gripper_widths["right"] = 1.0
-            
-            # Send directly via gRPC without changing control mode
-            set_target_request = robot_service_pb2.SetJointTargetRequest()
-            set_target_request.joint_target.CopyFrom(gripper_target)
-            self.client.stub.SetJointTarget(set_target_request)
-            
     def move_to_joint_goal(
-        self, joint_angles: np.ndarray, joint_names: list[str] = CANONICAL_ARM_JOINTS
+        self, joint_angles: np.ndarray, joint_names: list[str] | None = None
     ):
         """Moves the robot to a specific joint configuration using trajectory planning.
 
         Args:
             joint_angles: Array of target joint angles (radians)
             joint_names: List of joint names corresponding to the angles.
-                        Defaults to CANONICAL_ARM_JOINTS (left + right arm joints)
+                        Defaults to embodiment's canonical arm joints.
 
         Returns:
             The response from the MoveToJointGoal gRPC call
@@ -130,6 +104,8 @@ class RobotInterface:
             Exception: If the move fails
             ValueError: If joint_angles and joint_names have different lengths
         """
+        if joint_names is None:
+            joint_names = self.embodiment.canonical_arm_joints()
         return self.client.move_to_joint_goal(joint_angles, joint_names)
 
     def set_gripper_state(
@@ -183,7 +159,7 @@ class RobotInterface:
             # Build joint targets for each step in the trajectory
             joint_targets = []
             for action_step in numpy_action:
-                target = _build_joint_target(action_step, action_mode)
+                target = _build_joint_target(action_step, action_mode, self.embodiment)
                 joint_targets.append(target)
 
             # Visualize the trajectory
@@ -227,20 +203,19 @@ def _build_cart_target(
     return des_target_msg
 
 
-def _build_joint_target(np_action: np.ndarray, action_mode: ActionMode
+def _build_joint_target(
+    np_action: np.ndarray,
+    action_mode: ActionMode,
+    embodiment: EmbodimentJointConfig = _DEFAULT_EMBODIMENT,
 ) -> robot_service_pb2.JointTarget:
-    """Creates a RobotDesired message from an action slice."""
+    """Creates a JointTarget message from an action array."""
     des_target_msg = robot_service_pb2.JointTarget()
-    for i, joint_name in enumerate(CANONICAL_ARM_JOINTS):
+    for i, joint_name in enumerate(embodiment.canonical_arm_joints()):
         des_target_msg.joint_angles[joint_name] = np_action[i]
 
     # Action is always in absolute format after action_translator, so use absolute indices for grippers
     abs_mode = ActionMode.get_absolute_mode(action_mode)
-    des_target_msg.gripper_widths["left"] = np_action[
-        GET_LEFT_GRIPPER_IDX(abs_mode)
-    ]
-    des_target_msg.gripper_widths["right"] = np_action[
-        GET_RIGHT_GRIPPER_IDX(abs_mode)
-    ]
+    des_target_msg.gripper_widths["left"] = np_action[GET_LEFT_GRIPPER_IDX(abs_mode)]
+    des_target_msg.gripper_widths["right"] = np_action[GET_RIGHT_GRIPPER_IDX(abs_mode)]
 
     return des_target_msg

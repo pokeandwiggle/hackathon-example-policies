@@ -12,19 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Optional
+
 import numpy as np
 import torch
 
 from example_policies.data_ops.utils import image_processor
 from example_policies.data_ops.utils.geometric import continuous_quat
 from example_policies.utils.constants import OBSERVATION_STATE
-from example_policies.utils.state_builder import StateFeatureSpec
-from example_policies.utils.state_order import CANONICAL_ARM_JOINTS
+from example_policies.utils.embodiment import EmbodimentJointConfig, get_joint_config
+from example_policies.utils.state_builder import GripperType, StateFeatureSpec
+
+
+_DEFAULT_EMBODIMENT = get_joint_config("dual_panda_wall")
 
 
 class ObservationBuilder:
     def __init__(self, cfg):
         self.cfg = cfg
+
+        embodiment: Optional[EmbodimentJointConfig] = getattr(cfg, "embodiment", None)
+        self.embodiment = embodiment if embodiment is not None else _DEFAULT_EMBODIMENT
 
         # Default spec (will be overridden if metadata exists)
         self.state_spec = StateFeatureSpec()
@@ -124,7 +132,7 @@ class ObservationBuilder:
         joint_velocities = []
         joint_efforts = []
 
-        for j in CANONICAL_ARM_JOINTS:
+        for j in self.embodiment.canonical_arm_joints():
             if self.include_joint_pos:
                 joint_positions.append(snapshot.joints[j].position)
             if self.include_joint_vel:
@@ -170,13 +178,18 @@ class ObservationBuilder:
         Returns 1 or 2 values per side depending on the model's
         ``use_single_gripper_value`` setting (detected via feature names).
         """
-        # Always read both finger joints per side.
-        gripper_joint_names = [
-            "panda_left_finger_joint1",
-            "panda_left_finger_joint2",
-            "panda_right_finger_joint1",
-            "panda_right_finger_joint2",
-        ]
+        gripper_joint_names = []
+
+        if self.state_spec.left_gripper == GripperType.ROBOTIQ:
+            gripper_joint_names += self.embodiment.left_robotiq_gripper_joints()
+        else:
+            gripper_joint_names += self.embodiment.left_panda_gripper_joints()
+
+        if self.state_spec.right_gripper == GripperType.ROBOTIQ:
+            gripper_joint_names += self.embodiment.right_robotiq_gripper_joints()
+        else:
+            gripper_joint_names += self.embodiment.right_panda_gripper_joints()
+
         gripper_positions = [
             snapshot.joints[name].position for name in gripper_joint_names
         ]

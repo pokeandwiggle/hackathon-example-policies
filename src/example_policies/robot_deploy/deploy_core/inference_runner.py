@@ -48,7 +48,7 @@ class InferenceRunner:
                 print("\n=== RESETTING POLICY ===")
             policy_bundle.policy.reset()
             self._chunk_observation = None
-            
+
         observation = self.robot_interface.get_observation(policy_bundle.config.device)
 
         if not observation:

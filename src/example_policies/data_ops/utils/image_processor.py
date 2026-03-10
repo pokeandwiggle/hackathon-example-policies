@@ -15,6 +15,26 @@ import cv2
 import numpy as np
 
 
+def decode_av1_frame(data: bytes, codec) -> np.ndarray:
+    """Decode a single AV1 frame to a BGR numpy array using PyAV.
+
+    *codec* must be a ``CodecContext`` for AV1 decoding, reused across frames
+    to preserve decoder state (required for P-frame sequences).
+
+    Returns None for P-frames received before the first keyframe (recording
+    starts mid-GOP).
+    """
+    import av
+
+    for packet in codec.parse(data):
+        try:
+            for frame in codec.decode(packet):
+                return frame.to_ndarray(format="bgr24")
+        except (av.error.InvalidDataError, av.error.NotImplementedError):
+            return None
+    return None
+
+
 def encode_depth_multi_scale(
     depth_normalized: np.ndarray,
     scales: tuple = (1.0, 0.1, 0.01),
@@ -49,28 +69,18 @@ def encode_depth_multi_scale(
     return rgb_depth
 
 
-def process_image_bytes(
-    img_bytes: bytes,
+def resize_and_normalize(
+    img_array: np.ndarray,
     width: int,
     height: int,
     is_depth: bool,
     depth_scale: float = 1000.0,
 ) -> np.ndarray:
-    """
-    Process image data optimized for wrist cam depth with multi-scale encoding.
-    Returns H,W,3 array ready for PNG saving.
-    """
-    # Your existing PNG decoding logic
-    png_data = img_bytes[12:] if is_depth else img_bytes
-    nparr = np.frombuffer(png_data, np.uint8)
-    read_flag = cv2.IMREAD_UNCHANGED if is_depth else cv2.IMREAD_COLOR
-    img_array = cv2.imdecode(nparr, read_flag)
+    """Aspect-ratio-preserving resize, center crop, and normalize to float32.
 
-    # For RGB images, convert from BGR to RGB
-    if not is_depth and len(img_array.shape) == 3:
-        img_array = cv2.cvtColor(img_array, cv2.COLOR_BGR2RGB)
-
-    # Your existing aspect-ratio-preserving resize
+    For RGB inputs the array is normalized to [0, 1].
+    For depth inputs multi-scale encoding is applied after normalization.
+    """
     original_h, original_w = img_array.shape[:2]
     scale = max(width / original_w, height / original_h)
     new_w, new_h = int(original_w * scale), int(original_h * scale)
@@ -79,18 +89,49 @@ def process_image_bytes(
     left = (new_w - width) // 2
     img_array = resized_img[top : top + height, left : left + width]
 
-    # Convert to float
     img_array = img_array.astype(np.float32)
 
     if is_depth:
-        # Normalize depth to [0, 1]
         img_array /= depth_scale
         img_array = np.clip(img_array, 0.0, 1.0)
-
-        # Apply multi-scale encoding - this is the key improvement
         img_array = encode_depth_multi_scale(img_array)
     else:
-        # Standard RGB normalization
         img_array /= 255.0
 
     return img_array
+
+
+def process_video_bytes(
+    video_bytes: bytes,
+    width: int,
+    height: int,
+    codec,
+) -> np.ndarray | None:
+    """Decode AV1 video bytes, resize, and normalize to float32.
+
+    Returns None for P-frames received before the first keyframe.
+    """
+    bgr = decode_av1_frame(video_bytes, codec)
+    if bgr is None:
+        return None
+    rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+    return resize_and_normalize(rgb, width, height, is_depth=False)
+
+
+def process_image_bytes(
+    img_bytes: bytes,
+    width: int,
+    height: int,
+    is_depth: bool,
+    depth_scale: float = 1000.0,
+) -> np.ndarray:
+    """Decode compressed image bytes, resize, and normalize to float32."""
+    png_data = img_bytes[12:] if is_depth else img_bytes
+    nparr = np.frombuffer(png_data, np.uint8)
+    read_flag = cv2.IMREAD_UNCHANGED if is_depth else cv2.IMREAD_COLOR
+    img_array = cv2.imdecode(nparr, read_flag)
+
+    if not is_depth and len(img_array.shape) == 3:
+        img_array = cv2.cvtColor(img_array, cv2.COLOR_BGR2RGB)
+
+    return resize_and_normalize(img_array, width, height, is_depth, depth_scale)

@@ -50,7 +50,7 @@ class DatasetWriter:
             repo_id="local_only",
             fps=cfg.target_fps,
             root=output_dir,
-            robot_type="panda_bimanual",
+            robot_type="dual_panda",
             use_videos=True,
             image_writer_threads=16,
             image_writer_processes=8,
@@ -75,6 +75,7 @@ class DatasetWriter:
             DatasetType.PAUSE: 0,
             DatasetType.NO_SPEED_BOOST: 0,
         }
+        self.frame_parser.reset()
         self.frame_targeter.reset()
         self.frame_assembler.reset()
 
@@ -86,7 +87,7 @@ class DatasetWriter:
             repo_id="local_only",
             fps=self.cfg.target_fps,
             root=output_dir.with_name(f"{output_dir.name}_{suffix}"),
-            robot_type="panda_bimanual",
+            robot_type="dual_panda",
             use_videos=True,
             image_writer_threads=4,
             image_writer_processes=2,
@@ -108,7 +109,7 @@ class DatasetWriter:
                     # Lazily parse the frame only if it's needed for at least one dataset
                     frame = self.frame_parser.parse_frame(frame_buffer)
                     frame = self.frame_assembler.assemble(frame)
-                frame["task"] = self.cfg.task_name
+                    frame["task"] = self.cfg.task_name
                 self.datasets[target].add_frame(frame)
                 self.dataset_frame_counter[target] += 1
                 performed_save = True

@@ -1,10 +1,13 @@
 """Shared utility functions for dataset conversion."""
 
 import json
+import logging
 import pathlib
 import re
 import shutil
+
 from mcap.reader import make_reader
+from pydantic import ValidationError
 
 from example_policies.utils.constants import (
     BLACKLIST_FILE,
@@ -13,25 +16,103 @@ from example_policies.utils.constants import (
     PIPELINE_CONFIG_FILE,
 )
 
+logger = logging.getLogger(__name__)
+
+
+def _extract_episode_metadata(metadata_record) -> dict | None:
+    """Extract episode metadata from an MCAP metadata record.
+
+    Supports four formats (priority order):
+    1. "pw_episode_info" - new format (1.0+) with JSON data field
+    2. "episode_info" - previous format with JSON data containing episode.quality
+    3. "episode_rating" - legacy format with flat k/v pairs
+    4. "recording_info" - legacy format with flat k/v pairs
+
+    Returns:
+        Dict with 'rating' key, or None if not found
+    """
+    if metadata_record.name == "pw_episode_info":
+        schema_version = metadata_record.metadata.get("schema_version")
+        try:
+            if schema_version in ("1.0", "1.1"):
+                from schemas.pw_episode_info_1_0 import RecorderInfo
+            elif schema_version == "2.0":
+                from schemas.pw_episode_info_2_0 import RecorderInfo
+            else:
+                raise ValueError(f"Unsupported schema_version: {schema_version}")
+        except ImportError:
+            # schemas package not available — fall back to JSON parsing
+            data_str = metadata_record.metadata.get("data")
+            if data_str:
+                try:
+                    info = json.loads(data_str)
+                    episode = info.get("episode", {})
+                    rating = episode.get("rating")
+                    return {
+                        "rating": rating,
+                        "embodiment_name": info.get("embodiment", {}).get("name"),
+                        "end_effector_left": info.get("embodiment", {}).get("end_effector_left"),
+                        "end_effector_right": info.get("embodiment", {}).get("end_effector_right"),
+                    }
+                except json.JSONDecodeError:
+                    pass
+            return None
+        data_str = metadata_record.metadata.get("data")
+        if data_str:
+            try:
+                info = RecorderInfo.model_validate_json(data_str)
+                return {
+                    "rating": info.episode.rating.value,
+                    "embodiment_name": info.embodiment.name,
+                    "end_effector_left": info.embodiment.end_effector_left,
+                    "end_effector_right": info.embodiment.end_effector_right,
+                }
+            except ValidationError as e:
+                logger.warning("pw_episode_info failed validation: %s", e)
+                return None
+    elif metadata_record.name == "episode_info":
+        data_str = metadata_record.metadata.get("data")
+        if data_str:
+            try:
+                info = json.loads(data_str)
+                quality = info.get("episode", {}).get("quality")
+                if quality:
+                    return {"rating": quality}
+            except json.JSONDecodeError:
+                pass
+    elif metadata_record.name in ("episode_rating", "recording_info"):
+        # Legacy format - derive rating from quality/task_successful
+        quality = metadata_record.metadata.get("quality")
+        task_successful = (
+            metadata_record.metadata.get("task_successful", "").lower() == "true"
+        )
+        if quality in ("excellent", "ok", "failed"):
+            return {"rating": quality}
+        if task_successful:
+            return {"rating": quality if quality in ("excellent", "ok") else "ok"}
+        return {"rating": "failed"}
+    return None
+
+
 # Annotation file constants
 LEROBOT_ANNOTATIONS_FILE = "lerobot_annotations.json"
 SUBTASKS_FILE = "subtasks.parquet"
 
 # Default robot type if mount cannot be determined
-DEFAULT_ROBOT_TYPE = "panda_bimanual"
+DEFAULT_ROBOT_TYPE = "dual_panda"
 
 
 def extract_robot_type_from_mcap(episode_path: pathlib.Path) -> str:
     """Extract robot type from MCAP metadata.
 
     Parses the URDF in robot_description metadata to determine mount type
-    from the xacro source path (e.g., dual_panda_wall.urdf.xacro -> panda_bimanual_wall).
+    from the xacro source path (e.g., dual_panda_wall.urdf.xacro -> dual_panda_wall).
 
     Args:
         episode_path: Path to the MCAP episode file
 
     Returns:
-        Robot type string (e.g., 'panda_bimanual_wall', 'panda_bimanual_table')
+        Robot type string (e.g., 'dual_panda_wall', 'dual_panda_table')
     """
     try:
         with open(episode_path, "rb") as f:
@@ -44,11 +125,34 @@ def extract_robot_type_from_mcap(episode_path: pathlib.Path) -> str:
                     match = re.search(r"dual_panda_(wall|table)\.urdf\.xacro", urdf)
                     if match:
                         mount_type = match.group(1)
-                        return f"panda_bimanual_{mount_type}"
+                        return f"dual_panda_{mount_type}"
     except (OSError, ValueError) as e:
         print(f"  Warning: Failed to extract robot type from {episode_path}: {e}")
 
     return DEFAULT_ROBOT_TYPE
+
+
+def extract_embodiment_metadata(episode_path: pathlib.Path) -> dict | None:
+    """Extract embodiment metadata from an MCAP episode file.
+
+    Returns:
+        Dict with 'embodiment_name', 'end_effector_left', 'end_effector_right',
+        or None if no embodiment info is available.
+    """
+    try:
+        with open(episode_path, "rb") as f:
+            reader = make_reader(f)
+            for metadata_record in reader.iter_metadata():
+                meta = _extract_episode_metadata(metadata_record)
+                if meta is not None and "embodiment_name" in meta:
+                    return {
+                        "embodiment_name": meta["embodiment_name"],
+                        "end_effector_left": meta.get("end_effector_left"),
+                        "end_effector_right": meta.get("end_effector_right"),
+                    }
+    except (OSError, ValueError, KeyError) as e:
+        logger.warning("Error reading embodiment from %s: %s", episode_path, e)
+    return None
 
 
 class AnnotationExtractor:
@@ -92,7 +196,7 @@ class AnnotationExtractor:
         Returns:
             Unix timestamp in seconds
         """
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         # Handle 'Z' suffix (UTC) - convert to +00:00 format
         if start_time_str.endswith('Z'):
@@ -193,6 +297,18 @@ class AnnotationExtractor:
                 )
             else:
                 print("  Warning: Cannot remap annotations - no episode start time found")
+                # Without remapping, timestamps are relative to MCAP start and would
+                # be incorrect in the dataset. Discard them to avoid silent errors.
+                annotations = []
+        elif annotations and (raw_frame_kept is not None or sync_abs_start_s is not None):
+            # Only one of the two remapping parameters was provided — this is
+            # likely a caller error. Discard annotations to be safe.
+            missing = "sync_abs_start_s" if sync_abs_start_s is None else "raw_frame_kept"
+            print(
+                f"  Warning: Cannot remap annotations - {missing} not provided. "
+                "Discarding un-remapped annotations."
+            )
+            annotations = []
 
         # Store annotations for this episode
         if annotations:
@@ -337,26 +453,37 @@ class AnnotationExtractor:
             return annotations
 
         fps = self.fps
-        interval = 1.0 / fps
         n_raw_frames = len(raw_frame_kept)
 
         # Offset from MCAP episode start to first synced frame (in seconds)
         sync_offset = sync_abs_start_s - mcap_episode_start_s
 
-        # Build cumulative count of kept frames at each raw frame index
-        # cum_kept[i] = number of kept frames in raw_frame_kept[0..i] (inclusive)
+        if sync_offset < 0:
+            logger.warning(
+                "Negative sync_offset (%.3fs): synced frames start before MCAP "
+                "episode metadata start. Early annotations may be clamped to t=0.",
+                sync_offset,
+            )
+
+        # Build prefix sum of kept frames (exclusive: prefix_kept[i] = kept frames
+        # strictly before index i). Length is n_raw_frames + 1 so that
+        # prefix_kept[i] and prefix_kept[i+1] are always safe for i < n_raw_frames.
         kept_arr = np.array(raw_frame_kept, dtype=np.int32)
-        cum_kept = np.cumsum(kept_arr)
-        total_kept = int(cum_kept[-1])
+        prefix_kept = np.zeros(n_raw_frames + 1, dtype=np.int32)
+        prefix_kept[1:] = np.cumsum(kept_arr)
+        total_kept = int(prefix_kept[-1])
 
         def raw_time_to_dataset_time(raw_time_s: float) -> float:
             """Convert raw annotation time to dataset time accounting for pauses.
 
             For a raw time t:
-            1. Compute the fractional raw frame index: fi = (t - sync_offset) / interval
-            2. Clamp to valid range [0, n_raw_frames - 1]
-            3. Interpolate the cumulative kept-frame count at fi
+            1. Compute the fractional raw frame index: fi = (t - sync_offset) * fps
+            2. Clamp to valid range [0, n_raw_frames]
+            3. Interpolate the exclusive prefix-sum of kept frames at fi
             4. Dataset time = interpolated_kept_count / fps
+
+            Using an exclusive prefix sum ensures the first kept frame maps to
+            dataset time 0 (not 1/fps).
             """
             # Raw frame index (fractional)
             fi = (raw_time_s - sync_offset) * fps
@@ -364,16 +491,16 @@ class AnnotationExtractor:
             # Clamp to valid range
             if fi <= 0:
                 return 0.0
-            if fi >= n_raw_frames - 1:
+            if fi >= n_raw_frames:
                 return total_kept / fps
 
             # Integer frame index and fraction
             i = int(fi)
             frac = fi - i
 
-            # Cumulative kept count at frames i and i+1
-            ck_i = cum_kept[i]
-            ck_next = cum_kept[min(i + 1, n_raw_frames - 1)]
+            # Prefix kept count at frames i and i+1
+            ck_i = prefix_kept[i]
+            ck_next = prefix_kept[i + 1]
 
             # Linear interpolation
             interpolated = ck_i + frac * (ck_next - ck_i)
@@ -517,86 +644,28 @@ class AnnotationExtractor:
         return len(self.episode_annotations)
 
 
-def extract_episode_metadata(episode_path: pathlib.Path) -> dict | None:
-    """Extract episode metadata from an MCAP file.
+def _extract_episode_rating(episode_path: pathlib.Path) -> dict | None:
+    """Extract episode rating from an MCAP file.
 
-    Supports three formats (priority order):
-    1. "episode_info" - new format (1.0+) with JSON data field
-    2. "episode_rating" - previous format with flat k/v pairs
-    3. "recording_info" - legacy format with flat k/v pairs
+    Iterates over metadata records and delegates to _extract_episode_metadata
+    to parse any supported format.
 
     Args:
         episode_path: Path to the MCAP episode file
 
     Returns:
-        Dict with 'quality' and 'task_successful' keys, or None if not found
+        Dict with 'rating' key, or None if not found
     """
     try:
         with open(episode_path, "rb") as f:
             reader = make_reader(f)
             for metadata_record in reader.iter_metadata():
-                result = _parse_metadata_record(metadata_record)
+                result = _extract_episode_metadata(metadata_record)
                 if result is not None:
                     return result
     except (OSError, ValueError) as e:
         print(f"  Warning: Failed to read metadata from {episode_path}: {e}")
 
-    return None
-
-
-def _parse_metadata_record(metadata_record) -> dict | None:
-    """Parse a single MCAP metadata record.
-
-    Supports multiple metadata formats:
-    - pw_episode_info: New format (v1.0+) with JSON data containing episode.rating
-    - episode_info: Previous format with JSON data containing episode.quality
-    - episode_rating/recording_info: Legacy format with flat k/v pairs
-
-    Args:
-        metadata_record: MCAP metadata record
-
-    Returns:
-        Dict with 'quality' and 'task_successful' keys, or None if not matching
-    """
-    # New format: pw_episode_info (v1.0+)
-    if metadata_record.name == "pw_episode_info":
-        data_str = metadata_record.metadata.get("data")
-        if data_str:
-            try:
-                info = json.loads(data_str)
-                episode = info.get("episode", {})
-                # In new format, 'rating' is used instead of 'quality'
-                rating = episode.get("rating")
-                # Success is implied by rating being ok/good/excellent
-                task_successful = rating in ("ok", "good", "excellent") if rating else None
-                return {
-                    "quality": rating,  # Use rating as quality for compatibility
-                    "task_successful": task_successful,
-                }
-            except json.JSONDecodeError:
-                pass
-    # Previous format: episode_info
-    elif metadata_record.name == "episode_info":
-        data_str = metadata_record.metadata.get("data")
-        if data_str:
-            try:
-                info = json.loads(data_str)
-                episode = info.get("episode", {})
-                return {
-                    "quality": episode.get("quality"),
-                    "task_successful": episode.get("task_successful"),
-                }
-            except json.JSONDecodeError:
-                pass
-    # Legacy format: episode_rating/recording_info
-    elif metadata_record.name in ("episode_rating", "recording_info"):
-        task_successful_str = metadata_record.metadata.get("task_successful", "")
-        return {
-            "quality": metadata_record.metadata.get("quality"),
-            "task_successful": task_successful_str.lower() == "true"
-            if isinstance(task_successful_str, str)
-            else bool(task_successful_str),
-        }
     return None
 
 
@@ -612,6 +681,7 @@ def get_sorted_episodes(episode_dir: pathlib.Path) -> list[pathlib.Path]:
     episode_paths = list(episode_dir.rglob("*.mcap"))
     episode_paths.sort(key=lambda p: p.stat().st_ctime)
     return episode_paths
+
 
 def check_subtask_completeness(episode_path: pathlib.Path) -> tuple[bool, dict]:
     """Check if all defined subtasks have at least one successful segment.
@@ -642,24 +712,29 @@ def check_subtask_completeness(episode_path: pathlib.Path) -> tuple[bool, dict]:
             for metadata_record in reader.iter_metadata():
                 # New format: pw_episode_info
                 if metadata_record.name == "pw_episode_info":
+                    schema_version = metadata_record.metadata.get("schema_version")
+                    if schema_version == "1.0":
+                        from schemas.pw_episode_info_1_0 import RecorderInfo
+                    else:
+                        raise ValueError(f"Unsupported schema_version: {schema_version}")
                     data_str = metadata_record.metadata.get("data")
                     if not data_str:
                         continue
 
-                    info = json.loads(data_str)
-                    episode = info.get("episode", {})
+                    try:
+                        info = RecorderInfo.model_validate_json(data_str)
+                    except ValidationError as e:
+                        logger.warning("pw_episode_info failed validation: %s", e)
+                        continue
 
                     # Get defined steps (subtasks) from episode.steps
-                    steps = episode.get("steps", [])
-                    details["defined_subtasks"] = {step.get("name") for step in steps if step.get("name")}
+                    if info.episode.steps:
+                        details["defined_subtasks"] = {step.name for step in info.episode.steps}
 
                     # Find which steps have successful segments
-                    segments = info.get("segments", [])
-                    for seg in segments:
-                        step_name = seg.get("step_name")
-                        rating = seg.get("rating", "")
-                        if step_name and rating in successful_ratings:
-                            details["completed_subtasks"].add(step_name)
+                    for seg in info.segments or []:
+                        if seg.root.step_name and seg.root.rating.value in successful_ratings:
+                            details["completed_subtasks"].add(seg.root.step_name)
 
                     # Calculate missing subtasks
                     details["missing_subtasks"] = (
@@ -744,14 +819,14 @@ def get_selected_episodes(
 
     if success_only is True:
         for ep_path in episode_paths:
-            metadata = extract_episode_metadata(ep_path)
+            metadata = _extract_episode_rating(ep_path)
             if metadata is None:
                 continue
 
-            quality = metadata.get("quality")
-            if excellent_only is True and quality == "excellent":
+            rating = metadata.get("rating")
+            if excellent_only is True and rating == "excellent":
                 filtered_episode_paths.append(ep_path)
-            elif excellent_only is False and quality in ["excellent", "good", "ok"]:
+            elif excellent_only is False and rating in ["excellent", "good", "ok"]:
                 filtered_episode_paths.append(ep_path)
     else:
         filtered_episode_paths = episode_paths
@@ -773,6 +848,39 @@ def get_selected_episodes(
 
     return filtered_episode_paths
 
+
+def _parse_episode_filename(
+    file_path: pathlib.Path,
+) -> tuple[str | None, str | None]:
+    """Parse episode file path to extract operator and rating.
+
+    Supports two filename formats:
+    - New format: {timestamp}--{task}--{operator}--{rating}.mcap
+      Operator and rating extracted from filename.
+    - Old format: {parent_dir}/{task}/{operator}/{timestamp}_{success/failure}_{rating}.mcap
+      Operator extracted from parent directory, rating from filename.
+
+    Args:
+        file_path: Full path to the episode file
+
+    Returns:
+        Tuple of (operator, rating), with None for fields that couldn't be parsed
+    """
+    filename_stem = file_path.stem
+    if "--" in filename_stem:
+        parts = filename_stem.split("--")
+        if len(parts) == 4:
+            _timestamp, _task, operator, rating = parts
+            return operator, rating
+    else:
+        parts = filename_stem.split("_")
+        if len(parts) >= 4:
+            rating = parts[-1]
+            operator = file_path.parent.name
+            return operator, rating
+    return None, None
+
+
 def filter_episode_paths(
     episode_paths: list[pathlib.Path],
     operator_blacklist: list[str],
@@ -780,29 +888,36 @@ def filter_episode_paths(
 ) -> list[pathlib.Path]:
     """Filter episode paths based on operator blacklist and rating whitelist.
 
+    Supports two filename formats:
+    - New format: {timestamp}--{task}--{operator}--{rating}.mcap
+    - Old format: {parent_dir}/{task}/{operator}/{timestamp}_{success}_{rating}.mcap
+
     Args:
         episode_paths: List of episode file paths
         operator_blacklist: List of operator names to ignore
-        rating_whitelist: List of state names to include
+        rating_whitelist: List of rating values to include
 
     Returns:
         List of filtered episode paths
     """
-    OP_INDEX = 1
-    RATING_INDEX = 2
-
     if len(operator_blacklist) == 0 and len(rating_whitelist) == 0:
         return episode_paths
 
     filtered_paths = []
     for ep_path in episode_paths:
-        parts = ep_path.stem.split("_")
-        operator = parts[OP_INDEX]
-        rating = parts[RATING_INDEX]
+        operator, rating = _parse_episode_filename(ep_path)
 
-        if (not operator_blacklist or operator not in operator_blacklist) and (
-            not rating_whitelist or rating in rating_whitelist
-        ):
+        if rating is None:
+            continue
+
+        operator_ok = (
+            not operator_blacklist
+            or operator is None
+            or operator not in operator_blacklist
+        )
+        rating_ok = not rating_whitelist or rating in rating_whitelist
+
+        if operator_ok and rating_ok:
             filtered_paths.append(ep_path)
 
     return filtered_paths

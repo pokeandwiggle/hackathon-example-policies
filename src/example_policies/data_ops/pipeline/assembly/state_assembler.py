@@ -51,12 +51,15 @@ class StateAssembler:
         left_raw = gs[:raw_left_n]
         right_raw = gs[raw_left_n : raw_left_n + raw_right_n]
 
-        if self.config.use_single_gripper_value:
-            # Sum both finger-joint positions into a single gripper-width scalar.
+        # Only apply single-value summation for Panda grippers.
+        # Robotiq grippers always pass through all 6 values regardless of the flag.
+        if self.config.use_single_gripper_value and self.config.left_gripper == GripperType.PANDA:
             left_gs = np.array([left_raw.sum()], dtype=gs.dtype)
-            right_gs = np.array([right_raw.sum()], dtype=gs.dtype)
         else:
             left_gs = left_raw
+        if self.config.use_single_gripper_value and self.config.right_gripper == GripperType.PANDA:
+            right_gs = np.array([right_raw.sum()], dtype=gs.dtype)
+        else:
             right_gs = right_raw
         state_components.append(left_gs)
         state_components.append(right_gs)
