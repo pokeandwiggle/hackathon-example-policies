@@ -352,7 +352,7 @@ class FrameSynchronizer:
         # Check if all sensors are using the same clock by comparing first timestamps
         if len(first_timestamps) >= 2:
             clock_spread = max(first_timestamps) - min(first_timestamps)
-            max_clock_spread = 1.0  # Maximum allowed spread in seconds
+            max_clock_spread = 2.0  # Maximum allowed spread in seconds
             stats["clock_spread_s"] = clock_spread
             if clock_spread > max_clock_spread:
                 stats["skip_reason"] = f"sensors appear to use different clocks (spread: {clock_spread:.2f}s)"

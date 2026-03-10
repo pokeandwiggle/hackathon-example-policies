@@ -13,12 +13,16 @@
 # limitations under the License.
 import logging
 
+import av.logging
 import cv2
 import numpy as np
 
 # Suppress noisy native libdav1d ERROR logs emitted for P-frames
 # received before the first keyframe (expected at recording start).
+# Python-level PyAV logs:
 logging.getLogger("libav").setLevel(logging.CRITICAL)
+# C-level FFmpeg/libdav1d stderr messages (PANIC = silent):
+av.logging.set_level(av.logging.PANIC)
 
 
 def decode_av1_frame(data: bytes, codec) -> np.ndarray:
