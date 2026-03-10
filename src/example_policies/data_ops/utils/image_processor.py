@@ -11,8 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import logging
+
 import cv2
 import numpy as np
+
+# Suppress noisy native libdav1d ERROR logs emitted for P-frames
+# received before the first keyframe (expected at recording start).
+logging.getLogger("libav").setLevel(logging.CRITICAL)
 
 
 def decode_av1_frame(data: bytes, codec) -> np.ndarray:
