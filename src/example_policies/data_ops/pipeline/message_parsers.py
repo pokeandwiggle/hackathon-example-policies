@@ -15,7 +15,6 @@
 
 import numpy as np
 from rosbags.serde import deserialize_cdr
-from rosbags.typesys import get_types_from_msg, register_types
 
 from ...utils.embodiment import EmbodimentJointConfig, get_joint_config
 from ...utils.state_order import _joint_reorder_indices
@@ -24,39 +23,12 @@ from ..config.rosbag_topics import RosSchemaEnum
 from ..utils import geometric
 from ..utils.image_processor import process_image_bytes, process_video_bytes
 
+# Importing timestamp_utils registers custom ROS types (CompressedVideo,
+# PoseTwist, GripperValues) that are not in the standard rosbags typestore.
+# The definitions live there as the single source of truth.
+from . import timestamp_utils as _timestamp_utils  # noqa: F401
+
 _DEFAULT_EMBODIMENT = get_joint_config("dual_panda_wall")
-
-POSE_TWIST_MSG_DEF = """
-std_msgs/Header header
-geometry_msgs/Pose pose
-geometry_msgs/Twist twist
-"""
-
-COMPRESSED_VIDEO_MSG_DEF = """
-builtin_interfaces/Time timestamp
-string frame_id
-uint8[] data
-string format
-"""
-
-GRIPPER_VALUES_MSG_DEF = """
-std_msgs/Header header
-float64 width
-float64 speed
-float64 force
-"""
-
-# Register custom types with rosbags
-types = get_types_from_msg(POSE_TWIST_MSG_DEF, "teleop_controller_msgs/msg/PoseTwist")
-register_types(types)
-types = get_types_from_msg(
-    COMPRESSED_VIDEO_MSG_DEF, "foxglove_msgs/msg/CompressedVideo"
-)
-register_types(types)
-types = get_types_from_msg(
-    GRIPPER_VALUES_MSG_DEF, "teleop_controller_msgs/msg/GripperValues"
-)
-register_types(types)
 
 
 def parse_joints(

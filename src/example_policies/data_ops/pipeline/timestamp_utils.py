@@ -15,8 +15,42 @@
 """Utilities for extracting sensor timestamps from ROS messages."""
 
 from rosbags.serde import deserialize_cdr
+from rosbags.typesys import get_types_from_msg, register_types
 
 from ..config.rosbag_topics import RosSchemaEnum
+
+# ---------------------------------------------------------------------------
+# Register custom ROS message types that are not in the standard rosbags
+# typestore.  This makes extract_sensor_timestamp() self-contained — callers
+# no longer need to import message_parsers for its side-effect registration.
+# register_types is idempotent, so duplicating these definitions is harmless.
+# ---------------------------------------------------------------------------
+
+_CUSTOM_MSG_DEFS: dict[str, str] = {
+    "foxglove_msgs/msg/CompressedVideo": (
+        "builtin_interfaces/Time timestamp\n"
+        "string frame_id\n"
+        "uint8[] data\n"
+        "string format\n"
+    ),
+    "teleop_controller_msgs/msg/PoseTwist": (
+        "std_msgs/Header header\n"
+        "geometry_msgs/Pose pose\n"
+        "geometry_msgs/Twist twist\n"
+    ),
+    "teleop_controller_msgs/msg/GripperValues": (
+        "std_msgs/Header header\n"
+        "float64 width\n"
+        "float64 speed\n"
+        "float64 force\n"
+    ),
+}
+
+for _name, _def in _CUSTOM_MSG_DEFS.items():
+    try:
+        register_types(get_types_from_msg(_def, _name))
+    except Exception:
+        pass  # already registered or type conflict — safe to ignore
 
 
 def extract_sensor_timestamp(
