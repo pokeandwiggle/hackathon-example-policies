@@ -17,7 +17,6 @@ import pathlib
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from pprint import pprint
 from typing import Optional
 
 from lerobot.configs.policies import PreTrainedConfig
@@ -153,8 +152,15 @@ class PolicyConfigBase(ABC):
             cfg.optimizer = cfg.policy.get_optimizer_preset()
             cfg.scheduler = cfg.policy.get_scheduler_preset()
 
-        print("\nFinal Training Configuration (full details):")
-        pprint(cfg)
+        # Compact training summary
+        print(f"\nTraining {type(cfg.policy).__name__} on '{cfg.dataset.repo_id}'")
+        print(f"  -> {cfg.output_dir}")
+        print(f"  -> steps={cfg.steps}  batch={cfg.batch_size}  lr={cfg.policy.optimizer_lr}")
+        print(f"  -> horizon={cfg.policy.horizon}  n_action_steps={cfg.policy.n_action_steps}  n_obs_steps={cfg.policy.n_obs_steps}")
+        if cfg.policy.push_to_hub:
+            print(f"  -> HF: {cfg.policy.repo_id}")
+        if cfg.wandb.enable:
+            print(f"  -> W&B: {cfg.wandb.entity}/{cfg.wandb.project}")
         return cfg
 
 

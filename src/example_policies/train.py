@@ -74,11 +74,6 @@ def select_inputs(include_depth: bool = False):
 
 
 def filter_depth(cfg, include_depth: bool = False):
-    # --- 2. Inspect Dataset and Select Model Inputs ---
-    print("Available dataset features:")
-    for name, feature in cfg.policy.input_features.items():
-        print(f"  - {name}: shape={feature.shape}")
-
     selected_inputs = select_inputs(include_depth)
 
     input_features = deepcopy(cfg.policy.input_features)
@@ -106,6 +101,13 @@ def train_policy(cli_config: TrainCliArgs):
 
 
 def train(cfg):
+    import logging
+    import warnings
+
+    # Suppress noisy warnings
+    warnings.filterwarnings("ignore", message=".*video decoding.*torchvision.*deprecated.*")
+    logging.getLogger("lerobot.configs.policies").setLevel(logging.ERROR)
+
     print("\nStarting training...")
     # import after monkey patching
     from lerobot.utils.utils import init_logging
