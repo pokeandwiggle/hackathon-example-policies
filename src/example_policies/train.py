@@ -111,6 +111,17 @@ def train(cfg):
     # Suppress noisy warnings
     warnings.filterwarnings("ignore", message=".*video decoding.*torchvision.*deprecated.*")
     warnings.filterwarnings("ignore", message=".*No files have been modified since last commit.*")
+
+    print("\nStarting training...")
+    # import after monkey patching
+    from lerobot.utils.utils import init_logging
+    from lerobot.scripts.lerobot_train import train as lerobot_train
+
+    # init_logging() reconfigures the root logger, so we must apply our
+    # filters AFTER it runs — otherwise they get wiped out.
+    init_logging()
+
+    # Suppress device fallback warning and HF upload noise
     logging.getLogger("lerobot.configs.policies").setLevel(logging.ERROR)
     logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 
@@ -129,14 +140,11 @@ def train(cfg):
             msg = record.getMessage()
             return any(p in msg for p in _KEEP_PATTERNS)
 
-    logging.getLogger("lerobot").addFilter(_QuietTraining())
+    # Apply the filter to every handler on the root logger (init_logging
+    # attaches handlers there, not on the "lerobot" logger itself).
+    for handler in logging.root.handlers:
+        handler.addFilter(_QuietTraining())
 
-    print("\nStarting training...")
-    # import after monkey patching
-    from lerobot.utils.utils import init_logging
-    from lerobot.scripts.lerobot_train import train as lerobot_train
-
-    init_logging()
     lerobot_train(cfg)
 
 
