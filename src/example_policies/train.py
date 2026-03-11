@@ -94,6 +94,10 @@ def train_policy(cli_config: TrainCliArgs):
     # The policy config already has all parameters set via CLI (e.g., --policy.batch-size).
     cfg = cli_config.policy.build()
 
+    # Ensure a checkpoint is saved at end of training
+    if cfg.save_freq > cfg.steps:
+        cfg.save_freq = cfg.steps
+
     # Filter depth images based on include_depth flag
     cfg = filter_depth(cfg, cli_config.include_depth)
 
@@ -106,7 +110,19 @@ def train(cfg):
 
     # Suppress noisy warnings
     warnings.filterwarnings("ignore", message=".*video decoding.*torchvision.*deprecated.*")
+    warnings.filterwarnings("ignore", message=".*No files have been modified since last commit.*")
     logging.getLogger("lerobot.configs.policies").setLevel(logging.ERROR)
+    logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+
+    # Filter out the massive config dump from lerobot's ot_train.py
+    class _SkipConfigDump(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            msg = record.getMessage()
+            if msg.lstrip().startswith("{") and len(msg) > 500:
+                return False  # drop pformat(cfg) dump
+            return True
+
+    logging.getLogger("lerobot").addFilter(_SkipConfigDump())
 
     print("\nStarting training...")
     # import after monkey patching
