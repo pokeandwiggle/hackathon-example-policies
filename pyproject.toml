@@ -35,6 +35,9 @@ dependencies = [
     "torchvision>=0.23.0",
 ]
 
+[project.scripts]
+example_policies = "example_policies.cli:main"
+
 [tool.uv.sources]
 lerobot = { git = "https://github.com/pokeandwiggle/lerobot.git", branch = "fix/output-features-guard" }
 
