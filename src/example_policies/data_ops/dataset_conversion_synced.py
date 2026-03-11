@@ -32,6 +32,7 @@ import enum
 import logging
 import os
 import pathlib
+import sys
 import time
 
 import draccus
@@ -429,15 +430,25 @@ def main():
 
     Use --help to see all available options and their descriptions.
     """
-    # Suppress noisy C library output (libdav1d, SVT-AV1 encoder)
-    os.environ.setdefault("SVT_LOG", "1")  # SVT-AV1: 1 = errors only
+    # ------------------------------------------------------------------
+    # Suppress noisy C-library stderr (libdav1d, ffmpeg mp4 muxer, SVT-AV1).
+    # These write directly to file-descriptor 2, so Python-level log
+    # settings can't touch them.  We redirect fd 2 to /dev/null and re-
+    # point sys.stderr at the *original* fd so Python logging, warnings,
+    # and tracebacks still reach the terminal.
+    # ------------------------------------------------------------------
+    _orig_stderr_fd = os.dup(2)
+    _devnull_fd = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(_devnull_fd, 2)
+    os.close(_devnull_fd)
+    sys.stderr = os.fdopen(_orig_stderr_fd, "w", closefd=True)
+
+    # Suppress HuggingFace datasets progress bars (Map: 100%|███…)
     try:
-        import av
-        av.logging.set_level(av.logging.PANIC)  # libdav1d: silence all but panics
+        import datasets as _ds
+        _ds.disable_progress_bars()
     except Exception:
         pass
-    # Suppress HuggingFace datasets progress bars (Map: 100%|███...)
-    os.environ.setdefault("HF_DATASETS_DISABLE_PROGRESS_BARS", "1")
     logging.getLogger("datasets").setLevel(logging.WARNING)
 
     config = draccus.parse(config_class=SyncedConfig)
