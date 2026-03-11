@@ -90,12 +90,6 @@ def train_policy(cli_config: TrainCliArgs):
     Args:
         args: Parsed CLI arguments with nested policy configuration.
     """
-    import logging
-
-    # Suppress the "Device 'None' is not available" warning that fires
-    # inside build() before train() is reached.
-    logging.getLogger("lerobot.configs.policies").setLevel(logging.ERROR)
-
     # Build the LeRobot training configuration from the nested policy config.
     # The policy config already has all parameters set via CLI (e.g., --policy.batch-size).
     cfg = cli_config.policy.build()
@@ -111,57 +105,13 @@ def train_policy(cli_config: TrainCliArgs):
 
 
 def train(cfg):
-    import logging
     import warnings
 
-    # Suppress noisy warnings
     warnings.filterwarnings("ignore", message=".*video decoding.*torchvision.*deprecated.*")
     warnings.filterwarnings("ignore", message=".*No files have been modified since last commit.*")
 
     print("\nStarting training...")
-    # import after monkey patching
-    import lerobot.utils.utils as _lerobot_utils
     from lerobot.scripts.lerobot_train import train as lerobot_train
-
-    # Suppress device fallback warning and HF upload noise
-    logging.getLogger("lerobot.configs.policies").setLevel(logging.ERROR)
-    logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
-
-    # Only let through essential lerobot log messages; our compact summary
-    # already covers config, output dir, steps, batch size, etc.
-    _KEEP_PATTERNS = (
-        "Track this run",        # W&B link
-        "Logs will be synced",   # W&B enabled notice
-        "Checkpoint policy",     # checkpoint saved
-        "End of training",       # done
-        "Model pushed to",       # HF upload complete
-    )
-
-    class _QuietTraining(logging.Filter):
-        def filter(self, record: logging.LogRecord) -> bool:
-            msg = record.getMessage()
-            return any(p in msg for p in _KEEP_PATTERNS)
-
-    def _apply_quiet_filters():
-        """Add _QuietTraining filter to every root handler."""
-        for handler in logging.root.handlers:
-            # Avoid stacking duplicate filters
-            if not any(isinstance(f, _QuietTraining) for f in handler.filters):
-                handler.addFilter(_QuietTraining())
-
-    # Monkey-patch init_logging so our filters survive being re-called
-    # inside lerobot_train().
-    _orig_init_logging = _lerobot_utils.init_logging
-
-    def _patched_init_logging():
-        _orig_init_logging()
-        _apply_quiet_filters()
-
-    _lerobot_utils.init_logging = _patched_init_logging
-
-    # Apply filters now (for anything logged before lerobot_train calls
-    # init_logging again).
-    _lerobot_utils.init_logging()
 
     lerobot_train(cfg)
 
