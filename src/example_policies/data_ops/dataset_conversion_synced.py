@@ -390,6 +390,7 @@ class ScriptArgs:
 
     # HuggingFace Hub upload
     push_to_hub: bool = True  # Push dataset to HuggingFace Hub after conversion
+    private: bool = True  # Create private dataset repos on HuggingFace Hub by default
     repo_id: str | None = None  # HuggingFace repo ID; auto-generated as <hub_org>/<output-dir-name> if None
     hub_org: str = "pokeandwiggle"  # HuggingFace organization for auto-generated repo_id
 
@@ -521,7 +522,11 @@ def main():
         print(f"Pushing to HuggingFace Hub: {config.repo_id} ...")
         dataset = result["dataset"]
         dataset.repo_id = config.repo_id
-        dataset.push_to_hub(tags=["LeRobot"], license="apache-2.0")
+        dataset.push_to_hub(
+            tags=["LeRobot"],
+            license="apache-2.0",
+            private=config.private,
+        )
         print(f"Uploaded: https://huggingface.co/datasets/{config.repo_id}")
 
 
