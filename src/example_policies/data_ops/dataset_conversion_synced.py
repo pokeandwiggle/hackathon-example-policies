@@ -29,6 +29,8 @@ For log_time based conversion, use dataset_conversion.py instead.
 
 import dataclasses
 import enum
+import logging
+import os
 import pathlib
 import time
 
@@ -427,6 +429,17 @@ def main():
 
     Use --help to see all available options and their descriptions.
     """
+    # Suppress noisy C library output (libdav1d, SVT-AV1 encoder)
+    os.environ.setdefault("SVT_LOG", "1")  # SVT-AV1: 1 = errors only
+    try:
+        import av
+        av.logging.set_level(av.logging.PANIC)  # libdav1d: silence all but panics
+    except Exception:
+        pass
+    # Suppress HuggingFace datasets progress bars (Map: 100%|███...)
+    os.environ.setdefault("HF_DATASETS_DISABLE_PROGRESS_BARS", "1")
+    logging.getLogger("datasets").setLevel(logging.WARNING)
+
     config = draccus.parse(config_class=SyncedConfig)
 
     validate_input_dir(config.episodes_dir)

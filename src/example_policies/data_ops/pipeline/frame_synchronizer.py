@@ -20,9 +20,12 @@ synthetic timestamp using nearest-neighbor search.
 """
 
 import bisect
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator
+
+logger = logging.getLogger(__name__)
 
 from mcap.reader import make_reader
 
@@ -202,9 +205,9 @@ class FrameSynchronizer:
 
             # Report topics that used log_time fallback
             if topics_using_logtime:
-                print(
-                    f"  Note: Using log_time for topics without sensor timestamps: "
-                    f"{sorted(topics_using_logtime)}"
+                logger.debug(
+                    "Using log_time for topics without sensor timestamps: %s",
+                    sorted(topics_using_logtime),
                 )
 
         # Sort by timestamp (might not be strictly ordered in MCAP file)
@@ -264,9 +267,9 @@ class FrameSynchronizer:
 
             self.messages[topic] = decoded_messages
             self.timestamps[topic] = [m.timestamp for m in decoded_messages]
-            print(
-                f"  {topic.value}: decoded {total - failed}/{total} AV1 frames "
-                f"({failed} skipped before first keyframe)"
+            logger.debug(
+                "%s: decoded %d/%d AV1 frames (%d skipped before first keyframe)",
+                topic.value, total - failed, total, failed,
             )
 
     def validate_episode(self) -> tuple[bool, dict]:
@@ -295,8 +298,6 @@ class FrameSynchronizer:
             stats["skip_reason"] = "invalid during ingestion"
             return False, stats
 
-        print("Episode statistics:")
-
         missing_topics = []
         first_timestamps = []
 
@@ -310,11 +311,11 @@ class FrameSynchronizer:
 
             if count == 0:
                 missing_topics.append(topic)
-                print(f"{topic.value}: NO MESSAGES")
+                logger.debug("%s: NO MESSAGES", topic.value)
                 continue
 
             if count == 1:
-                print(f"{topic.value}: 1 message (cannot compute frequency)")
+                logger.debug("%s: 1 message (cannot compute frequency)", topic.value)
                 continue
 
             # Compute frequency statistics
@@ -343,15 +344,15 @@ class FrameSynchronizer:
                 "interval_dev_max_pct": max_dev,
             }
 
-            print(
-                f"{topic.value}: {count} msgs, "
-                f"avg {avg_freq:.1f}Hz (range: {min_freq:.1f}-{max_freq:.1f}Hz), "
-                f"interval deviation: {min_dev:+.1f}% to {max_dev:+.1f}%"
+            logger.debug(
+                "%s: %d msgs, avg %.1fHz (range: %.1f-%.1fHz), "
+                "interval deviation: %+.1f%% to %+.1f%%",
+                topic.value, count, avg_freq, min_freq, max_freq, min_dev, max_dev,
             )
 
         if missing_topics:
             stats["skip_reason"] = f"missing messages for topics: {[t.value for t in missing_topics]}"
-            print(f"WARNING: Skipping episode - {stats['skip_reason']}")
+            logger.warning("Skipping episode - %s", stats["skip_reason"])
             return False, stats
 
         # Check if all sensors are using the same clock by comparing first timestamps.
@@ -368,7 +369,7 @@ class FrameSynchronizer:
             stats["clock_spread_s"] = clock_spread
             if clock_spread > max_clock_spread:
                 stats["skip_reason"] = f"sensors appear to use different clocks (spread: {clock_spread:.2f}s)"
-                print(f"WARNING: Skipping episode - {stats['skip_reason']}")
+                logger.warning("Skipping episode - %s", stats["skip_reason"])
                 return False, stats
 
         # Compute usable time range stats
@@ -465,9 +466,9 @@ class FrameSynchronizer:
         Yields:
             Dict mapping RosTopicEnum to TimestampedMessage for each synced frame
         """
-        # Validate episode and print statistics
+        # Validate episode
         is_valid, stats = self.validate_episode()
-        print(f"  Stats: {stats}")
+        logger.debug("Stats: %s", stats)
         if not is_valid:
             return
 
@@ -476,7 +477,7 @@ class FrameSynchronizer:
         end_times = [ts[-1] for ts in self.timestamps.values() if ts]
 
         if not start_times or not end_times:
-            print("WARNING: No messages found for any topic")
+            logger.warning("No messages found for any topic")
             return
 
         # Start: when all topics have started (max of firsts)
@@ -486,7 +487,7 @@ class FrameSynchronizer:
         self._sync_episode_start = episode_start
 
         if episode_start >= episode_end:
-            print("WARNING: No overlapping time range for all topics")
+            logger.warning("No overlapping time range for all topics")
             return
 
         interval = 1.0 / self.target_frequency
@@ -509,11 +510,11 @@ class FrameSynchronizer:
                 if msg is None:
                     gap_ms = gap * 1000 if gap is not None else float("inf")
                     exceeded_ms = gap_ms - (self.tolerance * 1000)
-                    print(
-                        f"WARNING: Skipping entire episode - topic '{topic.value}' "
-                        f"has no message within {self.tolerance * 1000:.1f}ms tolerance "
-                        f"of timestamp {target_time:.3f}s "
-                        f"(nearest was {gap_ms:.1f}ms away, exceeded by {exceeded_ms:.1f}ms)"
+                    logger.warning(
+                        "Skipping entire episode - topic '%s' has no message within "
+                        "%.1fms tolerance of timestamp %.3fs "
+                        "(nearest was %.1fms away, exceeded by %.1fms)",
+                        topic.value, self.tolerance * 1000, target_time, gap_ms, exceeded_ms,
                     )
                     return
 
@@ -524,11 +525,11 @@ class FrameSynchronizer:
         # Yield all validated frames
         yield from all_frames
 
-        # Print summary
+        # Log summary
         duration = episode_end - episode_start
-        print(
-            f"  Sync stats: {len(all_frames)} frames at {self.target_frequency:.1f}Hz "
-            f"over {duration:.2f}s"
+        logger.debug(
+            "Sync stats: %d frames at %.1fHz over %.2fs",
+            len(all_frames), self.target_frequency, duration,
         )
 
     def get_sync_start_offset(self) -> float | None:
