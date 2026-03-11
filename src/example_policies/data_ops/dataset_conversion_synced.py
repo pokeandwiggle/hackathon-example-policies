@@ -168,11 +168,9 @@ class SyncedEpisodeConverter:
         self.reset_episode_state()
 
         # Pass 1: Ingest all messages
-        print("  Ingesting messages...")
         self.frame_synchronizer.ingest_episode(episode_path)
 
         # Pass 1.5: Pre-decode all AV1 video frames sequentially
-        print("  Decoding video topics...")
         w, h = self.config.image_resolution
         self.frame_synchronizer.decode_video_topics(w, h)
 
@@ -209,11 +207,6 @@ class SyncedEpisodeConverter:
             saved_frames += 1
             raw_frame_kept.append(True)
 
-        print(
-            f"  Saved {saved_frames} frames "
-            f"(skipped {skipped_pauses} pauses, {skipped_decode} undecoded)"
-        )
-
         # Store frame mapping for annotation remapping
         # sync_abs_start_s: absolute timestamp of first synced frame
         self._last_raw_frame_kept = raw_frame_kept
@@ -231,7 +224,6 @@ class SyncedEpisodeConverter:
         # Check if episode is too short
         min_frames = self.config.min_episode_seconds * self.config.target_fps
         if saved_frames < min_frames:
-            print(f"  Episode too short ({saved_frames} frames), adding to blacklist")
             self.blacklist.append(self.episode_counter)
 
         self.episode_counter += 1
@@ -271,7 +263,6 @@ def convert_episodes_synced(
     robot_type = "panda_bimanual"
     if episode_paths:
         robot_type = extract_robot_type_from_mcap(episode_paths[0])
-        print(f"  Detected robot type: {robot_type}")
 
     converter = SyncedEpisodeConverter(
         output_dir,
@@ -285,11 +276,22 @@ def convert_episodes_synced(
     # Initialize annotation extractor if requested
     annotation_extractor = AnnotationExtractor(fps=config.target_fps) if with_annotations else None
 
+    # Track per-episode results for summary
+    episode_results: list[dict] = []
+    total_episodes = len(episode_paths)
+
     for ep_idx, episode_path in enumerate(episode_paths):
-        print(f"Processing {episode_path}...")
+        ep_name = episode_path.stem
+        print(f"  [{ep_idx + 1}/{total_episodes}] {ep_name} ... ", end="", flush=True)
 
         try:
             saved = converter.process_episode(episode_path, ep_idx)
+            if saved:
+                print("ok")
+                episode_results.append({"path": ep_name, "status": "ok"})
+            else:
+                print("skipped (no frames)")
+                episode_results.append({"path": ep_name, "status": "no_frames"})
 
             # Extract annotations after successful conversion
             if annotation_extractor and saved:
@@ -302,16 +304,11 @@ def convert_episodes_synced(
                 )
 
         except Exception as e:
-            print(
-                f"Skipping faulty file: {episode_path} due to {type(e).__name__}: {e}"
-            )
-            import traceback
-
-            traceback.print_exc()
+            print(f"error ({type(e).__name__}: {e})")
+            episode_results.append({"path": ep_name, "status": "error", "reason": f"{type(e).__name__}: {e}"})
             continue
 
     # Finalize the dataset - required to close parquet writers and write footer metadata
-    print("Finalizing dataset...")
     converter.dataset.finalize()
 
     save_metadata(
@@ -332,15 +329,35 @@ def convert_episodes_synced(
     if annotation_extractor:
         result["annotation_extractor"] = annotation_extractor
 
+    result["episode_results"] = episode_results
+
     return result
 
 
 def print_conversion_result(result: dict) -> None:
-    """Print conversion statistics."""
-    print("\nConversion complete!")
-    print(f"  - Episodes saved: {result['episodes_saved']}")
-    print(f"  - Blacklisted episodes: {len(result['blacklist'])}")
-    print(f"  - Total time: {result['total_time']:.2f}s")
+    """Print conversion summary."""
+    ep_results = result.get("episode_results", [])
+    ok = [r for r in ep_results if r["status"] == "ok"]
+    no_frames = [r for r in ep_results if r["status"] == "no_frames"]
+    errors = [r for r in ep_results if r["status"] == "error"]
+    blacklisted = result.get("blacklist", [])
+
+    print("\n" + "=" * 60)
+    print("CONVERSION SUMMARY")
+    print("=" * 60)
+    print(f"  Total episodes processed : {len(ep_results)}")
+    print(f"  Successfully converted   : {len(ok)}")
+    print(f"  Blacklisted (too short)  : {len(blacklisted)}")
+    if no_frames:
+        print(f"  Skipped (no frames)      : {len(no_frames)}")
+        for r in no_frames:
+            print(f"    - {r['path']}")
+    if errors:
+        print(f"  Errors                   : {len(errors)}")
+        for r in errors:
+            print(f"    - {r['path']}: {r['reason']}")
+    print(f"  Time elapsed             : {result['total_time']:.1f}s")
+    print("=" * 60)
 
 
 @dataclasses.dataclass
@@ -423,7 +440,6 @@ def main():
     # Delete existing output directory if requested
     if config.delete_existing and config.output.exists():
         import shutil
-        print(f"Deleting existing dataset at {config.output} ...")
         shutil.rmtree(config.output)
 
     # Compute tolerance if not specified
@@ -431,26 +447,9 @@ def main():
     if tolerance_ms is None:
         tolerance_ms = 1000.0 / config.target_fps
 
-    print(f"Converting episodes from: {config.episodes_dir}")
-    print(f"Output directory: {config.output}")
-    print("Sync config:")
-    print(f"  - Target FPS: {config.target_fps}Hz")
-    print(f"  - Tolerance: {tolerance_ms:.1f}ms {'(auto)' if config.tolerance_ms is None else ''}")
-    if config.causal:
-        print("  - Causal sync: enabled (past-only, no future lookahead)")
-    if config.with_annotations:
-        print("  - Annotations: enabled")
-        if config.skip_failed_segments:
-            print("  - Skip failed segments: enabled")
     # Auto-generate repo_id from output directory name (already includes operator)
     if config.push_to_hub and not config.repo_id:
         config.repo_id = f"{config.hub_org}/{config.output.name}"
-    if config.push_to_hub:
-        print(f"  - Push to hub: {config.repo_id}")
-    print("Pipeline config:")
-    print(f"  - Action level: {config.action_level}")
-    print(f"  - Image resolution: {config.image_resolution}")
-    print(f"  - Task: {config.task_name}")
 
     episode_paths = get_selected_episodes(
         config.episodes_dir,
@@ -459,13 +458,14 @@ def main():
         complete_subtasks_only=config.complete_subtasks_only,
         api_filter=config.api_filter,
     )
-    if not config.success_only:
-        print("  - Including all episodes (success_only=False)")
-    elif not config.excellent_only:
-        print("  - Including ok/good/excellent episodes (excellent_only=False)")
     if config.max_episodes is not None:
         episode_paths = episode_paths[: config.max_episodes]
-        print(f"  - Limiting to first {config.max_episodes} episodes")
+
+    # Compact header
+    print(f"Converting {len(episode_paths)} episodes from {config.episodes_dir}")
+    print(f"  -> {config.output}  |  {config.target_fps}Hz  |  tol={tolerance_ms:.0f}ms  |  {config.action_level.value}")
+    if config.push_to_hub:
+        print(f"  -> HF: {config.repo_id}")
 
     result = convert_episodes_synced(
         episode_paths,
@@ -486,24 +486,17 @@ def main():
                 "('pw_episode_info' in new format, or 'segments' + 'episode_rating' in old format). "
                 "If annotations are not required, remove the --with_annotations flag."
             )
-
-        print("\nSaving annotations...")
         extractor.save(config.output)
-
-        # Print annotation stats
-        print(f"  - Episodes with annotations: {extractor.episodes_with_annotations}")
-        print(f"  - Total segments: {extractor.total_segments}")
 
     print_conversion_result(result)
 
     # Push to HuggingFace Hub if requested
     if config.push_to_hub:
-        print(f"\nPushing dataset to HuggingFace Hub: {config.repo_id}")
+        print(f"Pushing to HuggingFace Hub: {config.repo_id} ...")
         dataset = result["dataset"]
-        # Update repo_id for push
         dataset.repo_id = config.repo_id
         dataset.push_to_hub(tags=["LeRobot"], license="apache-2.0")
-        print(f"Dataset uploaded to: https://huggingface.co/datasets/{config.repo_id}")
+        print(f"Uploaded: https://huggingface.co/datasets/{config.repo_id}")
 
 
 if __name__ == "__main__":
