@@ -12,4 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os as _os
+
+_os.environ.setdefault("HF_LEROBOT_HOME", "/data/lerobot")
+
 from . import policies as policies

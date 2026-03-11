@@ -21,7 +21,6 @@ from copy import deepcopy
 import draccus
 
 from example_policies import config_factory as cf
-from example_policies.lerobot_patches import apply_patches
 
 
 @dataclasses.dataclass
@@ -120,6 +119,7 @@ def train(cfg):
 
 
 def main():
+    from example_policies.lerobot_patches import apply_patches
     apply_patches()
     cli_config = draccus.parse(config_class=TrainCliArgs)
     train_policy(cli_config)
