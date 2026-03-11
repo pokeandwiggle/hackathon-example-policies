@@ -115,6 +115,9 @@ def train(cfg):
 
     lerobot_train(cfg)
 
+    if getattr(cfg.policy, "push_to_hub", False) and getattr(cfg.policy, "repo_id", None):
+        print(f"\nModel uploaded to: https://huggingface.co/{cfg.policy.repo_id}")
+
 
 def main():
     apply_patches()
