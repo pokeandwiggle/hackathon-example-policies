@@ -54,6 +54,24 @@ HOME_JOINT_ANGLES = {
         2.3928931,
         -0.7659729,
     ],
+    "pedestal": [
+        # left arm (from dual_fr3_pedestal.yaml)
+        0.0002,
+        -0.1705,
+        0.2514,
+        -1.9817,
+        0.4381,
+        1.7944,
+        1.2713,
+        # right arm
+        0.0004,
+        -0.2775,
+        -0.3547,
+        -2.0181,
+        -0.5128,
+        1.8436,
+        -1.3013,
+    ],
 }
 
 # Gripper open width in meters
@@ -67,7 +85,7 @@ def move_home(robot_interface: RobotInterface, mount: str = "wall") -> None:
 
     Args:
         robot_interface: The robot interface to use for commands
-        mount: Robot mount type ("table" or "wall")
+        mount: Robot mount type ("table", "wall", or "pedestal")
     """
     import numpy as np
 
