@@ -114,15 +114,22 @@ def train(cfg):
     logging.getLogger("lerobot.configs.policies").setLevel(logging.ERROR)
     logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 
-    # Filter out the massive config dump from lerobot's ot_train.py
-    class _SkipConfigDump(logging.Filter):
+    # Only let through essential lerobot log messages; our compact summary
+    # already covers config, output dir, steps, batch size, etc.
+    _KEEP_PATTERNS = (
+        "Track this run",        # W&B link
+        "Logs will be synced",   # W&B enabled notice
+        "Checkpoint policy",     # checkpoint saved
+        "End of training",       # done
+        "Model pushed to",       # HF upload complete
+    )
+
+    class _QuietTraining(logging.Filter):
         def filter(self, record: logging.LogRecord) -> bool:
             msg = record.getMessage()
-            if msg.lstrip().startswith("{") and len(msg) > 500:
-                return False  # drop pformat(cfg) dump
-            return True
+            return any(p in msg for p in _KEEP_PATTERNS)
 
-    logging.getLogger("lerobot").addFilter(_SkipConfigDump())
+    logging.getLogger("lerobot").addFilter(_QuietTraining())
 
     print("\nStarting training...")
     # import after monkey patching
