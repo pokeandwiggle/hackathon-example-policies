@@ -108,6 +108,8 @@ class FrameSynchronizer:
         self._invalid_episode = False
         # Absolute timestamp where synced frames begin (set during generate_synced_frames)
         self._sync_episode_start: float | None = None
+        # Human-readable reason the episode was skipped (set by generate_synced_frames)
+        self.skip_reason: str | None = None
         # Raw first-timestamps before video decoding drops pre-keyframe frames
         self._raw_first_timestamps: dict[RosTopicEnum, float | None] = {
             topic: None for topic in self.required_topics
@@ -467,9 +469,11 @@ class FrameSynchronizer:
             Dict mapping RosTopicEnum to TimestampedMessage for each synced frame
         """
         # Validate episode
+        self.skip_reason = None
         is_valid, stats = self.validate_episode()
         logger.debug("Stats: %s", stats)
         if not is_valid:
+            self.skip_reason = stats.get("skip_reason", "validation failed")
             return
 
         # Determine time range where ALL topics have data
@@ -477,7 +481,8 @@ class FrameSynchronizer:
         end_times = [ts[-1] for ts in self.timestamps.values() if ts]
 
         if not start_times or not end_times:
-            logger.warning("No messages found for any topic")
+            self.skip_reason = "no messages found for any topic"
+            logger.warning(self.skip_reason)
             return
 
         # Start: when all topics have started (max of firsts)
@@ -487,7 +492,8 @@ class FrameSynchronizer:
         self._sync_episode_start = episode_start
 
         if episode_start >= episode_end:
-            logger.warning("No overlapping time range for all topics")
+            self.skip_reason = "no overlapping time range for all topics"
+            logger.warning(self.skip_reason)
             return
 
         interval = 1.0 / self.target_frequency
@@ -510,12 +516,12 @@ class FrameSynchronizer:
                 if msg is None:
                     gap_ms = gap * 1000 if gap is not None else float("inf")
                     exceeded_ms = gap_ms - (self.tolerance * 1000)
-                    logger.warning(
-                        "Skipping entire episode - topic '%s' has no message within "
-                        "%.1fms tolerance of timestamp %.3fs "
-                        "(nearest was %.1fms away, exceeded by %.1fms)",
-                        topic.value, self.tolerance * 1000, target_time, gap_ms, exceeded_ms,
+                    self.skip_reason = (
+                        f"tolerance exceeded on '{topic.value}' "
+                        f"(gap {gap_ms:.0f}ms > {self.tolerance * 1000:.0f}ms limit, "
+                        f"over by {exceeded_ms:.1f}ms)"
                     )
+                    logger.warning("Skipping entire episode - %s", self.skip_reason)
                     return
 
                 frame[topic] = msg

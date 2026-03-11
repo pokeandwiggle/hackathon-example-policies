@@ -141,7 +141,7 @@ class SyncedEpisodeConverter:
 
     def process_episode(
         self, episode_path: pathlib.Path, episode_idx: int
-    ) -> bool:
+    ) -> tuple[bool, str | None]:
         """Process an episode using sensor-timestamp synchronization.
 
         Args:
@@ -149,7 +149,9 @@ class SyncedEpisodeConverter:
             episode_idx: Index of the episode
 
         Returns:
-            True if episode was saved, False otherwise
+            Tuple of (saved, skip_reason). saved is True if episode was
+            saved, False otherwise.  skip_reason is None when saved,
+            or a human-readable explanation when skipped.
         """
         # Extract per-episode embodiment from MCAP metadata
         emb_meta = extract_embodiment_metadata(episode_path)
@@ -216,7 +218,7 @@ class SyncedEpisodeConverter:
         self._last_sync_abs_start_s = self.frame_synchronizer.get_sync_start_offset()
 
         if saved_frames == 0:
-            return False
+            return False, self.frame_synchronizer.skip_reason or "no frames produced"
 
         # Save episode
         self.dataset.save_episode()
@@ -230,7 +232,7 @@ class SyncedEpisodeConverter:
             self.blacklist.append(self.episode_counter)
 
         self.episode_counter += 1
-        return True
+        return True, None
 
     def get_total_time(self) -> float:
         """Get total elapsed time."""
@@ -288,13 +290,13 @@ def convert_episodes_synced(
         print(f"  [{ep_idx + 1}/{total_episodes}] {ep_name} ... ", end="", flush=True)
 
         try:
-            saved = converter.process_episode(episode_path, ep_idx)
+            saved, skip_reason = converter.process_episode(episode_path, ep_idx)
             if saved:
-                print("ok")
+                print("done")
                 episode_results.append({"path": ep_name, "status": "ok"})
             else:
-                print("skipped (no frames)")
-                episode_results.append({"path": ep_name, "status": "no_frames"})
+                print(f"skipped ({skip_reason})")
+                episode_results.append({"path": ep_name, "status": "no_frames", "reason": skip_reason})
 
             # Extract annotations after successful conversion
             if annotation_extractor and saved:
@@ -354,7 +356,7 @@ def print_conversion_result(result: dict) -> None:
     if no_frames:
         print(f"  Skipped (no frames)      : {len(no_frames)}")
         for r in no_frames:
-            print(f"    - {r['path']}")
+            print(f"    - {r['path']}: {r.get('reason', 'unknown')}")
     if errors:
         print(f"  Errors                   : {len(errors)}")
         for r in errors:
