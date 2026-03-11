@@ -524,8 +524,8 @@ def main():
         dataset.repo_id = config.repo_id
         dataset.push_to_hub(
             tags=["LeRobot"],
-            license="apache-2.0",
             private=config.private,
+            upload_large_folder=True,
         )
         print(f"Uploaded: https://huggingface.co/datasets/{config.repo_id}")
 
