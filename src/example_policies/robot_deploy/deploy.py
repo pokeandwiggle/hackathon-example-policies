@@ -79,6 +79,13 @@ GRIPPER_OPEN_WIDTH = 0.08
 GRIPPER_SPEED = 0.1  # m/s
 GRIPPER_FORCE = 50.0  # N
 
+# Map mount type to embodiment name for correct joint names
+_MOUNT_EMBODIMENT = {
+    "wall": "dual_panda_wall",
+    "table": "dual_panda_table",
+    "pedestal": "dual_fr3_pedestal",
+}
+
 
 def move_home(robot_interface: RobotInterface, mount: str = "wall") -> None:
     """Move the robot to home pose and open grippers.
@@ -97,8 +104,13 @@ def move_home(robot_interface: RobotInterface, mount: str = "wall") -> None:
 
     joint_angles = np.array(angles)
 
+    # Use the correct embodiment for the mount type so joint names match the robot
+    embodiment_name = _MOUNT_EMBODIMENT.get(mount)
+    embodiment = get_joint_config(embodiment_name)
+    joint_names = embodiment.canonical_arm_joints()
+
     print(f"Moving to home pose ({mount} mount)...")
-    robot_interface.move_to_joint_goal(joint_angles)
+    robot_interface.move_to_joint_goal(joint_angles, joint_names=joint_names)
 
     print("Opening grippers...")
     robot_interface.set_gripper_state(
