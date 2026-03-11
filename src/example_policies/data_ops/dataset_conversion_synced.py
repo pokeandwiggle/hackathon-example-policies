@@ -348,7 +348,8 @@ class ScriptArgs:
     """Arguments for synced conversion script."""
 
     episodes_dir: pathlib.Path = pathlib.Path("./data")
-    output: pathlib.Path = pathlib.Path("./output")
+    output: pathlib.Path | None = None  # Auto-generated as /data/lerobot/<task>_<operator> if None
+    delete_existing: bool = True  # Delete existing output directory before conversion
 
     # Sync-specific parameters
     tolerance_ms: float | None = None  # Auto-computed from target_fps if None
@@ -358,14 +359,17 @@ class ScriptArgs:
     # Episode filtering
     success_only: bool = True  # Include only successful episodes (based on MCAP metadata)
     excellent_only: bool = True  # Include only episodes with 'excellent' quality
+    complete_subtasks_only: bool = False  # Include only episodes where all subtasks have a successful segment
+    api_filter: str | None = None  # Platform API filter query string (overrides success/excellent/subtask filters)
 
     # Annotation extraction (opt-in)
     with_annotations: bool = False  # Extract segment annotations from /annotation topic
     skip_failed_segments: bool = False  # Skip frames from failed segments (requires --with-annotations)
 
     # HuggingFace Hub upload
-    push_to_hub: bool = False  # Push dataset to HuggingFace Hub after conversion
-    repo_id: str | None = None  # HuggingFace repo ID (e.g., 'user/dataset-name')
+    push_to_hub: bool = True  # Push dataset to HuggingFace Hub after conversion
+    repo_id: str | None = None  # HuggingFace repo ID; auto-generated as <hub_org>/<output-dir-name> if None
+    hub_org: str = "pokeandwiggle"  # HuggingFace organization for auto-generated repo_id
 
 
 @dataclasses.dataclass
@@ -373,7 +377,8 @@ class SyncedConfig(ScriptArgs, pipeline_config.PipelineConfig):
     """Configuration for synced conversion.
 
     Inherits from ScriptArgs and PipelineConfig to include all parameters.
-    """
+
+"""
 
     def to_dict(self):
         data = dataclasses.asdict(self)
@@ -409,6 +414,18 @@ def main():
 
     validate_input_dir(config.episodes_dir)
 
+    # Auto-generate output dir from episodes_dir: /data/lerobot/<task>_<operator>
+    if config.output is None:
+        operator_name = config.episodes_dir.name
+        task_name = config.episodes_dir.parent.name
+        config.output = pathlib.Path("/data/lerobot") / f"{task_name}_{operator_name}"
+
+    # Delete existing output directory if requested
+    if config.delete_existing and config.output.exists():
+        import shutil
+        print(f"Deleting existing dataset at {config.output} ...")
+        shutil.rmtree(config.output)
+
     # Compute tolerance if not specified
     tolerance_ms = config.tolerance_ms
     if tolerance_ms is None:
@@ -425,20 +442,22 @@ def main():
         print("  - Annotations: enabled")
         if config.skip_failed_segments:
             print("  - Skip failed segments: enabled")
+    # Auto-generate repo_id from output directory name (already includes operator)
+    if config.push_to_hub and not config.repo_id:
+        config.repo_id = f"{config.hub_org}/{config.output.name}"
     if config.push_to_hub:
-        print(f"  - Push to hub: {config.repo_id or 'repo_id required!'}")
+        print(f"  - Push to hub: {config.repo_id}")
     print("Pipeline config:")
     print(f"  - Action level: {config.action_level}")
     print(f"  - Image resolution: {config.image_resolution}")
     print(f"  - Task: {config.task_name}")
-    # Validate push_to_hub requires repo_id
-    if config.push_to_hub and not config.repo_id:
-        raise ValueError("--repo_id is required when using --push_to_hub")
 
     episode_paths = get_selected_episodes(
         config.episodes_dir,
         success_only=config.success_only,
         excellent_only=config.excellent_only,
+        complete_subtasks_only=config.complete_subtasks_only,
+        api_filter=config.api_filter,
     )
     if not config.success_only:
         print("  - Including all episodes (success_only=False)")

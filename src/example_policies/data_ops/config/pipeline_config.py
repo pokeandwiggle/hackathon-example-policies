@@ -84,7 +84,7 @@ class PipelineConfig:
     include_joint_velocities: bool = False
     include_joint_efforts: bool = False
     include_tcp_poses: bool = True
-    include_last_command: bool = True
+    include_last_command: bool = False
 
     include_rgb_images: bool = True
     include_depth_images: bool = False
@@ -93,7 +93,7 @@ class PipelineConfig:
 
     depth_scale_factor: float = 1000.0
 
-    action_level: ActionMode = ActionMode.DELTA_TCP
+    action_level: ActionMode = ActionMode.TCP
 
     # Gripper type
     left_gripper: GripperType = GripperType.PANDA
@@ -123,10 +123,10 @@ class PipelineConfig:
 
     # Subsampling
     recording_fps: int = 30  # Old dataset pipeline only
-    target_fps: int = 10
+    target_fps: int = 30
     subsample_offset: int = 0  # Old dataset pipeline only
 
-    min_episode_seconds: int = 8
+    min_episode_seconds: int = 1
 
     def __post_init__(self):
         self.include_joint_states = (

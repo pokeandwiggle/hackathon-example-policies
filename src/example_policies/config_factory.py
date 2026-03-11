@@ -39,12 +39,15 @@ class PolicyConfigBase(ABC):
     save_freq: int = 10_000
     resume_path: Optional[str] = None
     wandb_enable: bool = True
-    wandb_entity: Optional[str] = None
+    wandb_entity: Optional[str] = "pokeandwiggle"
     wandb_project: str = "lerobot"
     video_backend: str = "pyav"  # "torchcodec" or "pyav"
     policy_kwargs: dict = field(default_factory=dict)
     pretrained_actions: bool = False
     build_exp_name_dir: bool = True
+    # HuggingFace Hub upload
+    push_to_hub: bool = True  # Push trained model to HuggingFace Hub after training
+    hub_org: str = "pokeandwiggle"  # HuggingFace organization for auto-generated repo_id
 
     @property
     @abstractmethod
@@ -108,10 +111,16 @@ class PolicyConfigBase(ABC):
         pretrained_config = self.get_pretrained_config()
         if pretrained_config is None:
             pretrained_config = PreTrainedConfig.get_choice_class(self.model_name)(
-                push_to_hub=False, **merged_policy_kwargs
+                push_to_hub=self.push_to_hub, **merged_policy_kwargs
             )
 
         exp_name, exp_dir = self._build_exp_name_dir()
+
+        # Auto-generate repo_id for push_to_hub
+        if self.push_to_hub and exp_name:
+            pretrained_config.push_to_hub = True
+            ds_name = pathlib.Path(self.dataset_root_dir).name
+            pretrained_config.repo_id = f"{self.hub_org}/{ds_name}"
 
         cfg = TrainPipelineConfig(
             policy=pretrained_config,
@@ -410,13 +419,13 @@ class DiTFlowConfig(PolicyConfigBase):
     the dataset parquet files using the configured ``horizon``.
     """
 
-    batch_size: int = 64
+    batch_size: int = 128
     lr: float = 2e-4
-    steps: int = 10_000
-    save_freq: int = 5_000
-    n_obs_steps: int = 2
-    horizon: int = 16
-    n_action_steps: int = 8
+    steps: int = 100_000
+    save_freq: int = 25_000
+    n_obs_steps: int = 1
+    horizon: int = 96
+    n_action_steps: int = 48
 
     # Chunk-relative UMI-delta conversion (opt-in)
     use_chunk_relative_actions: bool = False

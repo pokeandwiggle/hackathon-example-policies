@@ -36,7 +36,9 @@ class TrainCliArgs:
     """
 
     # Path to the dataset directory containing training data.
-    data_dir: pathlib.Path
+    data_dir: pathlib.Path = None
+    # HuggingFace dataset repo ID (alternative to data_dir). Downloads and caches locally.
+    hf_repo_id: str | None = None
     # Include depth images in the input features.
     include_depth: bool = False
     # Nested policy configuration - exposes all DiTFlowConfig parameters
@@ -44,6 +46,17 @@ class TrainCliArgs:
 
     def __post_init__(self):
         """Sync data_dir to nested policy config after parsing."""
+        if self.hf_repo_id and self.data_dir:
+            raise ValueError("Set only one of --data-dir or --hf-repo-id, not both.")
+        if not self.hf_repo_id and not self.data_dir:
+            raise ValueError("Set either --data-dir (local) or --hf-repo-id (HuggingFace).")
+        if self.hf_repo_id:
+            from lerobot.datasets.lerobot_dataset import LeRobotDataset
+            print(f"Downloading dataset '{self.hf_repo_id}' from HuggingFace Hub...")
+            _hf_dataset = LeRobotDataset(repo_id=self.hf_repo_id)
+            self.data_dir = pathlib.Path(_hf_dataset.root)
+            print(f"Downloaded to: {self.data_dir}")
+            del _hf_dataset
         self.policy.dataset_root_dir = str(self.data_dir)
 
 
