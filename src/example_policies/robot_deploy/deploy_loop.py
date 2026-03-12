@@ -151,6 +151,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Record locally but skip HuggingFace upload",
     )
+    parser.add_argument(
+        "--suffix",
+        type=str,
+        default="",
+        help="Suffix appended to recording folder and HF repo name (e.g. '_blabbla')",
+    )
 
     return parser
 
@@ -180,7 +186,7 @@ def _push_dataset(recorder, args: argparse.Namespace, model_name: str) -> None:
     rate_pct = int(recorder.success_rate * 100)
     n_success = sum(1 for o in recorder.outcomes if o == "success")
     n_total = len(recorder.outcomes)
-    repo_id = f"{args.hub_org}/eval_{model_name}_{rate_pct}pct_{n_success}of{n_total}"
+    repo_id = f"{args.hub_org}/eval_{model_name}{args.suffix}_{rate_pct}pct_{n_success}of{n_total}"
 
     print(f"\nPushing to HuggingFace Hub: {repo_id} ...")
     dataset = LeRobotDataset(repo_id=repo_id, root=args.output)
@@ -199,7 +205,7 @@ def main():
 
     # Auto-generate output path if not specified
     if args.record and args.output is None:
-        args.output = pathlib.Path(f"/data/rollout_recordings/{model_name}")
+        args.output = pathlib.Path(f"/data/rollout_recordings/{model_name}{args.suffix}")
 
     # --- Resolve checkpoint ---
     checkpoint_dir = _resolve_checkpoint(args)
