@@ -12,16 +12,18 @@ LeRobot v3.0 dataset and auto-upload to HuggingFace Hub.
 
 Usage:
     # Deploy only (no recording):
-    example_policies deploy-loop \\
-        --checkpoint /data/models/my_policy \\
-        --robot-server 10.0.0.1:50051 \\
+    example_policies deploy-loop \
+        --checkpoint /data/models/my_policy \
+        --robot-server 192.168.0.201:50051 \
         --mount wall
 
     # Deploy with recording (auto-uploads to HF):
-    example_policies deploy-loop \\
-        --hf-repo-id pokeandwiggle/my_model \\
-        --robot-server 10.0.0.1:50051 \\
-        --mount pedestal \\
+    example_policies deploy-loop \
+        --hf-repo-id pokeandwiggle/my_model \
+        --robot-server 192.168.0.101:50051 \
+        --mount pedestal \
+        --num-rollouts 10 \
+        --n-action-steps 72 \
         --record
 """
 
@@ -95,6 +97,14 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["table", "wall", "pedestal"],
         required=True,
         help="Robot mount type (determines home pose and joint names)",
+    )
+
+    parser.add_argument(
+        "--n-action-steps",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Override the number of action steps executed per chunk (default: from model config)",
     )
 
     # --- Loop ---
@@ -198,6 +208,12 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     policy_bundle = PolicyManager.load_single(checkpoint_dir, device)
     print(f"Policy loaded on {device}")
+
+    # --- Override n_action_steps if requested ---
+    if args.n_action_steps is not None:
+        old = policy_bundle.config.n_action_steps
+        policy_bundle.config.n_action_steps = args.n_action_steps
+        print(f"Overriding n_action_steps: {old} → {args.n_action_steps}")
 
     # --- Derive embodiment from mount ---
     embodiment_name = _MOUNT_EMBODIMENT[args.mount]
