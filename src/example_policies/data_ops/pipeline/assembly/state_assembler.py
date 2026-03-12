@@ -15,6 +15,9 @@
 import numpy as np
 
 from ...config.pipeline_config import PipelineConfig
+from example_policies.utils.gripper import (
+    robotiq_width_from_knuckle,
+)
 from .action_assembler import LastCommand
 
 
@@ -42,27 +45,32 @@ class StateAssembler:
             state_components.append(parsed_frame["actual_tcp_right"])
 
         # gripper_state layout: [left_joints..., right_joints...]
-        # For Panda: [left_finger1, left_finger2, right_finger1, right_finger2]
+        # After joint reordering:
+        #   Panda:   [left_finger1, left_finger2, right_finger1, right_finger2]
+        #   Robotiq: [left_knuckle, right_knuckle]
+        # We always convert to 1 width-in-meters value per side.
         gs = parsed_frame["gripper_state"]
         from example_policies.utils.state_builder import GripperType
 
-        raw_left_n = 2 if self.config.left_gripper == GripperType.PANDA else 6
-        raw_right_n = 2 if self.config.right_gripper == GripperType.PANDA else 6
-        left_raw = gs[:raw_left_n]
-        right_raw = gs[raw_left_n : raw_left_n + raw_right_n]
+        left_n = 2 if self.config.left_gripper == GripperType.PANDA else 1
+        right_n = 2 if self.config.right_gripper == GripperType.PANDA else 1
+        left_raw = gs[:left_n]
+        right_raw = gs[left_n : left_n + right_n]
 
-        # Only apply single-value summation for Panda grippers.
-        # Robotiq grippers always pass through all 6 values regardless of the flag.
-        if self.config.use_single_gripper_value and self.config.left_gripper == GripperType.PANDA:
-            left_gs = np.array([left_raw.sum()], dtype=gs.dtype)
+        # Panda: width = sum of both finger joint positions (metres)
+        # Robotiq: convert knuckle position (rad) to width (metres)
+        if self.config.left_gripper == GripperType.PANDA:
+            left_width = float(left_raw.sum())
         else:
-            left_gs = left_raw
-        if self.config.use_single_gripper_value and self.config.right_gripper == GripperType.PANDA:
-            right_gs = np.array([right_raw.sum()], dtype=gs.dtype)
+            left_width = robotiq_width_from_knuckle(float(left_raw[0]))
+
+        if self.config.right_gripper == GripperType.PANDA:
+            right_width = float(right_raw.sum())
         else:
-            right_gs = right_raw
-        state_components.append(left_gs)
-        state_components.append(right_gs)
+            right_width = robotiq_width_from_knuckle(float(right_raw[0]))
+
+        state_components.append(np.array([left_width], dtype=np.float32))
+        state_components.append(np.array([right_width], dtype=np.float32))
 
         if self.config.include_last_command:
             state_components.append(

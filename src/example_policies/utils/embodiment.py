@@ -2,14 +2,10 @@ from dataclasses import dataclass
 
 from example_policies.utils.state_builder import GripperType
 
-_ROBOTIQ_JOINT_STEMS = [
-    "robotiq_85_left_knuckle_joint",
-    "robotiq_85_right_knuckle_joint",
-    "robotiq_85_left_inner_knuckle_joint",
-    "robotiq_85_right_inner_knuckle_joint",
-    "robotiq_85_left_finger_tip_joint",
-    "robotiq_85_right_finger_tip_joint",
-]
+# Only the left_knuckle_joint is exported by the Robotiq hardware driver.
+# The remaining 5 joints are URDF mimic joints computed by
+# joint_state_publisher and are not available on real hardware.
+_ROBOTIQ_KNUCKLE_JOINT_STEM = "robotiq_85_left_knuckle_joint"
 
 
 @dataclass(frozen=True)
@@ -38,10 +34,10 @@ class EmbodimentJointConfig:
         return [f"{self.right_arm_prefix}_finger_joint{i}" for i in range(1, 3)]
 
     def left_robotiq_gripper_joints(self) -> list[str]:
-        return [f"{self.left_arm_prefix}_{j}" for j in _ROBOTIQ_JOINT_STEMS]
+        return [f"{self.left_arm_prefix}_{_ROBOTIQ_KNUCKLE_JOINT_STEM}"]
 
     def right_robotiq_gripper_joints(self) -> list[str]:
-        return [f"{self.right_arm_prefix}_{j}" for j in _ROBOTIQ_JOINT_STEMS]
+        return [f"{self.right_arm_prefix}_{_ROBOTIQ_KNUCKLE_JOINT_STEM}"]
 
 
 _EMBODIMENT_CONFIGS: dict[str, EmbodimentJointConfig] = {

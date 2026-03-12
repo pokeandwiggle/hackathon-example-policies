@@ -92,7 +92,7 @@ class TestDeltaTCPRotationIntegration:
         left_rot_delta = left_rot_delta or [0.0, 0.0, 0.0]
         right_pos_delta = right_pos_delta or [0.0, 0.0, 0.0]
         right_rot_delta = right_rot_delta or [0.0, 0.0, 0.0]
-        grippers = grippers or [0.0, 0.0]  # Note: these get inverted in translate()
+        grippers = grippers or [0.0, 0.0]
 
         action = torch.tensor(
             [

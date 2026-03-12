@@ -100,15 +100,7 @@ class ActionTranslator:
         """
         Dispatch to the correct transformation based on inferred action mode.
         """
-        left_gripper_idx = GET_LEFT_GRIPPER_IDX(self.action_mode)
-        right_gripper_idx = GET_RIGHT_GRIPPER_IDX(self.action_mode)
-
         action = action.clone()
-        action[:, left_gripper_idx] = 1.0 - action[:, left_gripper_idx]
-        action[:, right_gripper_idx] = 1.0 - action[:, right_gripper_idx]
-
-        # Invert gripper action values to match the robot's open/close convention:
-        # incoming actions use "close=1", but robot expects "open=1"
         if self.action_mode == ActionMode.UMI_DELTA_TCP:
             return self._umi_delta_tcp(action, observation)
         if self.action_mode == ActionMode.DELTA_TCP:

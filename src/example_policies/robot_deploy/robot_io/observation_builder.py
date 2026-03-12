@@ -173,32 +173,39 @@ class ObservationBuilder:
         return np.array(tcp_poses, dtype=np.float32).flatten()
 
     def _get_gripper_state(self, snapshot) -> np.ndarray:
-        """Extracts gripper joint positions from the snapshot.
+        """Extracts gripper width (metres) from the snapshot.
 
-        Returns 1 or 2 values per side depending on the model's
-        ``use_single_gripper_value`` setting (detected via feature names).
+        Always returns exactly 2 values: [left_width, right_width].
+        - Panda: width = sum of both finger joint positions.
+        - Robotiq: width converted from left_knuckle_joint position.
         """
-        gripper_joint_names = []
+        from example_policies.utils.gripper import robotiq_width_from_knuckle
 
+        # Left gripper
         if self.state_spec.left_gripper == GripperType.ROBOTIQ:
-            gripper_joint_names += self.embodiment.left_robotiq_gripper_joints()
+            left_joints = self.embodiment.left_robotiq_gripper_joints()
+            left_width = robotiq_width_from_knuckle(
+                snapshot.joints[left_joints[0]].position
+            )
         else:
-            gripper_joint_names += self.embodiment.left_panda_gripper_joints()
+            left_joints = self.embodiment.left_panda_gripper_joints()
+            left_width = sum(
+                snapshot.joints[name].position for name in left_joints
+            )
 
+        # Right gripper
         if self.state_spec.right_gripper == GripperType.ROBOTIQ:
-            gripper_joint_names += self.embodiment.right_robotiq_gripper_joints()
+            right_joints = self.embodiment.right_robotiq_gripper_joints()
+            right_width = robotiq_width_from_knuckle(
+                snapshot.joints[right_joints[0]].position
+            )
         else:
-            gripper_joint_names += self.embodiment.right_panda_gripper_joints()
+            right_joints = self.embodiment.right_panda_gripper_joints()
+            right_width = sum(
+                snapshot.joints[name].position for name in right_joints
+            )
 
-        gripper_positions = [
-            snapshot.joints[name].position for name in gripper_joint_names
-        ]
-        if self.state_spec.use_single_gripper_value:
-            # Sum both finger-joint positions into a single width scalar per side.
-            left_sum = gripper_positions[0] + gripper_positions[1]
-            right_sum = gripper_positions[2] + gripper_positions[3]
-            return np.array([left_sum, right_sum], dtype=np.float32)
-        return np.array(gripper_positions, dtype=np.float32)
+        return np.array([left_width, right_width], dtype=np.float32)
 
     def _get_last_command(self, tcp_state: np.ndarray, last_command) -> np.ndarray:
         cmd = []
