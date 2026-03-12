@@ -31,7 +31,7 @@ class DeployArgumentParser:
         parser.add_argument(
             "--mount",
             type=str,
-            choices=["table", "wall"],
+            choices=["table", "wall", "pedestal"],
             default=None,
             help="Robot mount type for home pose (required when --move-home is set)",
         )
