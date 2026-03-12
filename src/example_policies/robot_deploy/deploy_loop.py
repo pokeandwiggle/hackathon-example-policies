@@ -1,30 +1,39 @@
 #!/usr/bin/env python
-"""Deploy a trained policy in a move-home → record loop.
+"""Deploy a trained policy in a move-home → deploy loop.
 
 Runs NUM_ROLLOUTS cycles of:
-  1. Move home (grippers open, consistent start pose — not recorded)
+  1. Move home (grippers open, consistent start pose)
   2. Wait for Enter to begin
-  3. Deploy policy until Ctrl-C (recorded as one episode)
-  4. Rate the rollout: press s (success) or f (failure)
-  5. Episode is saved
+  3. Deploy policy until Ctrl-C
+  4. (If recording) Rate the rollout and save the episode
 
-After all rollouts the dataset is finalized and optionally pushed to
-HuggingFace Hub.
+Recording is optional — pass --record to capture rollouts into a
+LeRobot v3.0 dataset.  Without --record the loop just deploys.
 
 Usage:
-    example_policies deploy-record \\
+    # Deploy only (no recording):
+    example_policies deploy-loop \\
+        --checkpoint /data/models/my_policy \\
+        --robot-server 10.0.0.1:50051 \\
+        --mount wall \\
+        --num-rollouts 10
+
+    # Deploy with recording:
+    example_policies deploy-loop \\
         --checkpoint /data/models/my_policy \\
         --robot-server 10.0.0.1:50051 \\
         --mount wall \\
         --num-rollouts 10 \\
+        --record \\
         --output /data/rollout_recordings/run_1
 
-    # Or with a HuggingFace model:
-    example_policies deploy-record \\
+    # HuggingFace model + recording + upload:
+    example_policies deploy-loop \\
         --hf-repo-id pokeandwiggle/my_model \\
         --robot-server 10.0.0.1:50051 \\
         --mount pedestal \\
         --num-rollouts 5 \\
+        --record \\
         --push-to-hub
 """
 
@@ -40,7 +49,6 @@ from example_policies.robot_deploy.deploy_core.deployment_structures import (
 )
 from example_policies.robot_deploy.deploy_core.inference_runner import InferenceRunner
 from example_policies.robot_deploy.deploy_core.policy_manager import PolicyManager
-from example_policies.robot_deploy.deploy_core.rollout_recorder import RolloutRecorder
 from example_policies.robot_deploy.robot_io.connection import RobotConnection
 from example_policies.robot_deploy.robot_io.robot_interface import (
     RobotClient,
@@ -51,7 +59,7 @@ from example_policies.utils.embodiment import get_joint_config
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Deploy policy with rollout recording",
+        description="Deploy policy in a move-home loop (optionally with recording)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
@@ -98,20 +106,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="Embodiment name override (e.g. dual_fr3_pedestal)",
     )
 
-    # --- Recording ---
+    # --- Loop ---
+    parser.add_argument(
+        "-n", "--num-rollouts",
+        type=int,
+        default=10,
+        metavar="N",
+        help="Number of rollouts to run (default: 10)",
+    )
+
+    # --- Recording (opt-in) ---
+    parser.add_argument(
+        "--record",
+        action="store_true",
+        help="Record rollouts into a LeRobot dataset",
+    )
     parser.add_argument(
         "-o", "--output",
         type=pathlib.Path,
         default=pathlib.Path("/data/rollout_recordings/recording_1"),
         metavar="DIR",
         help="Output directory for the recorded dataset (default: /data/rollout_recordings/recording_1)",
-    )
-    parser.add_argument(
-        "-n", "--num-rollouts",
-        type=int,
-        default=10,
-        metavar="N",
-        help="Number of rollouts to record (default: 10)",
     )
     parser.add_argument(
         "--task-name",
@@ -176,7 +191,7 @@ def _resolve_checkpoint(args: argparse.Namespace) -> pathlib.Path:
     return path
 
 
-def _push_dataset(recorder: RolloutRecorder, args: argparse.Namespace) -> None:
+def _push_dataset(recorder, args: argparse.Namespace) -> None:
     """Push the recorded dataset to HuggingFace Hub."""
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
@@ -205,6 +220,10 @@ def _push_dataset(recorder: RolloutRecorder, args: argparse.Namespace) -> None:
 def main():
     args = build_parser().parse_args()
 
+    # Validate: push-to-hub requires recording
+    if args.push_to_hub and not args.record:
+        build_parser().error("--push-to-hub requires --record")
+
     # --- Resolve checkpoint ---
     checkpoint_dir = _resolve_checkpoint(args)
 
@@ -213,18 +232,21 @@ def main():
     policy_bundle = PolicyManager.load_single(checkpoint_dir, device)
     print(f"Policy loaded on {device}")
 
-    # --- Prepare output directory ---
-    if args.output.exists() and not args.keep_existing:
-        shutil.rmtree(args.output)
-        print(f"Deleted existing dataset at {args.output}")
+    # --- Create recorder (if recording) ---
+    recorder = None
+    if args.record:
+        from example_policies.robot_deploy.deploy_core.rollout_recorder import RolloutRecorder
 
-    # --- Create recorder ---
-    recorder = RolloutRecorder.from_policy_bundle(
-        output_dir=args.output,
-        policy_bundle=policy_bundle,
-        fps=int(args.hertz),
-        task_name=args.task_name,
-    )
+        if args.output.exists() and not args.keep_existing:
+            shutil.rmtree(args.output)
+            print(f"Deleted existing dataset at {args.output}")
+
+        recorder = RolloutRecorder.from_policy_bundle(
+            output_dir=args.output,
+            policy_bundle=policy_bundle,
+            fps=int(args.hertz),
+            task_name=args.task_name,
+        )
 
     # --- Print config summary ---
     print()
@@ -232,8 +254,11 @@ def main():
     print(f"Robot:       {args.robot_server}")
     print(f"Mount:       {args.mount}")
     print(f"Frequency:   {args.hertz} Hz")
-    print(f"Output:      {args.output}")
     print(f"Rollouts:    {args.num_rollouts}")
+    if recorder:
+        print(f"Recording:   {args.output}")
+    else:
+        print(f"Recording:   off")
     if args.push_to_hub:
         print(f"Push to Hub: yes ({args.hub_org})")
     print()
@@ -253,7 +278,7 @@ def main():
         runner = InferenceRunner(robot_interface, config, verbose=False)
 
         for rollout_idx in range(args.num_rollouts):
-            # --- Move home (not recorded) ---
+            # --- Move home ---
             print(f"\n{'=' * 60}")
             print(f"  Rollout {rollout_idx + 1}/{args.num_rollouts} — moving home")
             print(f"{'=' * 60}")
@@ -261,26 +286,31 @@ def main():
 
             input("Press Enter to start deployment (Ctrl-C to stop)...")
 
-            # --- Deploy + record ---
+            # --- Deploy (+ optionally record) ---
             runner.step = 0
-            recorder.start_episode()
+            if recorder:
+                recorder.start_episode()
 
             try:
                 while True:
-                    result = runner.run_step_recorded(policy_bundle)
-                    recorder.record_step(result)
+                    if recorder:
+                        result = runner.run_step_recorded(policy_bundle)
+                        recorder.record_step(result)
+                    else:
+                        runner.run_step(policy_bundle)
             except KeyboardInterrupt:
                 print("\nRollout stopped.")
 
-            # --- Rate the rollout ---
-            while True:
-                rating = input("Rate this rollout — (s)uccess or (f)ailure: ").strip().lower()
-                if rating in ("s", "f"):
-                    break
-                print("  Please enter 's' or 'f'.")
+            # --- Rate the rollout (only when recording) ---
+            if recorder:
+                while True:
+                    rating = input("Rate this rollout — (s)uccess or (f)ailure: ").strip().lower()
+                    if rating in ("s", "f"):
+                        break
+                    print("  Please enter 's' or 'f'.")
 
-            outcome = "success" if rating == "s" else "failure"
-            recorder.end_episode(outcome=outcome)
+                outcome = "success" if rating == "s" else "failure"
+                recorder.end_episode(outcome=outcome)
 
         # --- Final move home ---
         print(f"\n{'=' * 60}")
@@ -289,17 +319,17 @@ def main():
         move_home(robot_interface, mount=args.mount)
 
     # --- Finalize ---
-    recorder.close()
-
-    n_success = sum(1 for o in recorder.outcomes if o == "success")
-    n_total = len(recorder.outcomes)
     print(f"\nAll {args.num_rollouts} rollouts complete.")
-    print(f"Success rate: {n_success}/{n_total} ({int(recorder.success_rate * 100)}%)")
-    print(f"Dataset saved to: {args.output}")
 
-    # --- Upload ---
-    if args.push_to_hub:
-        _push_dataset(recorder, args)
+    if recorder:
+        recorder.close()
+        n_success = sum(1 for o in recorder.outcomes if o == "success")
+        n_total = len(recorder.outcomes)
+        print(f"Success rate: {n_success}/{n_total} ({int(recorder.success_rate * 100)}%)")
+        print(f"Dataset saved to: {args.output}")
+
+        if args.push_to_hub:
+            _push_dataset(recorder, args)
 
 
 if __name__ == "__main__":

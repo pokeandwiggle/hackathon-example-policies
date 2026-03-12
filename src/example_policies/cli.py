@@ -11,7 +11,7 @@ def main():
         print("Commands:")
         print("  convert         Convert MCAP episodes to LeRobot dataset")
         print("  deploy          Run policy inference on robot")
-        print("  deploy-record   Deploy policy with rollout recording")
+        print("  deploy-loop     Deploy policy in a move-home loop (with optional recording)")
         print("  train           Train a policy")
         print("  validate        Validate trained policy with plots")
         print("  review          Review dataset")
@@ -31,12 +31,12 @@ def main():
         from example_policies.robot_deploy.deploy import main as deploy_main
 
         deploy_main()
-    elif command == "deploy-record":
-        from example_policies.robot_deploy.deploy_with_recording import (
-            main as deploy_record_main,
+    elif command == "deploy-loop":
+        from example_policies.robot_deploy.deploy_loop import (
+            main as deploy_loop_main,
         )
 
-        deploy_record_main()
+        deploy_loop_main()
     elif command == "train":
         from example_policies.train import main as train_main
 
