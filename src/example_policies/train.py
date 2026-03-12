@@ -118,13 +118,24 @@ def train(cfg):
     warnings.filterwarnings("ignore", message=".*video decoding.*torchvision.*deprecated.*")
     warnings.filterwarnings("ignore", message=".*No files have been modified since last commit.*")
 
+    # Capture and disable lerobot's built-in push_to_hub — it uploads to a
+    # temp dir that misses dataset_info.json.  We use upload_model() instead.
+    push_to_hub = getattr(cfg.policy, "push_to_hub", False)
+    repo_id = getattr(cfg.policy, "repo_id", None)
+    private = getattr(cfg.policy, "private", None)
+    if push_to_hub:
+        cfg.policy.push_to_hub = False
+
     print("\nStarting training...")
     from lerobot.scripts.lerobot_train import train as lerobot_train
 
     lerobot_train(cfg)
 
-    if getattr(cfg.policy, "push_to_hub", False) and getattr(cfg.policy, "repo_id", None):
-        print(f"\nModel uploaded to: https://huggingface.co/{cfg.policy.repo_id}")
+    if push_to_hub and repo_id:
+        from example_policies.data_ops.upload_model import upload_model
+
+        # Default to private=True when not explicitly set
+        upload_model(cfg.output_dir, repo_id=repo_id, private=private if private is not None else True)
 
 
 def main():
