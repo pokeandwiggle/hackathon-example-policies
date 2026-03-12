@@ -22,6 +22,15 @@ import draccus
 
 from example_policies import config_factory as cf
 
+"""
+Example usage:
+    python train.py \
+        --hf_repo_id pokeandwiggle/my_task \
+        --policy.steps 100000 \
+        --policy.horizon 96 \
+        --policy.n_action_steps 48
+"""
+
 
 @dataclasses.dataclass
 class TrainCliArgs:

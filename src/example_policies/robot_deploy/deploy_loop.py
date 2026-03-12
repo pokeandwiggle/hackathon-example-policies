@@ -13,9 +13,11 @@ LeRobot v3.0 dataset and auto-upload to HuggingFace Hub.
 Usage:
     # Deploy only (no recording):
     example_policies deploy-loop \
-        --checkpoint /data/models/my_policy \
-        --robot-server 192.168.0.201:50051 \
-        --mount wall
+        --hf-repo-id pokeandwiggle/my_model \
+        --robot-server 192.168.0.101:50051 \
+        --mount pedestal \
+        --num-rollouts 10 \
+        --n-action-steps 48
 
     # Deploy with recording (auto-uploads to HF):
     example_policies deploy-loop \
@@ -23,7 +25,7 @@ Usage:
         --robot-server 192.168.0.101:50051 \
         --mount pedestal \
         --num-rollouts 10 \
-        --n-action-steps 72 \
+        --n-action-steps 48 \
         --record
 """
 

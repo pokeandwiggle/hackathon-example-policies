@@ -25,6 +25,15 @@ Key features:
 - Messages from slower topics may be reused for multiple frames
 
 For log_time based conversion, use dataset_conversion.py instead.
+
+Example usage:
+    python dataset_conversion_synced.py \
+        --episodes_dir /data/raw/my_task/operator_name \
+        --task_name "My Task" \
+        --tolerance_ms 200.0 \
+        --api_filter "my_api_filter_from_poker"
+
+Use --help to see all available options and their descriptions.
 """
 
 import dataclasses
@@ -414,25 +423,6 @@ class SyncedConfig(ScriptArgs, pipeline_config.PipelineConfig):
 
 
 def main():
-    """
-    Sensor-timestamp synchronized conversion.
-
-    Example usage:
-        python dataset_conversion_synced.py \\
-            --episodes-dir /path/to/episodes \\
-            --output /path/to/output \\
-            --target-fps 10 \\
-            --tolerance-ms 40 \\
-            --action-level DELTA_TCP
-
-        # With annotation extraction:
-        python dataset_conversion_synced.py \\
-            --episodes-dir /path/to/episodes \\
-            --output /path/to/output \\
-            --with-annotations
-
-    Use --help to see all available options and their descriptions.
-    """
     # ------------------------------------------------------------------
     # Suppress noisy C-library stderr (libdav1d, ffmpeg mp4 muxer, SVT-AV1).
     # These write directly to file-descriptor 2, so Python-level log
