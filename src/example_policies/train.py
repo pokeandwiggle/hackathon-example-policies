@@ -122,7 +122,7 @@ def train(cfg):
     # temp dir that misses dataset_info.json.  We use upload_model() instead.
     push_to_hub = getattr(cfg.policy, "push_to_hub", False)
     repo_id = getattr(cfg.policy, "repo_id", None)
-    private = getattr(cfg.policy, "private", True)
+    private = getattr(cfg.policy, "private", None)
     if push_to_hub:
         cfg.policy.push_to_hub = False
 
@@ -134,7 +134,8 @@ def train(cfg):
     if push_to_hub and repo_id:
         from example_policies.data_ops.upload_model import upload_model
 
-        upload_model(cfg.output_dir, repo_id=repo_id, private=private or True)
+        # Default to private=True when not explicitly set
+        upload_model(cfg.output_dir, repo_id=repo_id, private=private if private is not None else True)
 
 
 def main():
