@@ -5,36 +5,24 @@ Runs NUM_ROLLOUTS cycles of:
   1. Move home (grippers open, consistent start pose)
   2. Wait for Enter to begin
   3. Deploy policy until Ctrl-C
-  4. (If recording) Rate the rollout and save the episode
+  4. (If --record) Rate the rollout, save, and upload to HuggingFace
 
 Recording is optional — pass --record to capture rollouts into a
-LeRobot v3.0 dataset.  Without --record the loop just deploys.
+LeRobot v3.0 dataset and auto-upload to HuggingFace Hub.
 
 Usage:
     # Deploy only (no recording):
     example_policies deploy-loop \\
         --checkpoint /data/models/my_policy \\
         --robot-server 10.0.0.1:50051 \\
-        --mount wall \\
-        --num-rollouts 10
+        --mount wall
 
-    # Deploy with recording:
-    example_policies deploy-loop \\
-        --checkpoint /data/models/my_policy \\
-        --robot-server 10.0.0.1:50051 \\
-        --mount wall \\
-        --num-rollouts 10 \\
-        --record \\
-        --output /data/rollout_recordings/run_1
-
-    # HuggingFace model + recording + upload:
+    # Deploy with recording (auto-uploads to HF):
     example_policies deploy-loop \\
         --hf-repo-id pokeandwiggle/my_model \\
         --robot-server 10.0.0.1:50051 \\
         --mount pedestal \\
-        --num-rollouts 5 \\
-        --record \\
-        --push-to-hub
+        --record
 """
 
 import argparse
@@ -43,7 +31,7 @@ import shutil
 
 import torch
 
-from example_policies.robot_deploy.deploy import move_home
+from example_policies.robot_deploy.deploy import _MOUNT_EMBODIMENT, move_home
 from example_policies.robot_deploy.deploy_core.deployment_structures import (
     InferenceConfig,
 )
@@ -55,6 +43,15 @@ from example_policies.robot_deploy.robot_io.robot_interface import (
     RobotInterface,
 )
 from example_policies.utils.embodiment import get_joint_config
+
+
+def _model_name(args: argparse.Namespace) -> str:
+    """Derive a short model name from checkpoint path or HF repo ID."""
+    if args.hf_repo_id:
+        # "pokeandwiggle/my_model" → "my_model"
+        return args.hf_repo_id.split("/")[-1]
+    # /data/models/my_policy → "my_policy"
+    return args.checkpoint.name
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -97,13 +94,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         choices=["table", "wall", "pedestal"],
         required=True,
-        help="Robot mount type for home pose",
-    )
-    parser.add_argument(
-        "--embodiment",
-        type=str,
-        default=None,
-        help="Embodiment name override (e.g. dual_fr3_pedestal)",
+        help="Robot mount type (determines home pose and joint names)",
     )
 
     # --- Loop ---
@@ -115,18 +106,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Number of rollouts to run (default: 10)",
     )
 
-    # --- Recording (opt-in) ---
+    # --- Recording (opt-in; implies push-to-hub) ---
     parser.add_argument(
         "--record",
         action="store_true",
-        help="Record rollouts into a LeRobot dataset",
+        help="Record rollouts and upload to HuggingFace Hub",
     )
     parser.add_argument(
         "-o", "--output",
         type=pathlib.Path,
-        default=pathlib.Path("/data/rollout_recordings/recording_1"),
+        default=None,
         metavar="DIR",
-        help="Output directory for the recorded dataset (default: /data/rollout_recordings/recording_1)",
+        help="Output directory for recorded dataset (default: /data/rollout_recordings/<model_name>)",
     )
     parser.add_argument(
         "--task-name",
@@ -139,39 +130,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Keep existing output directory (default: delete and recreate)",
     )
-
-    # --- HuggingFace upload ---
-    parser.add_argument(
-        "--push-to-hub",
-        action="store_true",
-        help="Push the recorded dataset to HuggingFace Hub after all rollouts",
-    )
-    parser.add_argument(
-        "--hub-repo-id",
-        type=str,
-        default=None,
-        metavar="REPO",
-        help="HuggingFace dataset repo ID for upload (auto-generated if omitted)",
-    )
     parser.add_argument(
         "--hub-org",
         type=str,
         default="pokeandwiggle",
-        help="HuggingFace organization for auto-generated repo ID (default: pokeandwiggle)",
+        help="HuggingFace organization for the uploaded dataset (default: pokeandwiggle)",
     )
     parser.add_argument(
-        "--public",
+        "--no-push",
         action="store_true",
-        help="Make the uploaded dataset public (default: private)",
-    )
-
-    # --- HuggingFace model download ---
-    parser.add_argument(
-        "--hf-download-dir",
-        type=pathlib.Path,
-        default=pathlib.Path("/data/models"),
-        metavar="DIR",
-        help="Local directory for downloaded HuggingFace models (default: /data/models)",
+        help="Record locally but skip HuggingFace upload",
     )
 
     return parser
@@ -184,34 +152,31 @@ def _resolve_checkpoint(args: argparse.Namespace) -> pathlib.Path:
 
     from huggingface_hub import snapshot_download
 
-    local_dir = args.hf_download_dir / args.hf_repo_id.replace("/", "_")
+    from example_policies.config_factory import MODELS_DIR
+
+    download_dir = MODELS_DIR
+    local_dir = download_dir / args.hf_repo_id.replace("/", "_")
     print(f"Downloading model '{args.hf_repo_id}' from HuggingFace Hub...")
     path = pathlib.Path(snapshot_download(repo_id=args.hf_repo_id, local_dir=local_dir))
     print(f"Downloaded to: {path}")
     return path
 
 
-def _push_dataset(recorder, args: argparse.Namespace) -> None:
-    """Push the recorded dataset to HuggingFace Hub."""
+def _push_dataset(recorder, args: argparse.Namespace, model_name: str) -> None:
+    """Push the recorded dataset to HuggingFace Hub (always private)."""
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
-    # Build repo ID
-    repo_id = args.hub_repo_id
-    if repo_id is None:
-        # Auto-generate: org/output-dir-name_<success_rate>
-        base_name = args.output.name
-        rate_pct = int(recorder.success_rate * 100)
-        n_success = sum(1 for o in recorder.outcomes if o == "success")
-        n_total = len(recorder.outcomes)
-        repo_id = f"{args.hub_org}/{base_name}_{rate_pct}pct_{n_success}of{n_total}"
-
-    private = not args.public
+    # Auto-generate repo ID: org/eval_<model_name>_<success_rate>
+    rate_pct = int(recorder.success_rate * 100)
+    n_success = sum(1 for o in recorder.outcomes if o == "success")
+    n_total = len(recorder.outcomes)
+    repo_id = f"{args.hub_org}/eval_{model_name}_{rate_pct}pct_{n_success}of{n_total}"
 
     print(f"\nPushing to HuggingFace Hub: {repo_id} ...")
     dataset = LeRobotDataset(repo_id=repo_id, root=args.output)
     dataset.push_to_hub(
         tags=["LeRobot"],
-        private=private,
+        private=True,
         upload_large_folder=True,
     )
     print(f"Uploaded: https://huggingface.co/datasets/{repo_id}")
@@ -220,9 +185,11 @@ def _push_dataset(recorder, args: argparse.Namespace) -> None:
 def main():
     args = build_parser().parse_args()
 
-    # Validate: push-to-hub requires recording
-    if args.push_to_hub and not args.record:
-        build_parser().error("--push-to-hub requires --record")
+    model_name = _model_name(args)
+
+    # Auto-generate output path if not specified
+    if args.record and args.output is None:
+        args.output = pathlib.Path(f"/data/rollout_recordings/{model_name}")
 
     # --- Resolve checkpoint ---
     checkpoint_dir = _resolve_checkpoint(args)
@@ -231,6 +198,10 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     policy_bundle = PolicyManager.load_single(checkpoint_dir, device)
     print(f"Policy loaded on {device}")
+
+    # --- Derive embodiment from mount ---
+    embodiment_name = _MOUNT_EMBODIMENT[args.mount]
+    embodiment = get_joint_config(embodiment_name)
 
     # --- Create recorder (if recording) ---
     recorder = None
@@ -250,17 +221,17 @@ def main():
 
     # --- Print config summary ---
     print()
-    print(f"Checkpoint:  {checkpoint_dir}")
+    print(f"Model:       {model_name} ({checkpoint_dir})")
     print(f"Robot:       {args.robot_server}")
-    print(f"Mount:       {args.mount}")
+    print(f"Mount:       {args.mount} ({embodiment_name})")
     print(f"Frequency:   {args.hertz} Hz")
     print(f"Rollouts:    {args.num_rollouts}")
     if recorder:
         print(f"Recording:   {args.output}")
+        if not args.no_push:
+            print(f"Upload:      enabled (to {args.hub_org})")
     else:
         print(f"Recording:   off")
-    if args.push_to_hub:
-        print(f"Push to Hub: yes ({args.hub_org})")
     print()
 
     # --- Setup inference ---
@@ -271,9 +242,7 @@ def main():
     )
 
     with RobotConnection(args.robot_server) as stub:
-        embodiment = get_joint_config(args.embodiment) if args.embodiment else None
-        if embodiment is not None:
-            policy_bundle.config.embodiment = embodiment
+        policy_bundle.config.embodiment = embodiment
         robot_interface = RobotInterface(stub, policy_bundle.config, embodiment)
         runner = InferenceRunner(robot_interface, config, verbose=False)
 
@@ -328,8 +297,8 @@ def main():
         print(f"Success rate: {n_success}/{n_total} ({int(recorder.success_rate * 100)}%)")
         print(f"Dataset saved to: {args.output}")
 
-        if args.push_to_hub:
-            _push_dataset(recorder, args)
+        if not args.no_push:
+            _push_dataset(recorder, args, model_name)
 
 
 if __name__ == "__main__":

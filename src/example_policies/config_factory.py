@@ -25,6 +25,9 @@ from lerobot.configs.train import TrainPipelineConfig
 from .robot_deploy.deploy_core.policy_loader import get_checkpoint_path
 from .training.utils import create_dataset_config, shorten_name
 
+MODELS_DIR = pathlib.Path("/data/models")
+"""Default directory for trained / downloaded model checkpoints."""
+
 
 @dataclass
 class PolicyConfigBase(ABC):
@@ -81,7 +84,7 @@ class PolicyConfigBase(ABC):
 
         # Experiment Name & Directory relative to dataset root
         exp_name = f"{short_ds_name}_{short_model_name}_{short_ts}"
-        exp_dir = ds_root.parent.parent / "models" / exp_name
+        exp_dir = MODELS_DIR / exp_name
 
         return exp_name, exp_dir
 
