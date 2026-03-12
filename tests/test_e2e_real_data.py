@@ -63,10 +63,12 @@ class TestDatasetStructure:
         names = action_feat["names"]
         assert any(n.startswith("tcp_") for n in names), f"Action names should start with tcp_: {names}"
 
-    def test_state_is_18dim(self):
+    def test_state_is_16_dim(self):
         info = _load_info()
         state_feat = info["features"]["observation.state"]
-        assert state_feat["shape"] == [18], f"Expected 18-dim state, got {state_feat['shape']}"
+        assert state_feat["shape"] == [16], (
+            f"Expected 16-dim state (1 gripper width per side), got {state_feat['shape']}"
+        )
 
     def test_parquet_has_data(self):
         df = _load_parquet()

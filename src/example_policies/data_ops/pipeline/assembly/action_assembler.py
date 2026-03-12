@@ -56,9 +56,8 @@ class ActionAssembler:
     def assemble(self, parsed_frame: dict, last_abs_command: LastCommand | None):
         action_level = self.config.action_level
 
-        # Invert grippers to match training convention
-        grip_l = 1.0 - parsed_frame["des_gripper_left"][0]
-        grip_r = 1.0 - parsed_frame["des_gripper_right"][0]
+        grip_l = parsed_frame["des_gripper_left"][0]
+        grip_r = parsed_frame["des_gripper_right"][0]
 
         left_action = None
         right_action = None

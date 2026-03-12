@@ -99,11 +99,6 @@ class PipelineConfig:
     left_gripper: GripperType = GripperType.PANDA
     right_gripper: GripperType = GripperType.PANDA
 
-    # When True, store only 1 gripper value per side in observation.state
-    # (e.g. finger_joint1 position).  Legacy TCP / DELTA_TCP modes use 2
-    # finger‐joint positions per side, so this should remain False for those.
-    use_single_gripper_value: bool = False
-
     # Termination Signal Processing
     termination_horizon_seconds: float = 0.0
 
@@ -201,7 +196,6 @@ def build_features(config: PipelineConfig) -> Dict[str, Any]:
         left_gripper=config.left_gripper,
         right_gripper=config.right_gripper,
         include_last_command=config.include_last_command,
-        use_single_gripper_value=config.use_single_gripper_value,
     )
     state_names = state_spec.get_feature_names()
 

@@ -46,11 +46,6 @@ class StateFeatureSpec:
     left_gripper: GripperType = GripperType.PANDA
     right_gripper: GripperType = GripperType.PANDA
 
-    # Single gripper value per side (width only, e.g. for UMI delta).
-    # When False (legacy default), Panda grippers report 2 finger‐joint
-    # positions per side (gripper_left_0/1, gripper_right_0/1).
-    use_single_gripper_value: bool = False
-
     # Last command (for temporal context in delta policies)
     include_last_command: bool = False
 
@@ -96,27 +91,17 @@ class StateFeatureSpec:
             state_names.extend([f"tcp_right_pos_{i}" for i in "xyz"])
             state_names.extend([f"tcp_right_quat_{i}" for i in "xyzw"])
 
-        # Left gripper
-        if self.left_gripper == GripperType.PANDA:
-            if self.use_single_gripper_value:
-                state_names.append("gripper_left")
-            else:
-                state_names.extend([f"gripper_left_{i}" for i in range(2)])
-        elif self.left_gripper == GripperType.ROBOTIQ:
-            state_names.extend([f"robotiq_left_{i}" for i in range(6)])
+        # Left gripper (1 width value; name encodes gripper type)
+        if self.left_gripper == GripperType.ROBOTIQ:
+            state_names.append("robotiq_left")
         else:
-            raise NotImplementedError(f"Unsupported gripper type {self.left_gripper}")
+            state_names.append("gripper_left")
 
-        # Right gripper
-        if self.right_gripper == GripperType.PANDA:
-            if self.use_single_gripper_value:
-                state_names.append("gripper_right")
-            else:
-                state_names.extend([f"gripper_right_{i}" for i in range(2)])
-        elif self.right_gripper == GripperType.ROBOTIQ:
-            state_names.extend([f"robotiq_right_{i}" for i in range(6)])
+        # Right gripper (1 width value; name encodes gripper type)
+        if self.right_gripper == GripperType.ROBOTIQ:
+            state_names.append("robotiq_right")
         else:
-            raise NotImplementedError(f"Unsupported gripper type {self.right_gripper}")
+            state_names.append("gripper_right")
 
         # Last command (14 elements: same as TCP poses)
         if self.include_last_command:
@@ -153,40 +138,17 @@ class StateFeatureSpec:
             "last_command_" in name for name in feature_names
         )
 
-        # Detect gripper types
-        if any("robotiq_left_" in name for name in feature_names):
+        # Detect gripper types from feature names.
+        # Current format: Robotiq → "robotiq_left", Panda → "gripper_left".
+        # Legacy Robotiq format used "robotiq_left_0..5" (also matched here).
+        if any(name.startswith("robotiq_left") for name in feature_names):
             spec.left_gripper = GripperType.ROBOTIQ
         else:
             spec.left_gripper = GripperType.PANDA
 
-        if any("robotiq_right_" in name for name in feature_names):
+        if any(name.startswith("robotiq_right") for name in feature_names):
             spec.right_gripper = GripperType.ROBOTIQ
         else:
             spec.right_gripper = GripperType.PANDA
-
-        # Detect single vs multi gripper value.
-        # "gripper_left" (no suffix) → single; "gripper_left_0" → multi.
-        has_single_left = "gripper_left" in feature_names
-        has_multi_left = "gripper_left_0" in feature_names
-        has_single_right = "gripper_right" in feature_names
-        has_multi_right = "gripper_right_0" in feature_names
-
-        left_is_single = has_single_left and not has_multi_left
-        right_is_single = has_single_right and not has_multi_right
-
-        # Validate both sides agree (when both are Panda grippers).
-        if (
-            spec.left_gripper == GripperType.PANDA
-            and spec.right_gripper == GripperType.PANDA
-            and left_is_single != right_is_single
-        ):
-            raise ValueError(
-                "Inconsistent gripper mode: left side is "
-                f"{'single' if left_is_single else 'multi'} but right side is "
-                f"{'single' if right_is_single else 'multi'}. "
-                "Both Panda grippers must use the same mode."
-            )
-
-        spec.use_single_gripper_value = left_is_single
 
         return spec
