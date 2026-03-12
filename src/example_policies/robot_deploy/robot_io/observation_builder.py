@@ -179,14 +179,12 @@ class ObservationBuilder:
         - Panda: width = sum of both finger joint positions.
         - Robotiq: width converted from left_knuckle_joint position.
         """
-        from example_policies.data_ops.pipeline.assembly.state_assembler import (
-            _robotiq_width_from_knuckle,
-        )
+        from example_policies.utils.gripper import robotiq_width_from_knuckle
 
         # Left gripper
         if self.state_spec.left_gripper == GripperType.ROBOTIQ:
             left_joints = self.embodiment.left_robotiq_gripper_joints()
-            left_width = _robotiq_width_from_knuckle(
+            left_width = robotiq_width_from_knuckle(
                 snapshot.joints[left_joints[0]].position
             )
         else:
@@ -198,7 +196,7 @@ class ObservationBuilder:
         # Right gripper
         if self.state_spec.right_gripper == GripperType.ROBOTIQ:
             right_joints = self.embodiment.right_robotiq_gripper_joints()
-            right_width = _robotiq_width_from_knuckle(
+            right_width = robotiq_width_from_knuckle(
                 snapshot.joints[right_joints[0]].position
             )
         else:

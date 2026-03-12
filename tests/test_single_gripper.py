@@ -14,11 +14,11 @@ from example_policies.data_ops.config.pipeline_config import (
     build_features,
 )
 from example_policies.data_ops.pipeline.assembly.action_assembler import LastCommand
-from example_policies.data_ops.pipeline.assembly.state_assembler import (
+from example_policies.data_ops.pipeline.assembly.state_assembler import StateAssembler
+from example_policies.utils.gripper import (
     ROBOTIQ_CLOSED_POSITION_RAD,
     ROBOTIQ_MAX_WIDTH_M,
-    StateAssembler,
-    _robotiq_width_from_knuckle,
+    robotiq_width_from_knuckle,
 )
 from example_policies.utils.state_builder import GripperType, StateFeatureSpec
 
@@ -68,16 +68,18 @@ class TestStateFeatureSpec:
 class TestRobotiqConversion:
     def test_fully_open(self):
         """Knuckle at 0 rad → max width (0.085 m)."""
-        assert _robotiq_width_from_knuckle(0.0) == pytest.approx(ROBOTIQ_MAX_WIDTH_M)
+        assert robotiq_width_from_knuckle(0.0) == pytest.approx(ROBOTIQ_MAX_WIDTH_M)
 
     def test_fully_closed(self):
         """Knuckle at 0.7929 rad → 0 m."""
-        assert _robotiq_width_from_knuckle(ROBOTIQ_CLOSED_POSITION_RAD) == pytest.approx(0.0)
+        assert robotiq_width_from_knuckle(ROBOTIQ_CLOSED_POSITION_RAD) == pytest.approx(
+            0.0
+        )
 
     def test_halfway(self):
         half_pos = ROBOTIQ_CLOSED_POSITION_RAD / 2.0
         expected = ROBOTIQ_MAX_WIDTH_M / 2.0
-        assert _robotiq_width_from_knuckle(half_pos) == pytest.approx(expected)
+        assert robotiq_width_from_knuckle(half_pos) == pytest.approx(expected)
 
 
 # ── StateAssembler ────────────────────────────────────────────────────────────

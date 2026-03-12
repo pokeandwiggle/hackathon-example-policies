@@ -15,18 +15,10 @@
 import numpy as np
 
 from ...config.pipeline_config import PipelineConfig
+from example_policies.utils.gripper import (
+    robotiq_width_from_knuckle,
+)
 from .action_assembler import LastCommand
-
-# Robotiq 2F‑85 joint‐to‐width conversion constants.
-# Matches the inverse of the C++ controller formula:
-#   position = (1 − (width − min_width) / range) × kGripperClosedPosition
-ROBOTIQ_CLOSED_POSITION_RAD = 0.7929
-ROBOTIQ_MAX_WIDTH_M = 0.085
-
-
-def _robotiq_width_from_knuckle(position: float) -> float:
-    """Convert Robotiq left_knuckle_joint position (rad) to width (m)."""
-    return (1.0 - position / ROBOTIQ_CLOSED_POSITION_RAD) * ROBOTIQ_MAX_WIDTH_M
 
 
 class StateAssembler:
@@ -70,12 +62,12 @@ class StateAssembler:
         if self.config.left_gripper == GripperType.PANDA:
             left_width = float(left_raw.sum())
         else:
-            left_width = _robotiq_width_from_knuckle(float(left_raw[0]))
+            left_width = robotiq_width_from_knuckle(float(left_raw[0]))
 
         if self.config.right_gripper == GripperType.PANDA:
             right_width = float(right_raw.sum())
         else:
-            right_width = _robotiq_width_from_knuckle(float(right_raw[0]))
+            right_width = robotiq_width_from_knuckle(float(right_raw[0]))
 
         state_components.append(np.array([left_width], dtype=np.float32))
         state_components.append(np.array([right_width], dtype=np.float32))
