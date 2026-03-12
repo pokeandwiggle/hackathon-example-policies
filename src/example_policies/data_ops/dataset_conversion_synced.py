@@ -179,6 +179,7 @@ class SyncedEpisodeConverter:
                 episode_cfg = dataclasses.replace(self.config, **gripper_overrides)
 
         self.frame_parser = FrameParser(episode_cfg, embodiment=embodiment)
+        self.frame_assembler = FrameAssembler(episode_cfg)
         self.reset_episode_state()
 
         # Pass 1: Ingest all messages
@@ -271,12 +272,24 @@ def convert_episodes_synced(
         Dict with keys: episode_mapping, blacklist, episodes_saved, total_time,
         and optionally annotation_extractor if with_annotations=True.
     """
-    features = pipeline_config.build_features(config)
-
-    # Extract robot type from first episode
+    # Detect gripper types and robot type from first episode's metadata
+    # so the feature schema matches the actual data.
     robot_type = "panda_bimanual"
     if episode_paths:
         robot_type = extract_robot_type_from_mcap(episode_paths[0])
+        emb_meta = extract_embodiment_metadata(episode_paths[0])
+        if emb_meta is not None:
+            gripper_overrides = {}
+            ee_left = emb_meta.get("end_effector_left")
+            if ee_left is not None:
+                gripper_overrides["left_gripper"] = gripper_type_from_end_effector(ee_left)
+            ee_right = emb_meta.get("end_effector_right")
+            if ee_right is not None:
+                gripper_overrides["right_gripper"] = gripper_type_from_end_effector(ee_right)
+            if gripper_overrides:
+                config = dataclasses.replace(config, **gripper_overrides)
+
+    features = pipeline_config.build_features(config)
 
     converter = SyncedEpisodeConverter(
         output_dir,
