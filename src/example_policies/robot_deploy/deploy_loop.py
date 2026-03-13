@@ -35,6 +35,7 @@ import shutil
 
 import torch
 
+from example_policies.default_paths import MODELS_DIR, ROLLOUT_RECORDINGS_DIR
 from example_policies.robot_deploy.deploy import _MOUNT_EMBODIMENT, move_home
 from example_policies.robot_deploy.deploy_core.deployment_structures import (
     InferenceConfig,
@@ -170,8 +171,6 @@ def _resolve_checkpoint(args: argparse.Namespace) -> pathlib.Path:
 
     from huggingface_hub import snapshot_download
 
-    from example_policies.config_factory import MODELS_DIR
-
     download_dir = MODELS_DIR
     local_dir = download_dir / args.hf_repo_id.replace("/", "_")
     print(f"Downloading model '{args.hf_repo_id}' from HuggingFace Hub...")
@@ -207,7 +206,7 @@ def main():
 
     # Auto-generate output path if not specified
     if args.record and args.output is None:
-        args.output = pathlib.Path(f"/data/rollout_recordings/{model_name}{args.suffix}")
+        args.output = ROLLOUT_RECORDINGS_DIR / f"{model_name}{args.suffix}"
 
     # --- Resolve checkpoint ---
     checkpoint_dir = _resolve_checkpoint(args)

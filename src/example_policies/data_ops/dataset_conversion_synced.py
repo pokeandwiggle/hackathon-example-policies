@@ -65,6 +65,7 @@ from example_policies.data_ops.utils.conversion_utils import (
     save_metadata,
     validate_input_dir,
 )
+from example_policies.default_paths import DATASETS_DIR
 from example_policies.utils.embodiment import (
     get_joint_config,
     gripper_type_from_end_effector,
@@ -392,7 +393,7 @@ class ScriptArgs:
     """Arguments for synced conversion script."""
 
     episodes_dir: pathlib.Path = pathlib.Path("./data")
-    output: pathlib.Path | None = None  # Auto-generated as /data/lerobot/<task>_<operator> if None
+    output: pathlib.Path | None = None  # Auto-generated as DATASETS_DIR/<task>_<operator> if None
     delete_existing: bool = True  # Delete existing output directory before conversion
 
     # Sync-specific parameters
@@ -461,11 +462,11 @@ def main():
 
     validate_input_dir(config.episodes_dir)
 
-    # Auto-generate output dir from episodes_dir: /data/lerobot/<task>_<operator>
+    # Auto-generate output dir from episodes_dir: DATASETS_DIR/<task>_<operator>
     if config.output is None:
         operator_name = config.episodes_dir.name
         task_name = config.episodes_dir.parent.name
-        config.output = pathlib.Path("/data/lerobot") / f"{task_name}_{operator_name}"
+        config.output = DATASETS_DIR / f"{task_name}_{operator_name}"
 
     # Delete existing output directory if requested
     if config.delete_existing and config.output.exists():

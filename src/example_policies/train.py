@@ -44,7 +44,7 @@ class TrainCliArgs:
     """
 
     # Path to the dataset directory containing training data.
-    data_dir: pathlib.Path = None
+    data_dir: pathlib.Path | None = None
     # HuggingFace dataset repo ID (alternative to data_dir). Downloads and caches locally.
     hf_repo_id: str | None = None
     # Include depth images in the input features.

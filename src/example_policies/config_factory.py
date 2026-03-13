@@ -22,11 +22,9 @@ from typing import Optional
 from lerobot.configs.policies import PreTrainedConfig
 from lerobot.configs.train import TrainPipelineConfig
 
+from .default_paths import MODELS_DIR
 from .robot_deploy.deploy_core.policy_loader import get_checkpoint_path
 from .training.utils import create_dataset_config, shorten_name
-
-MODELS_DIR = pathlib.Path("/data/models")
-"""Default directory for trained / downloaded model checkpoints."""
 
 
 @dataclass
@@ -118,11 +116,12 @@ class PolicyConfigBase(ABC):
 
         exp_name, exp_dir = self._build_exp_name_dir()
 
-        # Auto-generate repo_id for push_to_hub
+        # Auto-generate repo_id for push_to_hub (only if not already set)
         if self.push_to_hub and exp_name:
             pretrained_config.push_to_hub = True
-            ds_name = pathlib.Path(self.dataset_root_dir).name
-            pretrained_config.repo_id = f"{self.hub_org}/{ds_name}"
+            if not getattr(pretrained_config, "repo_id", None):
+                ds_name = pathlib.Path(self.dataset_root_dir).name
+                pretrained_config.repo_id = f"{self.hub_org}/{ds_name}"
 
         cfg = TrainPipelineConfig(
             policy=pretrained_config,

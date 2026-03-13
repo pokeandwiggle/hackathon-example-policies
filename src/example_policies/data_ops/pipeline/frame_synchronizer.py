@@ -46,6 +46,9 @@ LEGACY_TOPIC_MAPPING: dict[str, RosTopicEnum] = {
     # Old joint waypoint topics
     "/left_desired_joint_waypoint": RosTopicEnum.DES_JOINT_LEFT,
     "/right_desired_joint_waypoint": RosTopicEnum.DES_JOINT_RIGHT,
+    # Old actual TCP pose topics (v1 raw data: geometry_msgs/Transform)
+    "/panda_left/tcp": RosTopicEnum.ACTUAL_TCP_LEFT,
+    "/panda_right/tcp": RosTopicEnum.ACTUAL_TCP_RIGHT,
 }
 
 
