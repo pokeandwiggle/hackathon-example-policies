@@ -111,10 +111,12 @@ class StateFeatureSpec:
                     f"Unsupported right gripper type: {self.right_gripper}"
                 )
 
-        # Last command (14 elements: same as TCP poses)
+        # Last command (14 elements: same layout as TCP poses)
         if self.include_last_command:
-            state_names.extend([f"last_command_left_{i}" for i in range(7)])
-            state_names.extend([f"last_command_right_{i}" for i in range(7)])
+            state_names.extend([f"last_tcp_left_pos_{i}" for i in "xyz"])
+            state_names.extend([f"last_tcp_left_quat_{i}" for i in "xyzw"])
+            state_names.extend([f"last_tcp_right_pos_{i}" for i in "xyz"])
+            state_names.extend([f"last_tcp_right_quat_{i}" for i in "xyzw"])
 
         return state_names
 
@@ -142,8 +144,10 @@ class StateFeatureSpec:
         )
         spec.include_joint_efforts = any("joint_eff_" in name for name in feature_names)
         spec.include_tcp_poses = any("tcp_" in name for name in feature_names)
+        # Support both new ("last_tcp_") and legacy ("last_command_") formats
         spec.include_last_command = any(
-            "last_command_" in name for name in feature_names
+            "last_tcp_" in name or "last_command_" in name
+            for name in feature_names
         )
 
         # Detect gripper types from feature names.
