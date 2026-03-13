@@ -33,6 +33,7 @@ class DatasetWriter:
         output_dir: pathlib.Path,
         features: dict,
         cfg: pipeline_config.PipelineConfig,
+        robot_type: str = "dual_panda",
     ):
         self.cfg = cfg
         self.frame_parser = FrameParser(cfg)
@@ -45,12 +46,14 @@ class DatasetWriter:
             DatasetType.NO_SPEED_BOOST: 0,
         }
 
+        self.robot_type = robot_type
+
         # Create the main dataset
         self.datasets[DatasetType.MAIN] = LeRobotDataset.create(
             repo_id="local_only",
             fps=cfg.target_fps,
             root=output_dir,
-            robot_type="dual_panda",
+            robot_type=robot_type,
             use_videos=True,
             image_writer_threads=16,
             image_writer_processes=8,
@@ -87,7 +90,7 @@ class DatasetWriter:
             repo_id="local_only",
             fps=self.cfg.target_fps,
             root=output_dir.with_name(f"{output_dir.name}_{suffix}"),
-            robot_type="dual_panda",
+            robot_type=self.robot_type,
             use_videos=True,
             image_writer_threads=4,
             image_writer_processes=2,

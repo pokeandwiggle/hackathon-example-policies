@@ -24,8 +24,8 @@ Usage:
         --hf-repo-id pokeandwiggle/my_model \
         --robot-server 192.168.0.101:50051 \
         --mount pedestal \
-        --num-rollouts 10 \
         --n-action-steps 48 \
+        --num-rollouts 10 \
         --record
 """
 

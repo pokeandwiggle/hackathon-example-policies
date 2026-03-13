@@ -16,10 +16,11 @@ class EpisodeConverter:
         output_dir: pathlib.Path,
         config: pipeline_config.PipelineConfig,
         features: dict,
+        robot_type: str = "dual_panda",
     ):
         self.config = config
         self.frame_buffer = FrameBuffer(config)
-        self.dataset_writer = DatasetWriter(output_dir, features, config)
+        self.dataset_writer = DatasetWriter(output_dir, features, config, robot_type=robot_type)
 
         # Tracking
         self.episode_counter = 0

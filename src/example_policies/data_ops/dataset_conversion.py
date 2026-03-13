@@ -32,6 +32,7 @@ from mcap.reader import NonSeekingReader
 from example_policies.data_ops.config import pipeline_config
 from example_policies.data_ops.pipeline.episode_converter import EpisodeConverter
 from example_policies.data_ops.utils.conversion_utils import (
+    extract_robot_type_from_mcap,
     get_sorted_episodes,
     save_metadata,
     validate_input_dir,
@@ -54,7 +55,13 @@ def convert_episodes(
         Dict with keys: episode_mapping, blacklist, episodes_saved, total_time
     """
     features = pipeline_config.build_features(config)
-    converter = EpisodeConverter(output_dir, config, features)
+
+    # Extract robot type from first episode
+    robot_type = "dual_panda"
+    if episode_paths:
+        robot_type = extract_robot_type_from_mcap(episode_paths[0])
+
+    converter = EpisodeConverter(output_dir, config, features, robot_type=robot_type)
 
     for ep_idx, episode_path in enumerate(episode_paths):
         print(f"Processing {episode_path}...")
