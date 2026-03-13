@@ -182,28 +182,36 @@ class ObservationBuilder:
         from example_policies.utils.gripper import robotiq_width_from_knuckle
 
         # Left gripper
-        if self.state_spec.left_gripper == GripperType.ROBOTIQ:
-            left_joints = self.embodiment.left_robotiq_gripper_joints()
-            left_width = robotiq_width_from_knuckle(
-                snapshot.joints[left_joints[0]].position
-            )
-        else:
-            left_joints = self.embodiment.left_panda_gripper_joints()
-            left_width = sum(
-                snapshot.joints[name].position for name in left_joints
-            )
+        match self.state_spec.left_gripper:
+            case GripperType.ROBOTIQ:
+                left_joints = self.embodiment.left_robotiq_gripper_joints()
+                left_width = robotiq_width_from_knuckle(
+                    snapshot.joints[left_joints[0]].position
+                )
+            case GripperType.PANDA:
+                left_joints = self.embodiment.left_panda_gripper_joints()
+                left_width = sum(snapshot.joints[name].position for name in left_joints)
+            case _:
+                raise ValueError(
+                    f"Unsupported left gripper type: {self.state_spec.left_gripper}"
+                )
 
         # Right gripper
-        if self.state_spec.right_gripper == GripperType.ROBOTIQ:
-            right_joints = self.embodiment.right_robotiq_gripper_joints()
-            right_width = robotiq_width_from_knuckle(
-                snapshot.joints[right_joints[0]].position
-            )
-        else:
-            right_joints = self.embodiment.right_panda_gripper_joints()
-            right_width = sum(
-                snapshot.joints[name].position for name in right_joints
-            )
+        match self.state_spec.right_gripper:
+            case GripperType.ROBOTIQ:
+                right_joints = self.embodiment.right_robotiq_gripper_joints()
+                right_width = robotiq_width_from_knuckle(
+                    snapshot.joints[right_joints[0]].position
+                )
+            case GripperType.PANDA:
+                right_joints = self.embodiment.right_panda_gripper_joints()
+                right_width = sum(
+                    snapshot.joints[name].position for name in right_joints
+                )
+            case _:
+                raise ValueError(
+                    f"Unsupported right gripper type: {self.state_spec.right_gripper}"
+                )
 
         return np.array([left_width, right_width], dtype=np.float32)
 

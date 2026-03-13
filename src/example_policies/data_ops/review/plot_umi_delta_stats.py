@@ -439,11 +439,11 @@ def main() -> None:
     comp.add_argument("--out-normalized", type=Path, default=None)
 
     # Support calling without subcommand for backward compatibility
-    args = parser.parse_args()
+    args, remaining = parser.parse_known_args()
 
     if args.command is None:
         # No subcommand given → treat as single-dataset mode
-        args = single.parse_args(__import__("sys").argv[1:])
+        args = single.parse_args(remaining)
         args.command = "single"
 
     if args.command == "compare":

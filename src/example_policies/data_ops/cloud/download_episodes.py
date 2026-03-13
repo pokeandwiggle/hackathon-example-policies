@@ -26,7 +26,7 @@ def main():
             positional.append(arg)
 
     if len(positional) != 2:
-        print("Usage: python -m example_policies.download_episodes <output_dir> <filter_str> [--env=prod|nonprod]",
+        print("Usage: python -m example_policies.data_ops.cloud.download_episodes <output_dir> <filter_str> [--env=prod|nonprod]",
               file=sys.stderr)
         sys.exit(1)
 

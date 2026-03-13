@@ -92,16 +92,24 @@ class StateFeatureSpec:
             state_names.extend([f"tcp_right_quat_{i}" for i in "xyzw"])
 
         # Left gripper (1 width value; name encodes gripper type)
-        if self.left_gripper == GripperType.ROBOTIQ:
-            state_names.append("robotiq_left")
-        else:
-            state_names.append("gripper_left")
+        match self.left_gripper:
+            case GripperType.ROBOTIQ:
+                state_names.append("robotiq_left")
+            case GripperType.PANDA:
+                state_names.append("gripper_left")
+            case _:
+                raise ValueError(f"Unsupported left gripper type: {self.left_gripper}")
 
         # Right gripper (1 width value; name encodes gripper type)
-        if self.right_gripper == GripperType.ROBOTIQ:
-            state_names.append("robotiq_right")
-        else:
-            state_names.append("gripper_right")
+        match self.right_gripper:
+            case GripperType.ROBOTIQ:
+                state_names.append("robotiq_right")
+            case GripperType.PANDA:
+                state_names.append("gripper_right")
+            case _:
+                raise ValueError(
+                    f"Unsupported right gripper type: {self.right_gripper}"
+                )
 
         # Last command (14 elements: same as TCP poses)
         if self.include_last_command:

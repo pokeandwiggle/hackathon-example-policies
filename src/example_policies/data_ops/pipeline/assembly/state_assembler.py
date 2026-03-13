@@ -52,22 +52,48 @@ class StateAssembler:
         gs = parsed_frame["gripper_state"]
         from example_policies.utils.state_builder import GripperType
 
-        left_n = 2 if self.config.left_gripper == GripperType.PANDA else 1
-        right_n = 2 if self.config.right_gripper == GripperType.PANDA else 1
+        match self.config.left_gripper:
+            case GripperType.PANDA:
+                left_n = 2
+            case GripperType.ROBOTIQ:
+                left_n = 1
+            case _:
+                raise ValueError(
+                    f"Unsupported left gripper type: {self.config.left_gripper}"
+                )
+        match self.config.right_gripper:
+            case GripperType.PANDA:
+                right_n = 2
+            case GripperType.ROBOTIQ:
+                right_n = 1
+            case _:
+                raise ValueError(
+                    f"Unsupported right gripper type: {self.config.right_gripper}"
+                )
         left_raw = gs[:left_n]
         right_raw = gs[left_n : left_n + right_n]
 
         # Panda: width = sum of both finger joint positions (metres)
         # Robotiq: convert knuckle position (rad) to width (metres)
-        if self.config.left_gripper == GripperType.PANDA:
-            left_width = float(left_raw.sum())
-        else:
-            left_width = robotiq_width_from_knuckle(float(left_raw[0]))
+        match self.config.left_gripper:
+            case GripperType.PANDA:
+                left_width = float(left_raw.sum())
+            case GripperType.ROBOTIQ:
+                left_width = robotiq_width_from_knuckle(float(left_raw[0]))
+            case _:
+                raise ValueError(
+                    f"Unsupported left gripper type: {self.config.left_gripper}"
+                )
 
-        if self.config.right_gripper == GripperType.PANDA:
-            right_width = float(right_raw.sum())
-        else:
-            right_width = robotiq_width_from_knuckle(float(right_raw[0]))
+        match self.config.right_gripper:
+            case GripperType.PANDA:
+                right_width = float(right_raw.sum())
+            case GripperType.ROBOTIQ:
+                right_width = robotiq_width_from_knuckle(float(right_raw[0]))
+            case _:
+                raise ValueError(
+                    f"Unsupported right gripper type: {self.config.right_gripper}"
+                )
 
         state_components.append(np.array([left_width], dtype=np.float32))
         state_components.append(np.array([right_width], dtype=np.float32))

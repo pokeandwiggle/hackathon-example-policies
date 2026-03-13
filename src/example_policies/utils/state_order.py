@@ -15,19 +15,21 @@ def create_joint_order(
 
     joint_order = embodiment.canonical_arm_joints()
 
-    if cfg.left_gripper == GripperType.PANDA:
-        joint_order += embodiment.left_panda_gripper_joints()
-    elif cfg.left_gripper == GripperType.ROBOTIQ:
-        joint_order += embodiment.left_robotiq_gripper_joints()
-    else:
-        raise ValueError(f"Unsupported left gripper type: {cfg.left_gripper}")
+    match cfg.left_gripper:
+        case GripperType.PANDA:
+            joint_order += embodiment.left_panda_gripper_joints()
+        case GripperType.ROBOTIQ:
+            joint_order += embodiment.left_robotiq_gripper_joints()
+        case _:
+            raise ValueError(f"Unsupported left gripper type: {cfg.left_gripper}")
 
-    if cfg.right_gripper == GripperType.PANDA:
-        joint_order += embodiment.right_panda_gripper_joints()
-    elif cfg.right_gripper == GripperType.ROBOTIQ:
-        joint_order += embodiment.right_robotiq_gripper_joints()
-    else:
-        raise ValueError(f"Unsupported right gripper type: {cfg.right_gripper}")
+    match cfg.right_gripper:
+        case GripperType.PANDA:
+            joint_order += embodiment.right_panda_gripper_joints()
+        case GripperType.ROBOTIQ:
+            joint_order += embodiment.right_robotiq_gripper_joints()
+        case _:
+            raise ValueError(f"Unsupported right gripper type: {cfg.right_gripper}")
 
     return joint_order
 
