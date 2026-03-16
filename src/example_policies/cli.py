@@ -9,13 +9,14 @@ def main():
         print("Usage: example_policies <command> [args...]")
         print()
         print("Commands:")
-        print("  convert         Convert MCAP episodes to LeRobot dataset")
-        print("  deploy          Run policy inference on robot")
-        print("  deploy-loop     Deploy policy in a move-home loop (with optional recording)")
-        print("  train           Train a policy")
-        print("  validate        Validate trained policy with plots")
-        print("  review          Review dataset")
-        print("  sensor-stream   Stream sensor data for debugging")
+        print("  convert            Convert MCAP episodes to LeRobot dataset")
+        print("  deploy             Run policy inference on robot")
+        print("  deploy-loop        Deploy policy in a move-home loop (with optional recording)")
+        print("  pre-deploy-check   Compare dataset first-frame vs live camera")
+        print("  train              Train a policy")
+        print("  validate           Validate trained policy with plots")
+        print("  review             Review dataset")
+        print("  sensor-stream      Stream sensor data for debugging")
         sys.exit(1)
 
     command = sys.argv[1]
@@ -37,6 +38,12 @@ def main():
         )
 
         deploy_loop_main()
+    elif command == "pre-deploy-check":
+        from example_policies.robot_deploy.pre_deploy_check import (
+            main as pre_deploy_check_main,
+        )
+
+        pre_deploy_check_main()
     elif command == "train":
         from example_policies.train import main as train_main
 
