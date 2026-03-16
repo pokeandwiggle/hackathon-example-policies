@@ -14,25 +14,25 @@ The plot is displayed (if a display is available) and saved to
 
 Usage:
     # Local dataset:
-    example_policies pre-deploy-check \\
-        --dataset /data/lerobot/stack_one_brick \\
+    example_policies pre-deploy-check \
+        --dataset /data/lerobot/stack_one_brick \
         --robot-server 192.168.0.101:50051
 
     # Dataset from HuggingFace Hub:
-    example_policies pre-deploy-check \\
-        --hf-repo-id pokeandwiggle/stack_one_brick \\
+    example_policies pre-deploy-check \
+        --hf-repo-id pokeandwiggle/stack_one_brick \
         --robot-server 192.168.0.101:50051
 
     # Check a specific episode's first frame instead of the mean:
-    example_policies pre-deploy-check \\
-        --dataset /data/lerobot/stack_one_brick \\
-        --robot-server 192.168.0.101:50051 \\
+    example_policies pre-deploy-check \
+        --dataset /data/lerobot/stack_one_brick \
+        --robot-server 192.168.0.101:50051 \
         --episode 3
 
     # Override which camera to compare (default: rgb_static):
-    example_policies pre-deploy-check \\
-        --dataset /data/lerobot/stack_one_brick \\
-        --robot-server 192.168.0.101:50051 \\
+    example_policies pre-deploy-check \
+        --dataset /data/lerobot/stack_one_brick \
+        --robot-server 192.168.0.101:50051 \
         --camera rgb_left
 """
 
@@ -248,47 +248,100 @@ def run_check(
     pixel_diff = np.sqrt(np.sum((ds_f - lv_f) ** 2, axis=-1))
     pixel_diff_norm = (pixel_diff / pixel_diff.max() * 255).astype(np.uint8) if pixel_diff.max() > 0 else pixel_diff.astype(np.uint8)
 
-    # ── 4. Build comparison figure ────────────────────────────────
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    # ── 4. Build comparison figure (seaborn-inspired) ───────────────
+    _BG = "#f0f0f0"
+    _TEXT = "#333333"
+    _SUBTITLE = "#777777"
+    _ACCENT = "#4878d0"
+    _WARN = "#ee854a"
+    _FAIL = "#d65f5f"
+    _PASS = "#6acc64"
 
-    # Top-left: dataset frame
-    axes[0, 0].imshow(dataset_img)
-    axes[0, 0].set_title(f"Dataset ({ep_label})", fontsize=12, fontweight="bold")
-    axes[0, 0].axis("off")
+    plt.rcParams.update({
+        "figure.facecolor": _BG,
+        "axes.facecolor": _BG,
+        "text.color": _TEXT,
+        "font.family": "sans-serif",
+        "font.sans-serif": ["DejaVu Sans", "Helvetica", "Arial"],
+        "savefig.facecolor": _BG,
+        "savefig.edgecolor": _BG,
+    })
 
-    # Top-right: live frame
-    axes[0, 1].imshow(live_img)
-    axes[0, 1].set_title("Live Camera", fontsize=12, fontweight="bold")
-    axes[0, 1].axis("off")
+    from matplotlib.gridspec import GridSpec
 
-    # Bottom-left: blended overlay (50/50)
+    fig = plt.figure(figsize=(14, 11))
+    fig.set_facecolor(_BG)
+
+    # Layout: row 0 = suptitle area (via fig.text),
+    #         row 1 = dataset | live  (equal width, equal aspect),
+    #         row 2 = overlay | diff heatmap
+    gs = GridSpec(2, 2, figure=fig,
+                  hspace=0.18, wspace=0.06,
+                  left=0.03, right=0.97, top=0.88, bottom=0.04)
+
+    # ── Titles ────────────────────────────────────────────────────
+    fig.text(0.5, 0.96,
+             f"Pre-Deploy Camera Check — {camera_key}",
+             ha="center", fontsize=15, fontweight="bold", color=_TEXT)
+    fig.text(0.5, 0.925,
+             f"Dataset: {dataset_dir.name}  |  Robot: {server_address}",
+             ha="center", fontsize=10, color=_SUBTITLE)
+
+    # Verdict badge (top-right)
+    rmse = np.sqrt(np.mean((ds_f - lv_f) ** 2))
+    if mean_diff < 15:
+        _verdict, _vcol = "PASS", _PASS
+    elif mean_diff < 30:
+        _verdict, _vcol = "WARNING", _WARN
+    else:
+        _verdict, _vcol = "FAIL", _FAIL
+
+    fig.text(0.95, 0.96, _verdict, fontsize=13, fontweight="bold",
+             color="white", ha="center", va="center",
+             bbox=dict(boxstyle="round,pad=0.4", facecolor=_vcol,
+                       edgecolor="none", alpha=0.9))
+
+    # Helper: add a panel with a thin accent border
+    def _add_image_panel(gs_pos, img, title, cmap=None, add_cbar=False):
+        ax = fig.add_subplot(gs_pos)
+        ax.set_facecolor(_BG)
+        kw = dict(aspect="equal")
+        if cmap:
+            kw["cmap"] = cmap
+        im_obj = ax.imshow(img, **kw)
+        ax.set_title(title, fontsize=11, fontweight="medium",
+                     color=_TEXT, pad=8)
+        ax.axis("off")
+        # Thin border around image
+        for spine in ax.spines.values():
+            spine.set_visible(True)
+            spine.set_color("#cccccc")
+            spine.set_linewidth(0.8)
+        if add_cbar:
+            cbar = fig.colorbar(im_obj, ax=ax, fraction=0.046, pad=0.02,
+                                shrink=0.85)
+            cbar.ax.tick_params(labelsize=8, colors=_SUBTITLE)
+            cbar.outline.set_linewidth(0.5)
+        return ax
+
+    # Row 1: dataset vs live
+    _add_image_panel(gs[0, 0], dataset_img,
+                     f"Dataset ({ep_label})")
+    _add_image_panel(gs[0, 1], live_img,
+                     "Live Camera")
+
+    # Row 2: overlay and diff
     blended = (0.5 * ds_f + 0.5 * lv_f).astype(np.uint8)
-    axes[1, 0].imshow(blended)
-    axes[1, 0].set_title("Overlay (50/50 blend)", fontsize=12, fontweight="bold")
-    axes[1, 0].axis("off")
-
-    # Bottom-right: pixel-wise difference heatmap
-    im = axes[1, 1].imshow(pixel_diff_norm, cmap="hot")
-    axes[1, 1].set_title(
-        f"Pixel Difference (mean={mean_diff:.1f}, max={max_diff:.0f})",
-        fontsize=12,
-        fontweight="bold",
-    )
-    axes[1, 1].axis("off")
-    fig.colorbar(im, ax=axes[1, 1], fraction=0.046, pad=0.04)
-
-    fig.suptitle(
-        f"Pre-Deploy Camera Check — {camera_key}\n"
-        f"Dataset: {dataset_dir.name}  |  Robot: {server_address}",
-        fontsize=14,
-        fontweight="bold",
-    )
-    plt.tight_layout()
+    _add_image_panel(gs[1, 0], blended,
+                     "Overlay (50/50 blend)")
+    _add_image_panel(gs[1, 1], pixel_diff_norm,
+                     f"Pixel Difference  —  mean {mean_diff:.1f}  |  max {max_diff:.0f}  |  RMSE {rmse:.1f}",
+                     cmap="magma", add_cbar=True)
 
     # ── 5. Save & show ────────────────────────────────────────────
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     save_path = output_dir / f"pre_deploy_check_{timestamp}.png"
-    fig.savefig(save_path, dpi=150, bbox_inches="tight")
+    fig.savefig(save_path, dpi=200, bbox_inches="tight")
     print(f"\nSaved comparison to {save_path}")
 
     # Print a quick numeric summary
@@ -296,12 +349,12 @@ def run_check(
     print(f"  Camera:        {camera_key}")
     print(f"  Mean abs diff: {mean_diff:.2f}  (out of 255)")
     print(f"  Max abs diff:  {max_diff:.0f}")
-    print(f"  RMSE:          {np.sqrt(np.mean((ds_f - lv_f) ** 2)):.2f}")
+    print(f"  RMSE:          {rmse:.2f}")
     print(f"{'─' * 50}")
 
-    if mean_diff < 15:
+    if _verdict == "PASS":
         print("  ✅ Images look very similar — good to deploy!")
-    elif mean_diff < 30:
+    elif _verdict == "WARNING":
         print("  ⚠️  Moderate difference — double-check lighting / positioning.")
     else:
         print("  ❌ Large difference — scene may have changed significantly!")
