@@ -108,7 +108,7 @@ class DiTFlowConfig(PreTrainedConfig):
 
     # The original implementation doesn't sample frames for the last 7 steps,
     # which avoids excessive padding and leads to improved training results.
-    drop_n_last_frames: int = 7  # horizon - n_action_steps - n_obs_steps + 1
+    drop_n_last_frames: int = horizon - n_action_steps - n_obs_steps + 1
 
     # ── Chunk-relative UMI-delta conversion (LBM-style, arXiv:2507.05331) ──
     # When enabled, absolute TCP actions (16-dim) in the dataset are converted
