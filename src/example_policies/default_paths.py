@@ -38,3 +38,7 @@ MODELS_DIR = DATA_ROOT / "models"
 # ── Deployment / rollout recordings ──────────────────────────────────
 # Default root for deploy-loop rollout recordings.
 ROLLOUT_RECORDINGS_DIR = DATA_ROOT / "rollout_recordings"
+
+# ── Plots / reports ──────────────────────────────────────────────────
+# Default output directory for quality-report PDFs and diagnostic plots.
+PLOTS_DIR = DATA_ROOT / "plots"
