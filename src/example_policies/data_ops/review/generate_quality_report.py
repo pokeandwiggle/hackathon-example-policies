@@ -202,6 +202,22 @@ def analyse_episode(mcap_path, topic_names_flat):
     return per_topic, dict(ts_source), dict(schema_cache), dict(ts_drift), dict(keyframe_ts)
 
 
+def extract_dataset_version(mcap_path: pathlib.Path) -> str | None:
+    """Extract the schema_version from an MCAP file's pw_episode_info record.
+
+    Returns the version string (e.g. '2.0') or None if not found.
+    """
+    try:
+        with open(mcap_path, "rb") as f:
+            reader = make_reader(f)
+            for metadata_record in reader.iter_metadata():
+                if metadata_record.name == "pw_episode_info":
+                    return metadata_record.metadata.get("schema_version")
+    except (OSError, ValueError):
+        pass
+    return None
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # Main
 # ═══════════════════════════════════════════════════════════════════════
@@ -289,6 +305,12 @@ def main() -> None:
         episode_paths = episode_paths[:MAX_EPISODES]
 
     print(f"Analysing {len(episode_paths)} episodes ...")
+
+    # ── Extract dataset version from first episode ────────────────────
+    dataset_version: str | None = None
+    if episode_paths:
+        dataset_version = extract_dataset_version(episode_paths[0])
+    print(f"Version:   {dataset_version or '(not found)'}")
 
     rows: list[dict] = []
     all_intervals: dict[str, list[float]] = defaultdict(list)
@@ -590,7 +612,8 @@ def main() -> None:
         0.935,
         f"Generated {datetime.datetime.now():%Y-%m-%d %H:%M}  |  "
         f"{len(episode_paths)} episodes  |  {TARGET_FPS} Hz target  |  "
-        f"{actual_tolerance_ms:.0f} ms tolerance",
+        f"{actual_tolerance_ms:.0f} ms tolerance"
+        + (f"  |  v{dataset_version}" if dataset_version else ''),
         ha="center",
         fontsize=9,
         color="#777",
@@ -632,9 +655,10 @@ def main() -> None:
         ),
         ("Operator", f"{OPERATOR_NAME}"),
         ("Target / Tolerance", f"{TARGET_FPS} Hz / {actual_tolerance_ms:.0f} ms"),
+        ("Dataset Version", dataset_version or "—"),
     ]
 
-    y_pos = 0.92
+    y_pos = 0.95
     for label_txt, value_txt in stats_lines:
         ax_stats.text(
             0.05,
@@ -656,7 +680,7 @@ def main() -> None:
             transform=ax_stats.transAxes,
             va="top",
         )
-        y_pos -= 0.13
+        y_pos -= 0.12
 
     ax_stats.set_title(
         "Violation Summary", fontsize=10, fontweight="medium", pad=12
