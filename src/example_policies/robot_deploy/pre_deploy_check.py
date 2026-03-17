@@ -310,16 +310,15 @@ def run_check(
     })
 
     from matplotlib.gridspec import GridSpec
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
 
     fig = plt.figure(figsize=(14, 16))
     fig.set_facecolor(_BG)
 
-    # Layout: 3 rows × 2 cols
-    #   row 0: dataset vs live
-    #   row 1: overlay vs pixel diff
-    #   row 2: SSIM diff vs edge diff
+    # Simple 3×2 grid — colorbars are attached to their image axes
+    # via make_axes_locatable so they always match image height.
     gs = GridSpec(3, 2, figure=fig,
-                  hspace=0.15, wspace=0.06,
+                  hspace=0.14, wspace=0.08,
                   left=0.03, right=0.97, top=0.92, bottom=0.03)
 
     # ── Titles ────────────────────────────────────────────────────
@@ -347,7 +346,7 @@ def run_check(
              bbox=dict(boxstyle="round,pad=0.4", facecolor=_vcol,
                        edgecolor="none", alpha=0.9))
 
-    # Helper: add a panel with a thin accent border
+    # Helper: add a panel with attached colorbar
     def _add_image_panel(gs_pos, img, title, cmap=None, add_cbar=False):
         ax = fig.add_subplot(gs_pos)
         ax.set_facecolor(_BG)
@@ -364,8 +363,9 @@ def run_check(
             spine.set_color("#cccccc")
             spine.set_linewidth(0.8)
         if add_cbar:
-            cbar = fig.colorbar(im_obj, ax=ax, fraction=0.046, pad=0.02,
-                                shrink=0.85)
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes("right", size="3%", pad=0.06)
+            cbar = fig.colorbar(im_obj, cax=cax)
             cbar.ax.tick_params(labelsize=8, colors=_SUBTITLE)
             cbar.outline.set_linewidth(0.5)
         return ax
