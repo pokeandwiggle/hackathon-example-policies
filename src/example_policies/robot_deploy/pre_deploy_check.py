@@ -243,10 +243,52 @@ def run_check(
     abs_diff = np.abs(ds_f - lv_f)
     mean_diff = abs_diff.mean()
     max_diff = abs_diff.max()
+    rmse = np.sqrt(np.mean((ds_f - lv_f) ** 2))
 
     # Per-pixel L2 across channels, then normalise for visualisation
     pixel_diff = np.sqrt(np.sum((ds_f - lv_f) ** 2, axis=-1))
     pixel_diff_norm = (pixel_diff / pixel_diff.max() * 255).astype(np.uint8) if pixel_diff.max() > 0 else pixel_diff.astype(np.uint8)
+
+    # ── 3b. SSIM (structural similarity) ──────────────────────────
+    # Computed on greyscale — measures structural changes, robust to
+    # uniform brightness shifts.  Returns a per-pixel SSIM map too.
+    ds_grey = cv2.cvtColor(dataset_img, cv2.COLOR_RGB2GRAY)
+    lv_grey = cv2.cvtColor(live_img, cv2.COLOR_RGB2GRAY)
+
+    C1 = (0.01 * 255) ** 2
+    C2 = (0.03 * 255) ** 2
+    _WIN = 11  # window size (must be odd)
+
+    mu_ds = cv2.GaussianBlur(ds_grey.astype(np.float64), (_WIN, _WIN), 1.5)
+    mu_lv = cv2.GaussianBlur(lv_grey.astype(np.float64), (_WIN, _WIN), 1.5)
+    mu_ds_sq = mu_ds ** 2
+    mu_lv_sq = mu_lv ** 2
+    mu_ds_lv = mu_ds * mu_lv
+
+    sigma_ds_sq = cv2.GaussianBlur((ds_grey.astype(np.float64)) ** 2, (_WIN, _WIN), 1.5) - mu_ds_sq
+    sigma_lv_sq = cv2.GaussianBlur((lv_grey.astype(np.float64)) ** 2, (_WIN, _WIN), 1.5) - mu_lv_sq
+    sigma_ds_lv = cv2.GaussianBlur(
+        ds_grey.astype(np.float64) * lv_grey.astype(np.float64), (_WIN, _WIN), 1.5
+    ) - mu_ds_lv
+
+    ssim_map = ((2 * mu_ds_lv + C1) * (2 * sigma_ds_lv + C2)) / \
+               ((mu_ds_sq + mu_lv_sq + C1) * (sigma_ds_sq + sigma_lv_sq + C2))
+    ssim_score = float(ssim_map.mean())
+
+    # Invert for visualisation: bright = low similarity (potential movement)
+    ssim_diff_vis = ((1.0 - ssim_map) * 255).clip(0, 255).astype(np.uint8)
+
+    # ── 3c. Edge-based structural diff ────────────────────────────
+    # Canny edges are invariant to brightness — differences reveal
+    # geometric changes (moved objects, shifted surfaces).
+    edges_ds = cv2.Canny(ds_grey, 50, 150)
+    edges_lv = cv2.Canny(lv_grey, 50, 150)
+
+    # XOR highlights edges present in one image but not the other
+    edge_diff = cv2.bitwise_xor(edges_ds, edges_lv)
+    # Dilate for visibility
+    edge_diff_vis = cv2.dilate(edge_diff, np.ones((3, 3), np.uint8), iterations=1)
+    edge_change_pct = float(np.count_nonzero(edge_diff) / max(np.count_nonzero(edges_ds | edges_lv), 1) * 100)
 
     # ── 4. Build comparison figure (seaborn-inspired) ───────────────
     _BG = "#f0f0f0"
@@ -269,34 +311,38 @@ def run_check(
 
     from matplotlib.gridspec import GridSpec
 
-    fig = plt.figure(figsize=(14, 11))
+    fig = plt.figure(figsize=(14, 16))
     fig.set_facecolor(_BG)
 
-    # Layout: row 0 = suptitle area (via fig.text),
-    #         row 1 = dataset | live  (equal width, equal aspect),
-    #         row 2 = overlay | diff heatmap
-    gs = GridSpec(2, 2, figure=fig,
-                  hspace=0.18, wspace=0.06,
-                  left=0.03, right=0.97, top=0.88, bottom=0.04)
+    # Layout: 3 rows × 2 cols
+    #   row 0: dataset vs live
+    #   row 1: overlay vs pixel diff
+    #   row 2: SSIM diff vs edge diff
+    gs = GridSpec(3, 2, figure=fig,
+                  hspace=0.15, wspace=0.06,
+                  left=0.03, right=0.97, top=0.92, bottom=0.03)
 
     # ── Titles ────────────────────────────────────────────────────
-    fig.text(0.5, 0.96,
+    fig.text(0.5, 0.975,
              f"Pre-Deploy Camera Check — {camera_key}",
              ha="center", fontsize=15, fontweight="bold", color=_TEXT)
-    fig.text(0.5, 0.925,
+    fig.text(0.5, 0.955,
              f"Dataset: {dataset_dir.name}  |  Robot: {server_address}",
              ha="center", fontsize=10, color=_SUBTITLE)
 
-    # Verdict badge (top-right)
-    rmse = np.sqrt(np.mean((ds_f - lv_f) ** 2))
-    if mean_diff < 15:
-        _verdict, _vcol = "PASS", _PASS
-    elif mean_diff < 30:
-        _verdict, _vcol = "WARNING", _WARN
-    else:
+    # Verdict — incorporate SSIM and edge change %
+    # SSIM: 1.0 = identical, <0.85 = significant structural change
+    # Edge change: >30% = significant geometric change
+    if ssim_score < 0.80 or edge_change_pct > 40:
         _verdict, _vcol = "FAIL", _FAIL
+    elif ssim_score < 0.90 or edge_change_pct > 25 or mean_diff >= 30:
+        _verdict, _vcol = "WARNING", _WARN
+    elif mean_diff < 15 and ssim_score >= 0.95:
+        _verdict, _vcol = "PASS", _PASS
+    else:
+        _verdict, _vcol = "WARNING", _WARN
 
-    fig.text(0.95, 0.96, _verdict, fontsize=13, fontweight="bold",
+    fig.text(0.95, 0.975, _verdict, fontsize=13, fontweight="bold",
              color="white", ha="center", va="center",
              bbox=dict(boxstyle="round,pad=0.4", facecolor=_vcol,
                        edgecolor="none", alpha=0.9))
@@ -330,13 +376,31 @@ def run_check(
     _add_image_panel(gs[0, 1], live_img,
                      "Live Camera")
 
-    # Row 2: overlay and diff
+    # Row 2: overlay and pixel diff
     blended = (0.5 * ds_f + 0.5 * lv_f).astype(np.uint8)
     _add_image_panel(gs[1, 0], blended,
                      "Overlay (50/50 blend)")
     _add_image_panel(gs[1, 1], pixel_diff_norm,
                      f"Pixel Difference  —  mean {mean_diff:.1f}  |  max {max_diff:.0f}  |  RMSE {rmse:.1f}",
                      cmap="magma", add_cbar=True)
+
+    # Row 3: SSIM diff and edge diff
+    _add_image_panel(gs[2, 0], ssim_diff_vis,
+                     f"SSIM Structural Diff  —  SSIM = {ssim_score:.3f}"
+                     f"  ({'good' if ssim_score >= 0.95 else 'moderate' if ssim_score >= 0.85 else 'low'})",
+                     cmap="magma", add_cbar=True)
+
+    # Edge diff: show as coloured overlay (cyan = dataset-only, red = live-only)
+    edge_rgb = np.zeros((*edge_diff.shape, 3), dtype=np.uint8)
+    edge_rgb[..., 0] = np.where(edges_lv > 0, 200, 0)                      # red = live-only
+    edge_rgb[..., 1] = np.where(edges_ds > 0, 200, 0)                      # green = dataset-only
+    edge_rgb[edges_ds & edges_lv > 0] = [100, 100, 100]                    # grey = shared
+    edge_rgb[edge_diff > 0] = np.where(                                     # highlight XOR
+        edges_lv[edge_diff > 0, None] > 0, [255, 80, 80], [80, 220, 220]
+    )
+    _add_image_panel(gs[2, 1], edge_rgb,
+                     f"Edge Diff (Canny XOR)  —  {edge_change_pct:.1f}% edges changed"
+                     f"  (cyan=dataset, red=live)")
 
     # ── 5. Save & show ────────────────────────────────────────────
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -345,19 +409,21 @@ def run_check(
     print(f"\nSaved comparison to {save_path}")
 
     # Print a quick numeric summary
-    print(f"\n{'─' * 50}")
-    print(f"  Camera:        {camera_key}")
-    print(f"  Mean abs diff: {mean_diff:.2f}  (out of 255)")
-    print(f"  Max abs diff:  {max_diff:.0f}")
-    print(f"  RMSE:          {rmse:.2f}")
-    print(f"{'─' * 50}")
+    print(f"\n{'─' * 60}")
+    print(f"  Camera:         {camera_key}")
+    print(f"  Mean abs diff:  {mean_diff:.2f}  (out of 255)")
+    print(f"  Max abs diff:   {max_diff:.0f}")
+    print(f"  RMSE:           {rmse:.2f}")
+    print(f"  SSIM:           {ssim_score:.4f}  (1.0 = identical)")
+    print(f"  Edge change:    {edge_change_pct:.1f}%  (Canny XOR)")
+    print(f"{'─' * 60}")
 
     if _verdict == "PASS":
-        print("  ✅ Images look very similar — good to deploy!")
+        print("  ✅ Scene looks consistent — good to deploy!")
     elif _verdict == "WARNING":
-        print("  ⚠️  Moderate difference — double-check lighting / positioning.")
+        print("  ⚠️  Structural changes detected — check object positions & lighting.")
     else:
-        print("  ❌ Large difference — scene may have changed significantly!")
+        print("  ❌ Significant scene change — objects may have moved!")
 
     try:
         plt.show()
