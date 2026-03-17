@@ -254,6 +254,13 @@ def main() -> None:
         action="store_true",
         help="Include non-excellent episodes",
     )
+    parser.add_argument(
+        "--version",
+        type=str,
+        default=None,
+        metavar="VER",
+        help="Only include episodes with this schema_version (e.g. 2.0)",
+    )
     args = parser.parse_args()
 
     RAW_DATA_DIR = args.dataset_path.resolve()
@@ -308,13 +315,25 @@ def main() -> None:
 
     # ── Extract dataset version(s) from all episodes ─────────────────
     dataset_versions: set[str] = set()
-    for ep_path in episode_paths:
+    ep_version_map: dict[int, str | None] = {}
+    for i, ep_path in enumerate(episode_paths):
         v = extract_dataset_version(ep_path)
+        ep_version_map[i] = v
         if v:
             dataset_versions.add(v)
     dataset_version_str = ", ".join(sorted(dataset_versions)) if dataset_versions else None
     print(f"Version:   {dataset_version_str or '(not found)'}")
 
+    # ── Filter by version if requested ────────────────────────────
+    VERSION_FILTER = args.version
+    if VERSION_FILTER is not None:
+        filtered = [ep for i, ep in enumerate(episode_paths) if ep_version_map.get(i) == VERSION_FILTER]
+        n_before = len(episode_paths)
+        episode_paths = filtered
+        print(f"Filter:    v{VERSION_FILTER} → {len(episode_paths)}/{n_before} episodes")
+        if not episode_paths:
+            print(f"\n⚠️  No episodes match version '{VERSION_FILTER}'. Available: {dataset_version_str}")
+            return
     rows: list[dict] = []
     all_intervals: dict[str, list[float]] = defaultdict(list)
     episode_timestamps: dict[int, dict[str, np.ndarray]] = {}
