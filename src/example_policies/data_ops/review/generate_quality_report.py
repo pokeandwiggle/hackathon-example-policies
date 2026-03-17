@@ -6,7 +6,7 @@ Standalone script that produces the exact same output as notebook
 
 Usage
 -----
-    python scripts/generate_quality_report.py /data/raw/stack_one_brick/ZatchBeLL
+    python src/example_policies/data_ops/review/generate_quality_report.py /data/raw/build_lego_duplo_flower/MythicToad --tolerance-ms 100.0 --no-excellent-filter
 
 Options
 -------
@@ -128,8 +128,8 @@ TOPICS = [
     ("RGB L", [RosTopicEnum.RGB_LEFT_IMAGE.value]),
     ("RGB R", [RosTopicEnum.RGB_RIGHT_IMAGE.value]),
     ("RGB S", [RosTopicEnum.RGB_STATIC_IMAGE.value]),
-    ("TCP L", [RosTopicEnum.ACTUAL_TCP_LEFT.value]),
-    ("TCP R", [RosTopicEnum.ACTUAL_TCP_RIGHT.value]),
+    ("TCP L", [RosTopicEnum.ACTUAL_TCP_LEFT.value, "/left/franka_robot_state_broadcaster/current_pose"]),
+    ("TCP R", [RosTopicEnum.ACTUAL_TCP_RIGHT.value, "/right/franka_robot_state_broadcaster/current_pose"]),
     ("Cmd TCP L", ["/cartesian_target_left", "/desired_pose_twist_left"]),
     ("Cmd TCP R", ["/cartesian_target_right", "/desired_pose_twist_right"]),
     ("Cmd Gripper L", [RosTopicEnum.DES_GRIPPER_LEFT.value]),
@@ -306,11 +306,14 @@ def main() -> None:
 
     print(f"Analysing {len(episode_paths)} episodes ...")
 
-    # ── Extract dataset version from first episode ────────────────────
-    dataset_version: str | None = None
-    if episode_paths:
-        dataset_version = extract_dataset_version(episode_paths[0])
-    print(f"Version:   {dataset_version or '(not found)'}")
+    # ── Extract dataset version(s) from all episodes ─────────────────
+    dataset_versions: set[str] = set()
+    for ep_path in episode_paths:
+        v = extract_dataset_version(ep_path)
+        if v:
+            dataset_versions.add(v)
+    dataset_version_str = ", ".join(sorted(dataset_versions)) if dataset_versions else None
+    print(f"Version:   {dataset_version_str or '(not found)'}")
 
     rows: list[dict] = []
     all_intervals: dict[str, list[float]] = defaultdict(list)
@@ -613,7 +616,7 @@ def main() -> None:
         f"Generated {datetime.datetime.now():%Y-%m-%d %H:%M}  |  "
         f"{len(episode_paths)} episodes  |  {TARGET_FPS} Hz target  |  "
         f"{actual_tolerance_ms:.0f} ms tolerance"
-        + (f"  |  v{dataset_version}" if dataset_version else ''),
+        + (f"  |  v{dataset_version_str}" if dataset_version_str else ''),
         ha="center",
         fontsize=9,
         color="#777",
@@ -655,7 +658,7 @@ def main() -> None:
         ),
         ("Operator", f"{OPERATOR_NAME}"),
         ("Target / Tolerance", f"{TARGET_FPS} Hz / {actual_tolerance_ms:.0f} ms"),
-        ("Dataset Version", dataset_version or "—"),
+        ("Dataset Version", dataset_version_str or "—"),
     ]
 
     y_pos = 0.95
