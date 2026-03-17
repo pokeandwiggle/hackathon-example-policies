@@ -56,7 +56,7 @@ import numpy as np
 import torch
 
 from example_policies.data_ops.utils import image_processor
-from example_policies.default_paths import DATASETS_DIR
+from example_policies.default_paths import DATASETS_DIR, PLOTS_DIR
 from example_policies.robot_deploy.robot_io.robot_service import (
     robot_service_pb2,
     robot_service_pb2_grpc,
@@ -215,7 +215,7 @@ def run_check(
     Returns the path to the saved comparison image.
     """
     if output_dir is None:
-        output_dir = pathlib.Path("outputs")
+        output_dir = PLOTS_DIR / "pre_deploy_check"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # ── 1. Load dataset first frame(s) ────────────────────────────
