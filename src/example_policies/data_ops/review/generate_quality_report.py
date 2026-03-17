@@ -334,6 +334,8 @@ def main() -> None:
         if not episode_paths:
             print(f"\n⚠️  No episodes match version '{VERSION_FILTER}'. Available: {dataset_version_str}")
             return
+        # Update displayed version to reflect the filter
+        dataset_version_str = VERSION_FILTER
     rows: list[dict] = []
     all_intervals: dict[str, list[float]] = defaultdict(list)
     episode_timestamps: dict[int, dict[str, np.ndarray]] = {}
