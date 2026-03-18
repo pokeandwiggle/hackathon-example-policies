@@ -30,6 +30,13 @@ class GripperType(Enum):
     ROBOTIQ = "robotiq"
 
 
+class LastCommandStyle(Enum):
+    """Naming convention for last-command features."""
+
+    LAST_TCP = "last_tcp"        # last_tcp_left_pos_x (semantic names)
+    LAST_COMMAND = "last_command"  # last_command_left_0  (indexed names)
+
+
 @dataclass
 class StateFeatureSpec:
     """Specification for what features to include in observation.state and their order."""
@@ -48,6 +55,7 @@ class StateFeatureSpec:
 
     # Last command (for temporal context in delta policies)
     include_last_command: bool = False
+    last_command_style: LastCommandStyle = LastCommandStyle.LAST_TCP
 
     @property
     def include_joint_state(self) -> bool:
@@ -111,10 +119,16 @@ class StateFeatureSpec:
                     f"Unsupported right gripper type: {self.right_gripper}"
                 )
 
-        # Last command (14 elements: same as TCP poses)
+        # Last command (14 elements: same layout as TCP poses)
         if self.include_last_command:
-            state_names.extend([f"last_command_left_{i}" for i in range(7)])
-            state_names.extend([f"last_command_right_{i}" for i in range(7)])
+            if self.last_command_style == LastCommandStyle.LAST_TCP:
+                state_names.extend([f"last_tcp_left_pos_{i}" for i in "xyz"])
+                state_names.extend([f"last_tcp_left_quat_{i}" for i in "xyzw"])
+                state_names.extend([f"last_tcp_right_pos_{i}" for i in "xyz"])
+                state_names.extend([f"last_tcp_right_quat_{i}" for i in "xyzw"])
+            else:
+                state_names.extend([f"last_command_left_{i}" for i in range(7)])
+                state_names.extend([f"last_command_right_{i}" for i in range(7)])
 
         return state_names
 
@@ -142,9 +156,13 @@ class StateFeatureSpec:
         )
         spec.include_joint_efforts = any("joint_eff_" in name for name in feature_names)
         spec.include_tcp_poses = any("tcp_" in name for name in feature_names)
-        spec.include_last_command = any(
-            "last_command_" in name for name in feature_names
-        )
+        has_last_command = any("last_command_" in name for name in feature_names)
+        has_last_tcp = any("last_tcp_" in name for name in feature_names)
+        spec.include_last_command = has_last_command or has_last_tcp
+        if has_last_tcp:
+            spec.last_command_style = LastCommandStyle.LAST_TCP
+        elif has_last_command:
+            spec.last_command_style = LastCommandStyle.LAST_COMMAND
 
         # Detect gripper types from feature names.
         # Current format: Robotiq → "robotiq_left", Panda → "gripper_left".
