@@ -27,6 +27,7 @@ class PolicyBundle:
 
     def reset(self):
         self.policy.reset()
+        self.translator.reset()
 
 
 @dataclass

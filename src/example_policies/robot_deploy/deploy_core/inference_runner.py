@@ -33,6 +33,15 @@ class InferenceRunner:
         # observation rather than the *current* one which has drifted.
         self._chunk_observation: Optional[dict] = None
 
+    def reset(self):
+        """Reset runner state for a new rollout / policy switch.
+
+        Sets ``step`` back to 0 so the next ``run_step_recorded()`` call
+        will trigger the full reset chain (policy, translator, interface).
+        """
+        self.step = 0
+        self._chunk_observation = None
+
     def run_step(self, policy_bundle: PolicyBundle) -> Optional[float]:
         """Execute one inference step. Returns termination signal if present."""
         result = self.run_step_recorded(policy_bundle)
@@ -42,12 +51,16 @@ class InferenceRunner:
         """Execute one inference step. Returns full StepResult with observation, action, and termination signal."""
         start_time = time.monotonic()
 
-        # Reset policy at the very first step
+        # Reset policy *and* interface state at the very first step
         if self.step == 0:
             if self.verbose:
                 print("\n=== RESETTING POLICY ===")
-            policy_bundle.policy.reset()
+            policy_bundle.reset()
             self._chunk_observation = None
+            # Clear stale last_command and quaternion-continuity state so the
+            # first observation of this rollout is not contaminated by the
+            # previous one.
+            self.robot_interface.reset()
 
         observation = self.robot_interface.get_observation(policy_bundle.config.device)
 

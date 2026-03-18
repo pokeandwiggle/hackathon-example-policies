@@ -71,6 +71,7 @@ def main():
                     f"Interval reached ({args.prompt_interval} steps)",
                 )
                 if switcher.switch_to(selected_idx):
+                    runner.reset()
                     print(f"\n{'=' * 60}")
                     print(
                         f"SWITCHED TO POLICY {switcher.current_idx} ({switcher.current_policy.name})"
@@ -99,6 +100,7 @@ def main():
                     "Termination signal triggered",
                 )
                 if switcher.switch_to(selected_idx):
+                    runner.reset()
                     print(f"\n{'=' * 60}")
                     print(
                         f"SWITCHED TO POLICY {switcher.current_idx} ({switcher.current_policy.name})"

@@ -45,6 +45,17 @@ class RobotInterface:
         self.robot_names = None
         self.last_command = None
 
+    def reset(self):
+        """Clear state that must not persist across rollouts.
+
+        Resets ``last_command`` (so the first observation of a new rollout
+        falls back to the current TCP state instead of using the stale
+        final action from a previous rollout) and forwards the reset to
+        the :class:`ObservationBuilder` (quaternion continuity tracking).
+        """
+        self.last_command = None
+        self.observation_builder.reset()
+
     def get_observation(self, device):
         """Gets the current observation from the robot."""
         snapshot_response, self.robot_names = self.client.get_snapshot()

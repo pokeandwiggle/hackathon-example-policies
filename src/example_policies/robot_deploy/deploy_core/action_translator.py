@@ -72,6 +72,17 @@ class ActionTranslator:
         # Precompute indices for absolute tcp + grippers inside observation.state
         self.state_info_idxs = self.compute_state_info_indices(self.action_mode)
 
+    def reset(self):
+        """Clear accumulated state so the next rollout starts fresh.
+
+        For delta action modes (DELTA_TCP, DELTA_JOINT) the translator
+        accumulates actions in ``last_action``.  If this is not cleared
+        between rollouts the first step of the new rollout will skip
+        re-initialisation from the current observation and instead build
+        on the stale final action of the previous rollout.
+        """
+        self.last_action = None
+
     def compute_state_info_indices(self, action_mode: ActionMode):
         required_names = []
         if action_mode in (

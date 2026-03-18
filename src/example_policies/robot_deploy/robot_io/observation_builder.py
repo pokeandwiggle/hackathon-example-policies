@@ -44,6 +44,18 @@ class ObservationBuilder:
 
         self.configure_metadata(cfg)
 
+    def reset(self):
+        """Clear state that must not persist across rollouts.
+
+        Resets the previous TCP poses used for quaternion continuity tracking.
+        Without this, the first observation of a new rollout would compare
+        against the last TCP pose of the *previous* rollout (which ended in a
+        completely different configuration), potentially producing incorrect
+        quaternion sign choices.
+        """
+        self._prev_tcp_left = None
+        self._prev_tcp_right = None
+
     def configure_metadata(self, cfg):
         # Legacy Checkpoints / Lerobot Checkpoints are saved without metadata
         if not cfg.metadata:

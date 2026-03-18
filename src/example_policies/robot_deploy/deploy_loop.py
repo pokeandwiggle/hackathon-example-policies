@@ -279,7 +279,7 @@ def main():
             input("Press Enter to start deployment (Ctrl-C to stop)...")
 
             # --- Deploy (+ optionally record) ---
-            runner.step = 0
+            runner.reset()
             if recorder:
                 recorder.start_episode()
 
