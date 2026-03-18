@@ -109,6 +109,13 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="Override the number of action steps executed per chunk (default: from model config)",
     )
+    parser.add_argument(
+        "--controller",
+        type=str,
+        choices=["waypoint", "direct"],
+        default="waypoint",
+        help="Cartesian controller mode: waypoint (default) or direct",
+    )
 
     # --- Loop ---
     parser.add_argument(
@@ -258,10 +265,14 @@ def main():
     print()
 
     # --- Setup inference ---
+    _CONTROLLER_MAP = {
+        "waypoint": RobotClient.CART_WAYPOINT,
+        "direct": RobotClient.CART_DIRECT,
+    }
     config = InferenceConfig(
         hz=args.hertz,
         device=device,
-        controller=RobotClient.CART_WAYPOINT,
+        controller=_CONTROLLER_MAP[args.controller],
     )
 
     with RobotConnection(args.robot_server) as stub:
