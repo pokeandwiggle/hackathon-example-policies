@@ -872,6 +872,7 @@ def main() -> None:
         cmap="magma_r",
         vmin=0,
         vmax=hm_vmax_pdf,
+        interpolation="nearest",
         zorder=2,
     )
     ax_hm.set_xticks(range(len(heatmap_labels)))
