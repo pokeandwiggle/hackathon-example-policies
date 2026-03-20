@@ -210,7 +210,9 @@ class InferenceRunner:
             )
         if is_new_chunk:
             self._timing.inference_durations.append(time.monotonic() - inference_start)
-        self._timing.step_is_inference.append(is_new_chunk)
+        # NOTE: step_is_inference is recorded in _finish_step together with
+        # step_durations so both lists stay in sync on KeyboardInterrupt.
+        self._step_was_inference = is_new_chunk
 
         if is_new_chunk and self.verbose:
             print("\n=== RAW MODEL PREDICTION ===")
@@ -242,7 +244,7 @@ class InferenceRunner:
             self.config.controller,
         )
 
-        self._finish_step(start_time)
+        self._finish_step(start_time, is_new_chunk)
         self.step += 1
         return StepResult(
             observation=observation,
@@ -394,7 +396,7 @@ class InferenceRunner:
     # Timing
     # ------------------------------------------------------------------
 
-    def _finish_step(self, start_time: float):
+    def _finish_step(self, start_time: float, is_inference: bool = False):
         """Wait to maintain control frequency and record timing."""
         elapsed = time.monotonic() - start_time
         sleep_time = self.period - elapsed
@@ -408,6 +410,9 @@ class InferenceRunner:
             time.sleep(sleep_time)
             # Record exact period as step duration (we slept the remainder)
             self._timing.step_durations.append(time.monotonic() - start_time)
+        # Always appended together with step_durations so the two lists
+        # stay in sync even when KeyboardInterrupt fires during sleep.
+        self._timing.step_is_inference.append(is_inference)
 
     def print_timing_summary(self):
         """Print timing summary for the current rollout."""
