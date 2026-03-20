@@ -335,7 +335,7 @@ def main():
                 runner.print_timing_summary()
                 # Save timing plot
                 ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                plot_path = PLOTS_DIR / f"deploy_timing_{model_name}_r{rollout_idx+1}_{ts}.png"
+                plot_path = PLOTS_DIR / "deploy_timing" / f"deploy_timing_{model_name}_r{rollout_idx+1}_{ts}.png"
                 runner.save_timing_plot(plot_path)
                 print(f"Timing plot saved to: {plot_path}")
 

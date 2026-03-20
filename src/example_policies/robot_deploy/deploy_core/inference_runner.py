@@ -129,6 +129,7 @@ class InferenceRunner:
         self.step = 0
         self._chunk_observation = None
         self._timing = TimingStats()
+        self._step_was_inference = False
         if self._blender is not None:
             self._blender.reset()
 

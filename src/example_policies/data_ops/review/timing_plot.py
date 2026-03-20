@@ -83,8 +83,8 @@ def save_timing_plot(
     ax = axes[0, 0]
     inf_idx = step_idx[is_inf]
     queue_idx = step_idx[~is_inf]
-    ax.scatter(inf_idx, inf_ms, s=6, alpha=0.7, color=CLR_INF, label="Inference", zorder=3)
-    ax.scatter(queue_idx, queue_ms, s=6, alpha=0.7, color=CLR_QUEUE, label="Queue replay", zorder=3)
+    ax.scatter(queue_idx, queue_ms, s=8, alpha=0.5, color=CLR_QUEUE, label="Queue replay", zorder=3)
+    ax.scatter(inf_idx, inf_ms, s=40, alpha=0.9, color=CLR_INF, marker="D", edgecolors="white", linewidths=0.5, label="Inference", zorder=4)
     ax.axhline(target_ms, color=CLR_TARGET, ls="--", lw=1.2, label=f"Target ({target_ms:.1f} ms)")
     ax.set_xlabel("Step index")
     ax.set_ylabel("Step duration (ms)")
@@ -127,8 +127,8 @@ def save_timing_plot(
     freqs = np.where(all_ms > 0, 1000.0 / all_ms, 0.0)
     inf_freqs = freqs[is_inf]
     queue_freqs = freqs[~is_inf]
-    ax.scatter(inf_idx, inf_freqs, s=6, alpha=0.7, color=CLR_INF, label="Inference", zorder=3)
-    ax.scatter(queue_idx, queue_freqs, s=6, alpha=0.7, color=CLR_QUEUE, label="Queue replay", zorder=3)
+    ax.scatter(queue_idx, queue_freqs, s=8, alpha=0.5, color=CLR_QUEUE, label="Queue replay", zorder=3)
+    ax.scatter(inf_idx, inf_freqs, s=40, alpha=0.9, color=CLR_INF, marker="D", edgecolors="white", linewidths=0.5, label="Inference", zorder=4)
     ax.axhline(target_hz, color=CLR_TARGET, ls="--", lw=1.2, label=f"Target ({target_hz:.0f} Hz)")
     ax.set_xlabel("Step index")
     ax.set_ylabel("Frequency (Hz)")
