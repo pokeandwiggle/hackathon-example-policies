@@ -410,6 +410,20 @@ class TestActionChunkBlenderReset:
         with pytest.raises(AssertionError, match="Chunk exhausted"):
             blender.pop_action()
 
+    def test_only_n_action_steps_poppable(self):
+        """With overlap, only n_action_steps items should be poppable, not chunk_size."""
+        blender = ActionChunkBlender(chunk_size=16, n_action_steps=8)
+        identity_q = torch.tensor([0.0, 0.0, 0.0, 1.0])
+        chunk = [_make_abs_tcp_action([1, 1, 1], identity_q, [1, 1, 1], identity_q) for _ in range(16)]
+        blender.on_new_chunk(chunk)
+
+        # Should be able to pop exactly 8 (n_action_steps), not 16
+        for _ in range(8):
+            blender.pop_action()
+        assert not blender.has_chunk
+        with pytest.raises(AssertionError, match="Chunk exhausted"):
+            blender.pop_action()
+
     def test_has_chunk_property(self):
         """has_chunk should reflect whether actions are available."""
         blender = ActionChunkBlender(chunk_size=2, n_action_steps=2)

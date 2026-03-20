@@ -190,8 +190,9 @@ class ActionChunkBlender:
         """
         # --- Temporal ensemble: blend new head with old tail ---
         if self.overlap > 0 and self._prev_chunk_tail is not None:
-            for k in range(self.overlap):
-                alpha = (k + 1) / (self.overlap + 1)
+            n_blend = min(self.overlap, len(self._prev_chunk_tail), len(translated_actions))
+            for k in range(n_blend):
+                alpha = (k + 1) / (n_blend + 1)
                 old = self._prev_chunk_tail[k]
                 new = translated_actions[k]
                 translated_actions[k] = blend_abs_tcp_actions(old, new, alpha)
@@ -211,7 +212,10 @@ class ActionChunkBlender:
                 a.clone() for a in translated_actions[self.n_action_steps :]
             ]
 
-        self._current_chunk = translated_actions
+        # Only keep the executable portion (n_action_steps) for pop_action.
+        # The tail beyond n_action_steps is only used as blending reference
+        # for the next chunk — it must NOT be sent to the robot.
+        self._current_chunk = translated_actions[: self.n_action_steps]
         self._step_in_chunk = 0
 
     def pop_action(self) -> torch.Tensor:
