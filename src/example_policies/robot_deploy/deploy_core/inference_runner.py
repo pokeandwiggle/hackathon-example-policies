@@ -1,8 +1,13 @@
 import time
+from collections import deque
+from dataclasses import dataclass, field
 from typing import Optional
 
 import torch
 
+from example_policies.robot_deploy.deploy_core.action_chunk_blender import (
+    ActionChunkBlender,
+)
 from example_policies.robot_deploy.deploy_core.deployment_structures import (
     InferenceConfig,
     PolicyBundle,
@@ -10,6 +15,63 @@ from example_policies.robot_deploy.deploy_core.deployment_structures import (
 from example_policies.robot_deploy.deploy_core.rollout_recorder import StepResult
 from example_policies.robot_deploy.robot_io.robot_interface import RobotInterface
 from example_policies.utils.action_order import ActionMode, GET_TERMINATION_IDX
+
+
+@dataclass
+class TimingStats:
+    """Per-rollout timing statistics."""
+
+    step_durations: list[float] = field(default_factory=list)
+    inference_durations: list[float] = field(default_factory=list)
+    overrun_durations: list[float] = field(default_factory=list)
+
+    @property
+    def n_steps(self) -> int:
+        return len(self.step_durations)
+
+    @property
+    def n_overruns(self) -> int:
+        return len(self.overrun_durations)
+
+    def summary(self, target_period: float) -> str:
+        """Return a human-readable summary of timing deviations."""
+        if not self.step_durations:
+            return "No steps recorded."
+
+        import statistics
+
+        target_hz = 1.0 / target_period
+        durations = self.step_durations
+        actual_hz = [1.0 / d for d in durations if d > 0]
+
+        mean_hz = statistics.mean(actual_hz)
+        min_hz = min(actual_hz)
+        max_hz = max(actual_hz)
+        std_hz = statistics.stdev(actual_hz) if len(actual_hz) > 1 else 0.0
+
+        mean_dur_ms = statistics.mean(durations) * 1000
+        max_dur_ms = max(durations) * 1000
+        p95_dur_ms = sorted(durations)[int(len(durations) * 0.95)] * 1000
+
+        lines = [
+            f"Timing stats ({self.n_steps} steps, target {target_hz:.1f} Hz / {target_period*1000:.1f} ms):",
+            f"  Frequency:  mean={mean_hz:.1f} Hz, min={min_hz:.1f} Hz, max={max_hz:.1f} Hz, std={std_hz:.2f} Hz",
+            f"  Step time:  mean={mean_dur_ms:.1f} ms, p95={p95_dur_ms:.1f} ms, max={max_dur_ms:.1f} ms",
+            f"  Overruns:   {self.n_overruns}/{self.n_steps} steps ({100*self.n_overruns/self.n_steps:.1f}%)",
+        ]
+        if self.inference_durations:
+            inf_mean = statistics.mean(self.inference_durations) * 1000
+            inf_max = max(self.inference_durations) * 1000
+            lines.append(
+                f"  Inference:  mean={inf_mean:.1f} ms, max={inf_max:.1f} ms ({len(self.inference_durations)} chunks)"
+            )
+        if self.overrun_durations:
+            ovr_mean = statistics.mean(self.overrun_durations) * 1000
+            ovr_max = max(self.overrun_durations) * 1000
+            lines.append(
+                f"  Overrun Δ:  mean={ovr_mean:.1f} ms, max={ovr_max:.1f} ms"
+            )
+        return "\n".join(lines)
 
 
 class InferenceRunner:
@@ -20,6 +82,7 @@ class InferenceRunner:
         robot_interface: RobotInterface,
         config: InferenceConfig,
         verbose: bool = True,
+        blender: Optional[ActionChunkBlender] = None,
     ):
         self.robot_interface = robot_interface
         self.config = config
@@ -27,11 +90,22 @@ class InferenceRunner:
         self.step = 0
         self.verbose = verbose
 
+        # Optional action-chunk blender for smooth chunk transitions
+        self._blender = blender
+
         # Observation captured at the start of each action chunk.
         # UMI-delta actions are chunk-relative (all steps expressed relative to
         # the TCP at chunk prediction time), so the translator must use this
         # observation rather than the *current* one which has drifted.
         self._chunk_observation: Optional[dict] = None
+
+        # Per-rollout timing instrumentation
+        self._timing: TimingStats = TimingStats()
+
+    @property
+    def timing_stats(self) -> TimingStats:
+        """Access timing stats for the current/last rollout."""
+        return self._timing
 
     def reset(self):
         """Reset runner state for a new rollout / policy switch.
@@ -41,6 +115,9 @@ class InferenceRunner:
         """
         self.step = 0
         self._chunk_observation = None
+        self._timing = TimingStats()
+        if self._blender is not None:
+            self._blender.reset()
 
     def run_step(self, policy_bundle: PolicyBundle) -> Optional[float]:
         """Execute one inference step. Returns termination signal if present."""
@@ -65,7 +142,7 @@ class InferenceRunner:
         observation = self.robot_interface.get_observation(policy_bundle.config.device)
 
         if not observation:
-            self._wait_for_period(start_time)
+            self._finish_step(start_time)
             return StepResult()
 
         # Detect whether a new action chunk will be predicted this step.
@@ -77,34 +154,38 @@ class InferenceRunner:
             _queues is not None and len(_queues.get("action", [])) == 0
         )
 
+        # When blending is enabled, temporarily expand the action queue so the
+        # full predicted chunk is preserved (the default deque maxlen =
+        # n_action_steps silently truncates the tail we need for blending).
+        if is_new_chunk and self._blender is not None:
+            _queues["action"] = deque(maxlen=self._blender.chunk_size)
+
+        inference_start = time.monotonic()
         with torch.inference_mode():
             action, termination_signal = self._process_action(
                 policy_bundle, observation, is_new_chunk=is_new_chunk,
             )
+        if is_new_chunk:
+            self._timing.inference_durations.append(time.monotonic() - inference_start)
 
             if self.verbose:
                 print("\n=== RAW MODEL PREDICTION ===")
                 policy_bundle.printer.print(self.step, observation, action, raw_action=True)
 
-        # --- Bug-fix: use chunk-start observation for UMI-delta translation ---
-        # UMI-delta actions are expressed relative to the TCP at the start of
-        # the action chunk.  Using the *current* observation (which drifts as
-        # the robot moves) introduces exponentially growing rotation errors for
-        # steps > 0 in the chunk.
+        # --- Update chunk observation (used for UMI-delta translation) ---
         if is_new_chunk:
             self._chunk_observation = observation
 
-        if (
-            policy_bundle.translator.action_mode == ActionMode.UMI_DELTA_TCP
-            and self._chunk_observation is not None
-        ):
-            translator_obs = self._chunk_observation
+        # === Action translation (with optional blending) ===
+        if self._blender is not None:
+            action_translated = self._run_blended_step(
+                policy_bundle, observation, action, is_new_chunk,
+            )
         else:
-            translator_obs = observation
+            action_translated = self._run_normal_translation(
+                policy_bundle, observation, action,
+            )
 
-        action_translated = policy_bundle.translator.translate(
-            action, translator_obs
-        )
         if self.verbose:
             print("\n=== ABSOLUTE ROBOT COMMANDS ===")
             policy_bundle.printer.print(
@@ -117,13 +198,107 @@ class InferenceRunner:
             self.config.controller,
         )
 
-        self._wait_for_period(start_time)
+        self._finish_step(start_time)
         self.step += 1
         return StepResult(
             observation=observation,
             action=action,
             termination_signal=termination_signal,
         )
+
+    # ------------------------------------------------------------------
+    # Translation helpers
+    # ------------------------------------------------------------------
+
+    def _run_normal_translation(
+        self,
+        policy_bundle: PolicyBundle,
+        observation: dict,
+        action: torch.Tensor,
+    ) -> torch.Tensor:
+        """Standard per-step action translation (no blending)."""
+        if (
+            policy_bundle.translator.action_mode == ActionMode.UMI_DELTA_TCP
+            and self._chunk_observation is not None
+        ):
+            translator_obs = self._chunk_observation
+        else:
+            translator_obs = observation
+
+        return policy_bundle.translator.translate(action, translator_obs)
+
+    def _run_blended_step(
+        self,
+        policy_bundle: PolicyBundle,
+        observation: dict,
+        action: torch.Tensor,
+        is_new_chunk: bool,
+    ) -> torch.Tensor:
+        """Translation with action-chunk blending.
+
+        On new-chunk steps: translates the full raw chunk to absolute TCP,
+        passes it to the blender for overlap / offset-decay blending,
+        then pops the first blended action.
+
+        On subsequent steps: pops the next blended action from the stored
+        chunk (normal translation is skipped).
+        """
+        assert self._blender is not None
+
+        if is_new_chunk:
+            # --- Extract full unnormalized chunk ---
+            queue = policy_bundle.policy._queues["action"]
+            remaining = list(queue)  # chunk_size - 1 items (expanded deque)
+            full_raw = [action] + remaining  # chunk_size items, each (1, D)
+
+            # Resize queue back to n_action_steps so the queue drains at
+            # the correct rate and triggers re-prediction after
+            # n_action_steps steps.
+            n_remain = min(self._blender.n_action_steps - 1, len(remaining))
+            policy_bundle.policy._queues["action"] = deque(
+                remaining[:n_remain],
+                maxlen=self._blender.n_action_steps,
+            )
+
+            # --- Translate full chunk to absolute TCP ---
+            translated = self._translate_full_chunk(
+                full_raw, policy_bundle, observation,
+            )
+
+            # --- Blend and store ---
+            self._blender.on_new_chunk(translated)
+
+        # Pop next blended action (works on both new-chunk and later steps)
+        return self._blender.pop_action()
+
+    def _translate_full_chunk(
+        self,
+        raw_actions: list[torch.Tensor],
+        policy_bundle: PolicyBundle,
+        observation: dict,
+    ) -> list[torch.Tensor]:
+        """Translate every action in a chunk to absolute TCP space.
+
+        Returns a list of ``(16,)`` tensors (batch dim squeezed).
+
+        For ``UMI_DELTA_TCP`` and ``TCP`` / ``TELEOP`` the translator is
+        stateless per action, so we can safely call it in a loop without
+        corrupting accumulated state.
+        """
+        translator = policy_bundle.translator
+        mode = translator.action_mode
+
+        if mode == ActionMode.UMI_DELTA_TCP:
+            obs = self._chunk_observation or observation
+        else:
+            obs = observation
+
+        translated: list[torch.Tensor] = []
+        for raw in raw_actions:
+            t = translator.translate(raw, obs)
+            translated.append(t[0].clone())  # squeeze batch → (16,)
+
+        return translated
 
     def _process_action(
         self,
@@ -171,12 +346,25 @@ class InferenceRunner:
 
         return action, termination_signal
 
-    def _wait_for_period(self, start_time: float):
-        """Wait to maintain control frequency."""
+    # ------------------------------------------------------------------
+    # Timing
+    # ------------------------------------------------------------------
+
+    def _finish_step(self, start_time: float):
+        """Wait to maintain control frequency and record timing."""
         elapsed = time.monotonic() - start_time
         sleep_time = self.period - elapsed
         if sleep_time < 0:
             if self.verbose:
                 print(f"Warning: cannot maintain desired frequency of {self.config.hz} Hz")
+            self._timing.overrun_durations.append(-sleep_time)
+            # Record actual step duration (no sleep, took longer than period)
+            self._timing.step_durations.append(elapsed)
         else:
             time.sleep(sleep_time)
+            # Record exact period as step duration (we slept the remainder)
+            self._timing.step_durations.append(time.monotonic() - start_time)
+
+    def print_timing_summary(self):
+        """Print timing summary for the current rollout."""
+        print(f"\n{self._timing.summary(self.period)}")

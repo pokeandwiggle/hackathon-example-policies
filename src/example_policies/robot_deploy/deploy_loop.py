@@ -37,6 +37,9 @@ import torch
 
 from example_policies.default_paths import MODELS_DIR, ROLLOUT_RECORDINGS_DIR
 from example_policies.robot_deploy.deploy import _MOUNT_EMBODIMENT, move_home
+from example_policies.robot_deploy.deploy_core.action_chunk_blender import (
+    ActionChunkBlender,
+)
 from example_policies.robot_deploy.deploy_core.deployment_structures import (
     InferenceConfig,
 )
@@ -168,6 +171,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Suffix appended to recording folder and HF repo name (e.g. '_blabbla')",
     )
 
+    # --- Temporal ensemble (opt-in) ---
+    parser.add_argument(
+        "--temporal-ensemble",
+        action="store_true",
+        help="Enable temporal-ensemble blending to smooth action chunk boundaries",
+    )
+
     return parser
 
 
@@ -275,10 +285,28 @@ def main():
         controller=_CONTROLLER_MAP[args.controller],
     )
 
+    # --- Optional temporal-ensemble blender ---
+    blender = None
+    if args.temporal_ensemble:
+        chunk_size = getattr(policy_bundle.config, "chunk_size", None) or getattr(
+            policy_bundle.config, "horizon", None
+        )
+        n_action_steps = policy_bundle.config.n_action_steps
+        if chunk_size is None:
+            print("Warning: cannot determine chunk_size from config; disabling temporal ensemble.")
+        else:
+            blender = ActionChunkBlender(
+                chunk_size=chunk_size,
+                n_action_steps=n_action_steps,
+            )
+            overlap = blender.overlap
+            mode = "temporal-ensemble" if overlap > 0 else "offset-decay"
+            print(f"Temporal ensemble:  {mode} (chunk={chunk_size}, execute={n_action_steps}, overlap={overlap})")
+
     with RobotConnection(args.robot_server) as stub:
         policy_bundle.config.embodiment = embodiment
         robot_interface = RobotInterface(stub, policy_bundle.config, embodiment)
-        runner = InferenceRunner(robot_interface, config, verbose=False)
+        runner = InferenceRunner(robot_interface, config, verbose=False, blender=blender)
 
         for rollout_idx in range(args.num_rollouts):
             # --- Move home ---
@@ -303,6 +331,7 @@ def main():
                         runner.run_step(policy_bundle)
             except KeyboardInterrupt:
                 print("\nRollout stopped.")
+                runner.print_timing_summary()
 
             # --- Rate the rollout (only when recording) ---
             if recorder:
