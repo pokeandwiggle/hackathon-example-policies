@@ -1,7 +1,12 @@
+import pathlib
 import time
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Optional
+
+from example_policies.data_ops.review.timing_plot import (
+    save_timing_plot as _save_timing_plot,
+)
 
 import torch
 
@@ -24,6 +29,7 @@ class TimingStats:
     step_durations: list[float] = field(default_factory=list)
     inference_durations: list[float] = field(default_factory=list)
     overrun_durations: list[float] = field(default_factory=list)
+    step_is_inference: list[bool] = field(default_factory=list)
 
     @property
     def n_steps(self) -> int:
@@ -32,6 +38,27 @@ class TimingStats:
     @property
     def n_overruns(self) -> int:
         return len(self.overrun_durations)
+
+    def _sub_stats(self, durations: list[float], target_period: float) -> str:
+        """Format stats for a subset of step durations."""
+        import statistics
+
+        if not durations:
+            return "  (no steps)"
+        actual_hz = [1.0 / d for d in durations if d > 0]
+        mean_hz = statistics.mean(actual_hz)
+        min_hz = min(actual_hz)
+        std_hz = statistics.stdev(actual_hz) if len(actual_hz) > 1 else 0.0
+        mean_ms = statistics.mean(durations) * 1000
+        max_ms = max(durations) * 1000
+        p95_ms = sorted(durations)[int(len(durations) * 0.95)] * 1000
+        n_over = sum(1 for d in durations if d > target_period * 1.01)
+        return (
+            f"  n={len(durations):>5d}  "
+            f"freq: mean={mean_hz:.1f} Hz, min={min_hz:.1f} Hz, std={std_hz:.2f} Hz  │  "
+            f"step: mean={mean_ms:.1f} ms, p95={p95_ms:.1f} ms, max={max_ms:.1f} ms  │  "
+            f"overruns: {n_over}"
+        )
 
     def summary(self, target_period: float) -> str:
         """Return a human-readable summary of timing deviations."""
@@ -71,7 +98,23 @@ class TimingStats:
             lines.append(
                 f"  Overrun Δ:  mean={ovr_mean:.1f} ms, max={ovr_max:.1f} ms"
             )
+
+        # --- Separate stats for inference vs queue-replay steps ---
+        if self.step_is_inference:
+            inf_durs = [d for d, is_inf in zip(self.step_durations, self.step_is_inference) if is_inf]
+            queue_durs = [d for d, is_inf in zip(self.step_durations, self.step_is_inference) if not is_inf]
+            lines.append("")
+            lines.append("By step type:")
+            lines.append(f"  Inference steps (new chunk):")
+            lines.append(f"  {self._sub_stats(inf_durs, target_period)}")
+            lines.append(f"  Queue-replay steps:")
+            lines.append(f"  {self._sub_stats(queue_durs, target_period)}")
+
         return "\n".join(lines)
+
+    def save_plot(self, target_period: float, output_path: pathlib.Path) -> pathlib.Path:
+        """Generate and save a timing analysis plot. Returns the output path."""
+        return _save_timing_plot(self, target_period, output_path)
 
 
 class InferenceRunner:
@@ -167,10 +210,11 @@ class InferenceRunner:
             )
         if is_new_chunk:
             self._timing.inference_durations.append(time.monotonic() - inference_start)
+        self._timing.step_is_inference.append(is_new_chunk)
 
-            if self.verbose:
-                print("\n=== RAW MODEL PREDICTION ===")
-                policy_bundle.printer.print(self.step, observation, action, raw_action=True)
+        if is_new_chunk and self.verbose:
+            print("\n=== RAW MODEL PREDICTION ===")
+            policy_bundle.printer.print(self.step, observation, action, raw_action=True)
 
         # --- Update chunk observation (used for UMI-delta translation) ---
         if is_new_chunk:
@@ -368,3 +412,7 @@ class InferenceRunner:
     def print_timing_summary(self):
         """Print timing summary for the current rollout."""
         print(f"\n{self._timing.summary(self.period)}")
+
+    def save_timing_plot(self, output_path: pathlib.Path) -> pathlib.Path:
+        """Save a timing analysis plot for the current rollout."""
+        return self._timing.save_plot(self.period, output_path)

@@ -30,12 +30,13 @@ Usage:
 """
 
 import argparse
+import datetime
 import pathlib
 import shutil
 
 import torch
 
-from example_policies.default_paths import MODELS_DIR, ROLLOUT_RECORDINGS_DIR
+from example_policies.default_paths import MODELS_DIR, PLOTS_DIR, ROLLOUT_RECORDINGS_DIR
 from example_policies.robot_deploy.deploy import _MOUNT_EMBODIMENT, move_home
 from example_policies.robot_deploy.deploy_core.action_chunk_blender import (
     ActionChunkBlender,
@@ -332,6 +333,11 @@ def main():
             except KeyboardInterrupt:
                 print("\nRollout stopped.")
                 runner.print_timing_summary()
+                # Save timing plot
+                ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                plot_path = PLOTS_DIR / f"deploy_timing_{model_name}_r{rollout_idx+1}_{ts}.png"
+                runner.save_timing_plot(plot_path)
+                print(f"Timing plot saved to: {plot_path}")
 
             # --- Rate the rollout (only when recording) ---
             if recorder:
