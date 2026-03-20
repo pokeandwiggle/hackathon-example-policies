@@ -65,46 +65,16 @@ class TimingStats:
         if not self.step_durations:
             return "No steps recorded."
 
-        import statistics
-
         target_hz = 1.0 / target_period
-        durations = self.step_durations
-        actual_hz = [1.0 / d for d in durations if d > 0]
-
-        mean_hz = statistics.mean(actual_hz)
-        min_hz = min(actual_hz)
-        max_hz = max(actual_hz)
-        std_hz = statistics.stdev(actual_hz) if len(actual_hz) > 1 else 0.0
-
-        mean_dur_ms = statistics.mean(durations) * 1000
-        max_dur_ms = max(durations) * 1000
-        p95_dur_ms = sorted(durations)[int(len(durations) * 0.95)] * 1000
 
         lines = [
             f"Timing stats ({self.n_steps} steps, target {target_hz:.1f} Hz / {target_period*1000:.1f} ms):",
-            f"  Frequency:  mean={mean_hz:.1f} Hz, min={min_hz:.1f} Hz, max={max_hz:.1f} Hz, std={std_hz:.2f} Hz",
-            f"  Step time:  mean={mean_dur_ms:.1f} ms, p95={p95_dur_ms:.1f} ms, max={max_dur_ms:.1f} ms",
-            f"  Overruns:   {self.n_overruns}/{self.n_steps} steps ({100*self.n_overruns/self.n_steps:.1f}%)",
         ]
-        if self.inference_durations:
-            inf_mean = statistics.mean(self.inference_durations) * 1000
-            inf_max = max(self.inference_durations) * 1000
-            lines.append(
-                f"  Inference:  mean={inf_mean:.1f} ms, max={inf_max:.1f} ms ({len(self.inference_durations)} chunks)"
-            )
-        if self.overrun_durations:
-            ovr_mean = statistics.mean(self.overrun_durations) * 1000
-            ovr_max = max(self.overrun_durations) * 1000
-            lines.append(
-                f"  Overrun Δ:  mean={ovr_mean:.1f} ms, max={ovr_max:.1f} ms"
-            )
 
         # --- Separate stats for inference vs queue-replay steps ---
         if self.step_is_inference:
             inf_durs = [d for d, is_inf in zip(self.step_durations, self.step_is_inference) if is_inf]
             queue_durs = [d for d, is_inf in zip(self.step_durations, self.step_is_inference) if not is_inf]
-            lines.append("")
-            lines.append("By step type:")
             lines.append(f"  Inference steps (new chunk):")
             lines.append(f"  {self._sub_stats(inf_durs, target_period)}")
             lines.append(f"  Queue-replay steps:")
