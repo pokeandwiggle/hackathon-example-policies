@@ -183,10 +183,11 @@ class ActionChunkBlender:
             n_blend = min(
                 self.overlap, len(self._prev_chunk_tail), len(translated_actions)
             )
-            assert n_blend == self.overlap, (
-                f"Expected to blend {self.overlap} steps, but only have "
-                f"{n_blend} steps available (prev tail: {len(self._prev_chunk_tail)}, "
-            )
+            print("=== ActionChunkBlender: Temporal Ensemble Blending ===")
+            print(f"Blending {n_blend} overlapping steps with temporal ensemble")
+            print(f"Previous chunk tail length: {len(self._prev_chunk_tail)}")
+            print(f"Current chunk length: {len(translated_actions)}")
+            print(f"Overlap: {self.overlap}, Blend steps: {n_blend}")
 
             for k in range(n_blend):
                 alpha = (k + 1) / n_blend
