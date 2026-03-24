@@ -2,9 +2,11 @@
 
 import json
 import logging
+import os
 import pathlib
 import re
 import shutil
+import sys
 
 from mcap.reader import make_reader
 from pydantic import ValidationError
@@ -17,6 +19,19 @@ from example_policies.utils.constants import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def suppress_native_stderr():
+    """Redirect fd 2 to /dev/null to silence C-library noise (libdav1d, SVT-AV1).
+
+    Python's sys.stderr is re-pointed at the original fd so that print(),
+    logging, warnings, and tracebacks still reach the terminal / Cloud Logging.
+    """
+    orig_fd = os.dup(2)
+    devnull_fd = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(devnull_fd, 2)
+    os.close(devnull_fd)
+    sys.stderr = os.fdopen(orig_fd, "w", closefd=True)
 
 
 def _extract_episode_metadata(metadata_record) -> dict | None:
@@ -33,30 +48,12 @@ def _extract_episode_metadata(metadata_record) -> dict | None:
     """
     if metadata_record.name == "pw_episode_info":
         schema_version = metadata_record.metadata.get("schema_version")
-        try:
-            if schema_version in ("1.0", "1.1"):
-                from schemas.pw_episode_info_1_0 import RecorderInfo
-            elif schema_version == "2.0":
-                from schemas.pw_episode_info_2_0 import RecorderInfo
-            else:
-                raise ValueError(f"Unsupported schema_version: {schema_version}")
-        except ImportError:
-            # schemas package not available — fall back to JSON parsing
-            data_str = metadata_record.metadata.get("data")
-            if data_str:
-                try:
-                    info = json.loads(data_str)
-                    episode = info.get("episode", {})
-                    rating = episode.get("rating")
-                    return {
-                        "rating": rating,
-                        "embodiment_name": info.get("embodiment", {}).get("name"),
-                        "end_effector_left": info.get("embodiment", {}).get("end_effector_left"),
-                        "end_effector_right": info.get("embodiment", {}).get("end_effector_right"),
-                    }
-                except json.JSONDecodeError:
-                    pass
-            return None
+        if schema_version and schema_version.startswith("1."):
+            from schemas.pw_episode_info_1_0 import RecorderInfo
+        elif schema_version and schema_version.startswith("2."):
+            from schemas.pw_episode_info_2_0 import RecorderInfo
+        else:
+            raise ValueError(f"Unsupported schema_version: {schema_version}")
         data_str = metadata_record.metadata.get("data")
         if data_str:
             try:
@@ -127,9 +124,7 @@ def extract_robot_type_from_mcap(episode_path: pathlib.Path) -> str:
                 # Fall back to parsing URDF xacro comment
                 if metadata_record.name == "robot_description":
                     urdf = metadata_record.metadata.get("urdf", "")
-                    match = re.search(
-                        r"(dual_(?:panda|fr3)_\w+)\.urdf\.xacro", urdf
-                    )
+                    match = re.search(r"(dual_(?:panda|fr3)_\w+)\.urdf\.xacro", urdf)
                     if match:
                         return match.group(1)
     except (OSError, ValueError) as e:
@@ -205,10 +200,10 @@ class AnnotationExtractor:
         from datetime import datetime
 
         # Handle 'Z' suffix (UTC) - convert to +00:00 format
-        if start_time_str.endswith('Z'):
+        if start_time_str.endswith("Z"):
             # Format: 2026-02-11T11:20:46.642772353Z
             # Truncate nanoseconds to microseconds
-            start_time_truncated = start_time_str[:26] + '+00:00'
+            start_time_truncated = start_time_str[:26] + "+00:00"
         else:
             # Format: 2026-02-05T16:10:21.582082182+00:00
             # Truncate nanoseconds to microseconds for datetime parsing
@@ -264,7 +259,9 @@ class AnnotationExtractor:
                     elif metadata_record.name == "episode_rating":
                         start_time_str = metadata_record.metadata.get("start_time")
                         if start_time_str:
-                            episode_start_time = self._parse_iso_timestamp(start_time_str)
+                            episode_start_time = self._parse_iso_timestamp(
+                                start_time_str
+                            )
                     # Old format: segments metadata
                     elif metadata_record.name == "segments":
                         segment_map_str = metadata_record.metadata.get("segment_map")
@@ -273,7 +270,9 @@ class AnnotationExtractor:
 
             # Try new format first (pw_episode_info)
             if pw_episode_info is not None:
-                annotations = self._extract_from_pw_episode_info(pw_episode_info, episode_path)
+                annotations = self._extract_from_pw_episode_info(
+                    pw_episode_info, episode_path
+                )
                 # Get episode start time for remapping
                 ep_start_str = pw_episode_info.get("episode", {}).get("start_time")
                 if ep_start_str:
@@ -302,14 +301,20 @@ class AnnotationExtractor:
                     mcap_episode_start_s=episode_start_time,
                 )
             else:
-                print("  Warning: Cannot remap annotations - no episode start time found")
+                print(
+                    "  Warning: Cannot remap annotations - no episode start time found"
+                )
                 # Without remapping, timestamps are relative to MCAP start and would
                 # be incorrect in the dataset. Discard them to avoid silent errors.
                 annotations = []
-        elif annotations and (raw_frame_kept is not None or sync_abs_start_s is not None):
+        elif annotations and (
+            raw_frame_kept is not None or sync_abs_start_s is not None
+        ):
             # Only one of the two remapping parameters was provided — this is
             # likely a caller error. Discard annotations to be safe.
-            missing = "sync_abs_start_s" if sync_abs_start_s is None else "raw_frame_kept"
+            missing = (
+                "sync_abs_start_s" if sync_abs_start_s is None else "raw_frame_kept"
+            )
             print(
                 f"  Warning: Cannot remap annotations - {missing} not provided. "
                 "Discarding un-remapped annotations."
@@ -557,7 +562,9 @@ class AnnotationExtractor:
                     label = f"{subtask_id}_failed" if subtask_id else "failed"
                 else:
                     # Use the actual subtask_id with rating suffix
-                    label = f"{subtask_id}_{rating}" if subtask_id else f"unknown_{rating}"
+                    label = (
+                        f"{subtask_id}_{rating}" if subtask_id else f"unknown_{rating}"
+                    )
 
                 subtasks.append(
                     {
@@ -675,8 +682,8 @@ def _extract_episode_rating(episode_path: pathlib.Path) -> dict | None:
     return None
 
 
-def get_sorted_episodes(episode_dir: pathlib.Path) -> list[pathlib.Path]:
-    """Get episode paths sorted by creation time (oldest first).
+def get_episodes(episode_dir: pathlib.Path) -> list[pathlib.Path]:
+    """Get all .mcap episode paths sorted by creation time (oldest first).
 
     Args:
         episode_dir: Directory containing .mcap episode files
@@ -719,15 +726,19 @@ def check_subtask_completeness(episode_path: pathlib.Path) -> tuple[bool, dict]:
                 # New format: pw_episode_info
                 if metadata_record.name == "pw_episode_info":
                     schema_version = metadata_record.metadata.get("schema_version")
-                    if schema_version == "1.0":
-                        from schemas.pw_episode_info_1_0 import RecorderInfo
-                    else:
-                        raise ValueError(f"Unsupported schema_version: {schema_version}")
                     data_str = metadata_record.metadata.get("data")
                     if not data_str:
                         continue
 
                     try:
+                        if schema_version and schema_version.startswith("1."):
+                            from schemas.pw_episode_info_1_0 import RecorderInfo
+                        elif schema_version and schema_version.startswith("2."):
+                            from schemas.pw_episode_info_2_0 import RecorderInfo
+                        else:
+                            raise ValueError(
+                                f"Unsupported schema_version: {schema_version}"
+                            )
                         info = RecorderInfo.model_validate_json(data_str)
                     except ValidationError as e:
                         logger.warning("pw_episode_info failed validation: %s", e)
@@ -735,11 +746,16 @@ def check_subtask_completeness(episode_path: pathlib.Path) -> tuple[bool, dict]:
 
                     # Get defined steps (subtasks) from episode.steps
                     if info.episode.steps:
-                        details["defined_subtasks"] = {step.name for step in info.episode.steps}
+                        details["defined_subtasks"] = {
+                            step.name for step in info.episode.steps
+                        }
 
                     # Find which steps have successful segments
                     for seg in info.segments or []:
-                        if seg.root.step_name and seg.root.rating.value in successful_ratings:
+                        if (
+                            seg.root.step_name
+                            and seg.root.rating.value in successful_ratings
+                        ):
                             details["completed_subtasks"].add(seg.root.step_name)
 
                     # Calculate missing subtasks
@@ -776,10 +792,14 @@ def check_subtask_completeness(episode_path: pathlib.Path) -> tuple[bool, dict]:
                     break
 
     except (OSError, ValueError, json.JSONDecodeError) as e:
-        print(f"  Warning: Failed to check subtask completeness for {episode_path}: {e}")
+        print(
+            f"  Warning: Failed to check subtask completeness for {episode_path}: {e}"
+        )
         return False, details
 
-    is_complete = len(details["missing_subtasks"]) == 0 and len(details["defined_subtasks"]) > 0
+    is_complete = (
+        len(details["missing_subtasks"]) == 0 and len(details["defined_subtasks"]) > 0
+    )
     return is_complete, details
 
 
