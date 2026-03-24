@@ -46,5 +46,7 @@ lerobot = { git = "https://github.com/pokeandwiggle/lerobot.git", branch = "fix/
 dev = [
     "black>=25.1.0",
     "isort>=6.0.1",
+    "matplotlib>=3.9.0",
     "pre-commit>=4.3.0",
+    "pytest>=8.0.0",
 ]
