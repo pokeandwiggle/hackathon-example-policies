@@ -68,13 +68,21 @@ class TimingStats:
         target_hz = 1.0 / target_period
 
         lines = [
-            f"Timing stats ({self.n_steps} steps, target {target_hz:.1f} Hz / {target_period*1000:.1f} ms):",
+            f"Timing stats ({self.n_steps} steps, target {target_hz:.1f} Hz / {target_period * 1000:.1f} ms):",
         ]
 
         # --- Separate stats for inference vs queue-replay steps ---
         if self.step_is_inference:
-            inf_durs = [d for d, is_inf in zip(self.step_durations, self.step_is_inference) if is_inf]
-            queue_durs = [d for d, is_inf in zip(self.step_durations, self.step_is_inference) if not is_inf]
+            inf_durs = [
+                d
+                for d, is_inf in zip(self.step_durations, self.step_is_inference)
+                if is_inf
+            ]
+            queue_durs = [
+                d
+                for d, is_inf in zip(self.step_durations, self.step_is_inference)
+                if not is_inf
+            ]
             lines.append(f"  Inference steps (new chunk):")
             lines.append(f"  {self._sub_stats(inf_durs, target_period)}")
             lines.append(f"  Queue-replay steps:")
@@ -82,7 +90,9 @@ class TimingStats:
 
         return "\n".join(lines)
 
-    def save_plot(self, target_period: float, output_path: pathlib.Path) -> pathlib.Path:
+    def save_plot(
+        self, target_period: float, output_path: pathlib.Path
+    ) -> pathlib.Path:
         """Generate and save a timing analysis plot. Returns the output path."""
         return _save_timing_plot(self, target_period, output_path)
 
@@ -164,9 +174,14 @@ class InferenceRunner:
         # predict_action_chunk internally, producing a fresh chunk.
         policy = policy_bundle.policy
         _queues = getattr(policy, "_queues", None)
-        is_new_chunk = (
-            _queues is not None and len(_queues.get("action", [])) == 0
-        )
+        is_new_chunk = _queues is not None and len(_queues.get("action", [])) == 0
+
+        # Seed the blender with the current robot pose on the first step
+        # so it has a reference for blending the first chunk transition.
+        if is_new_chunk and self._blender is not None and self._blender._last_sent_action is None:
+            self._blender._last_sent_action = self._current_pose_as_action(
+                policy_bundle, observation,
+            )
 
         # When blending is enabled, temporarily expand the action queue AND
         # the model's n_action_steps so generate_actions() returns the full
@@ -184,7 +199,9 @@ class InferenceRunner:
         inference_start = time.monotonic()
         with torch.inference_mode():
             action, termination_signal = self._process_action(
-                policy_bundle, observation, is_new_chunk=is_new_chunk,
+                policy_bundle,
+                observation,
+                is_new_chunk=is_new_chunk,
             )
 
         # Restore original n_action_steps so the queue drains at the right rate.
@@ -207,11 +224,16 @@ class InferenceRunner:
         # === Action translation (with optional blending) ===
         if self._blender is not None:
             action_translated = self._run_blended_step(
-                policy_bundle, observation, action, is_new_chunk,
+                policy_bundle,
+                observation,
+                action,
+                is_new_chunk,
             )
         else:
             action_translated = self._run_normal_translation(
-                policy_bundle, observation, action,
+                policy_bundle,
+                observation,
+                action,
             )
 
         if self.verbose:
@@ -290,7 +312,9 @@ class InferenceRunner:
 
             # --- Translate full chunk to absolute TCP ---
             translated = self._translate_full_chunk(
-                full_raw, policy_bundle, observation,
+                full_raw,
+                policy_bundle,
+                observation,
             )
 
             # --- Blend and store ---
@@ -327,6 +351,35 @@ class InferenceRunner:
             translated.append(t[0].clone())  # squeeze batch → (16,)
 
         return translated
+
+    def _current_pose_as_action(
+        self,
+        policy_bundle: PolicyBundle,
+        observation: dict,
+    ) -> torch.Tensor:
+        """Build a 16-dim absolute TCP action from the current observation state."""
+        translator = policy_bundle.translator
+        device = observation["observation.state"].device
+
+        # 14-dim TCP pose: [L_pos(3), L_quat(4), R_pos(3), R_quat(4)]
+        tcp_pose = translator._init_last_action_from_observation(observation, device)
+
+        action = torch.zeros(16, device=device)
+        action[:14] = tcp_pose[0]
+
+        # Gripper widths: look up by feature name in the observation state
+        state = observation["observation.state"]
+        feature_names = translator._state_feature_names
+        for name in ("robotiq_left", "panda_left"):
+            if name in feature_names:
+                action[14] = state[0, feature_names.index(name)]
+                break
+        for name in ("robotiq_right", "panda_right"):
+            if name in feature_names:
+                action[15] = state[0, feature_names.index(name)]
+                break
+
+        return action
 
     def _process_action(
         self,
@@ -384,7 +437,9 @@ class InferenceRunner:
         sleep_time = self.period - elapsed
         if sleep_time < 0:
             if self.verbose:
-                print(f"Warning: cannot maintain desired frequency of {self.config.hz} Hz")
+                print(
+                    f"Warning: cannot maintain desired frequency of {self.config.hz} Hz"
+                )
             self._timing.overrun_durations.append(-sleep_time)
             # Record actual step duration (no sleep, took longer than period)
             self._timing.step_durations.append(elapsed)
