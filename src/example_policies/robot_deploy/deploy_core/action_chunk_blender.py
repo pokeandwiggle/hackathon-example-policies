@@ -211,6 +211,7 @@ class ActionChunkBlender:
         elif self._prev_chunk_tail is None:
             print("=== ActionChunkBlender: No previous chunk tail to blend with ===")
             print("This is expected for the first chunk of a rollout.")
+            print(f"Last action: {self._last_sent_action}")
 
         # Store THIS chunk's tail for blending with the NEXT chunk
         if self.overlap > 0:
