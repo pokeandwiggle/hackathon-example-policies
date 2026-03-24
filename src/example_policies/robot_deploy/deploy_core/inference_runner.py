@@ -168,17 +168,28 @@ class InferenceRunner:
             _queues is not None and len(_queues.get("action", [])) == 0
         )
 
-        # When blending is enabled, temporarily expand the action queue so the
-        # full predicted chunk is preserved (the default deque maxlen =
-        # n_action_steps silently truncates the tail we need for blending).
+        # When blending is enabled, temporarily expand the action queue AND
+        # the model's n_action_steps so generate_actions() returns the full
+        # horizon (chunk_size) instead of cropping to n_action_steps.
+        _saved_n_action_steps = None
         if is_new_chunk and self._blender is not None:
             _queues["action"] = deque(maxlen=self._blender.chunk_size)
+            _saved_n_action_steps = policy_bundle.policy.config.n_action_steps
+            # generate_actions() slices actions[:, n_obs_steps-1 : n_obs_steps-1 + n_action_steps]
+            # so the maximum extractable actions = horizon - (n_obs_steps - 1).
+            n_obs_steps = getattr(policy_bundle.policy.config, "n_obs_steps", 1)
+            max_extractable = self._blender.chunk_size - (n_obs_steps - 1)
+            policy_bundle.policy.config.n_action_steps = max_extractable
 
         inference_start = time.monotonic()
         with torch.inference_mode():
             action, termination_signal = self._process_action(
                 policy_bundle, observation, is_new_chunk=is_new_chunk,
             )
+
+        # Restore original n_action_steps so the queue drains at the right rate.
+        if _saved_n_action_steps is not None:
+            policy_bundle.policy.config.n_action_steps = _saved_n_action_steps
         if is_new_chunk:
             self._timing.inference_durations.append(time.monotonic() - inference_start)
         # NOTE: step_is_inference is recorded in _finish_step together with
