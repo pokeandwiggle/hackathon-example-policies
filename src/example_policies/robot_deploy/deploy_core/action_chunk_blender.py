@@ -25,6 +25,8 @@ from typing import Optional
 
 import torch
 from torch.nn import functional as F
+from scipy.spatial.transform import Rotation as R
+from scipy.spatial.transform import Slerp
 
 from ...utils.action_order import (
     DUAL_ABS_LEFT_POS_IDXS,
@@ -48,24 +50,15 @@ def slerp_quat(q0: torch.Tensor, q1: torch.Tensor, t: float) -> torch.Tensor:
     q0 = q0.float()
     q1 = q1.float()
 
-    dot = (q0 * q1).sum()
-    if dot < 0:
-        q1 = -q1
-        dot = -dot
-    dot = dot.clamp(max=0.9995)
+    slerp = Slerp([0, 1], R.from_quat([q0.cpu().numpy(), q1.cpu().numpy()]))
+    R_interp = slerp(t)
+    q_interp = torch.from_numpy(R_interp.as_quat()).to(q0.device)
+    return q_interp
 
-    theta = torch.acos(dot)
-    sin_theta = torch.sin(theta)
 
-    # When quaternions are very close, fall back to normalised LERP
-    if sin_theta.abs() < 1e-6:
-        result = (1.0 - t) * q0 + t * q1
-        return F.normalize(result, p=2, dim=-1)
-
-    w0 = torch.sin((1.0 - t) * theta) / sin_theta
-    w1 = torch.sin(t * theta) / sin_theta
-    result = w0 * q0 + w1 * q1
-    return F.normalize(result, p=2, dim=-1)
+def linear_blend(v0: torch.Tensor, v1: torch.Tensor, alpha: float) -> torch.Tensor:
+    """Linear blend between two tensors."""
+    return (1.0 - alpha) * v0 + alpha * v1
 
 
 # ---------------------------------------------------------------------------
