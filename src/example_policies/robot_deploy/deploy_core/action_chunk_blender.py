@@ -208,10 +208,11 @@ class ActionChunkBlender:
             #         self._last_sent_action, translated_actions[k], alpha
             #     )
 
-        elif self._prev_chunk_tail is None:
+        elif self._prev_chunk_tail is None and self._last_sent_action is not None:
             print("=== ActionChunkBlender: No previous chunk tail to blend with ===")
             print("This is expected for the first chunk of a rollout.")
             print(f"Last action: {self._last_sent_action}")
+            self._last_sent_action.to(translated_actions[0].device)
             K = min(self.decay_steps, self.n_action_steps)
             for k in range(K):
                 alpha = (k + 1) / K
