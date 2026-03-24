@@ -84,29 +84,27 @@ def blend_abs_tcp_actions(
     """
     result = new.clone()
 
-    # Position: LERP
-    result[DUAL_ABS_LEFT_POS_IDXS] = (
-        (1.0 - alpha) * old[DUAL_ABS_LEFT_POS_IDXS]
-        + alpha * new[DUAL_ABS_LEFT_POS_IDXS]
-    )
-    result[DUAL_ABS_RIGHT_POS_IDXS] = (
-        (1.0 - alpha) * old[DUAL_ABS_RIGHT_POS_IDXS]
-        + alpha * new[DUAL_ABS_RIGHT_POS_IDXS]
-    )
+    old_left_pos = old[DUAL_ABS_LEFT_POS_IDXS]
+    old_left_quat = old[DUAL_ABS_LEFT_QUAT_IDXS]
+    old_right_pos = old[DUAL_ABS_RIGHT_POS_IDXS]
+    old_right_quat = old[DUAL_ABS_RIGHT_QUAT_IDXS]
+    new_left_pos = new[DUAL_ABS_LEFT_POS_IDXS]
+    new_left_quat = new[DUAL_ABS_LEFT_QUAT_IDXS]
+    new_right_pos = new[DUAL_ABS_RIGHT_POS_IDXS]
+    new_right_quat = new[DUAL_ABS_RIGHT_QUAT_IDXS]
 
-    # Orientation: SLERP
-    result[DUAL_ABS_LEFT_QUAT_IDXS] = slerp_quat(
-        old[DUAL_ABS_LEFT_QUAT_IDXS],
-        new[DUAL_ABS_LEFT_QUAT_IDXS],
-        alpha,
-    )
-    result[DUAL_ABS_RIGHT_QUAT_IDXS] = slerp_quat(
-        old[DUAL_ABS_RIGHT_QUAT_IDXS],
-        new[DUAL_ABS_RIGHT_QUAT_IDXS],
-        alpha,
-    )
+    # Interpolate positions and quaternions separately, then combine back into
+    # a single action vector.
+    blend_left_pos = linear_blend(old_left_pos, new_left_pos, alpha)
+    blend_right_pos = linear_blend(old_right_pos, new_right_pos, alpha)
+    blend_left_quat = slerp_quat(old_left_quat, new_left_quat, alpha)
+    blend_right_quat = slerp_quat(old_right_quat, new_right_quat, alpha)
 
-    # Grippers: keep from *new* (already in result via clone)
+    result[DUAL_ABS_LEFT_POS_IDXS] = blend_left_pos
+    result[DUAL_ABS_RIGHT_POS_IDXS] = blend_right_pos
+    result[DUAL_ABS_LEFT_QUAT_IDXS] = blend_left_quat
+    result[DUAL_ABS_RIGHT_QUAT_IDXS] = blend_right_quat
+
     return result
 
 
@@ -165,9 +163,8 @@ class ActionChunkBlender:
     @property
     def has_chunk(self) -> bool:
         """Whether the blender has actions ready to pop."""
-        return (
-            self._current_chunk is not None
-            and self._step_in_chunk < len(self._current_chunk)
+        return self._current_chunk is not None and self._step_in_chunk < len(
+            self._current_chunk
         )
 
     # ------------------------------------------------------------------
@@ -183,21 +180,32 @@ class ActionChunkBlender:
         """
         # --- Temporal ensemble: blend new head with old tail ---
         if self.overlap > 0 and self._prev_chunk_tail is not None:
-            n_blend = min(self.overlap, len(self._prev_chunk_tail), len(translated_actions))
+            n_blend = min(
+                self.overlap, len(self._prev_chunk_tail), len(translated_actions)
+            )
+            assert n_blend == self.overlap, (
+                f"Expected to blend {self.overlap} steps, but only have "
+                f"{n_blend} steps available (prev tail: {len(self._prev_chunk_tail)}, "
+            )
+
             for k in range(n_blend):
-                alpha = (k + 1) / (n_blend + 1)
+                alpha = (k + 1) / n_blend
                 old = self._prev_chunk_tail[k]
                 new = translated_actions[k]
                 translated_actions[k] = blend_abs_tcp_actions(old, new, alpha)
 
         # --- Offset-decay (fallback when there is no overlap) ---
         elif self.overlap <= 0 and self._last_sent_action is not None:
-            K = min(self.decay_steps, self.n_action_steps)
-            for k in range(K):
-                alpha = (k + 1) / (K + 1)
-                translated_actions[k] = blend_abs_tcp_actions(
-                    self._last_sent_action, translated_actions[k], alpha
-                )
+            raise NotImplementedError(
+                "Offset-decay blending is not implemented yet."
+                "Please set chunk_size > n_action_steps for temporal ensemble blending."
+            )
+            # K = min(self.decay_steps, self.n_action_steps)
+            # for k in range(K):
+            #     alpha = (k + 1) / (K + 1)
+            #     translated_actions[k] = blend_abs_tcp_actions(
+            #         self._last_sent_action, translated_actions[k], alpha
+            #     )
 
         # Store THIS chunk's tail for blending with the NEXT chunk
         if self.overlap > 0:
