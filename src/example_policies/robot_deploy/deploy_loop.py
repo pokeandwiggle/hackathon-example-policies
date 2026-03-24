@@ -310,7 +310,7 @@ def main():
             )
             overlap = blender.overlap
             mode = "temporal-ensemble" if overlap > 0 else "offset-decay"
-            print(f"Temporal ensemble:  {mode} (chunk={chunk_size}, execute={n_action_steps}, overlap={overlap})")
+            print(f"Temporal ensemble:  {mode} (chunk={chunk_size}, execute={n_action_steps}, overlap={overlap}, decay_steps={args.decay_steps})")
 
     with RobotConnection(args.robot_server) as stub:
         policy_bundle.config.embodiment = embodiment
