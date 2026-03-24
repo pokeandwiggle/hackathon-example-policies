@@ -8,10 +8,15 @@ Covers:
     5. Reset and edge cases
 """
 
+import pathlib
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
 import pytest
 import torch
 from scipy.spatial.transform import Rotation as R
-import numpy as np
 
 from example_policies.robot_deploy.deploy_core.action_chunk_blender import (
     ActionChunkBlender,
@@ -70,7 +75,7 @@ class TestSlerpQuat:
         rng = np.random.default_rng(42)
         q = _random_quat(rng)
         for t in [0.0, 0.5, 1.0]:
-            result = slerp_quat(q, q, t)
+            result = slerp_quat(q, q, t).float()
             dot = torch.abs(torch.dot(result, q))
             torch.testing.assert_close(dot, torch.tensor(1.0), atol=ATOL, rtol=1e-5)
 
@@ -79,7 +84,7 @@ class TestSlerpQuat:
         rng = np.random.default_rng(42)
         q0 = _random_quat(rng)
         q1 = _random_quat(rng)
-        result = slerp_quat(q0, q1, 0.0)
+        result = slerp_quat(q0, q1, 0.0).float()
         dot = torch.abs(torch.dot(result, q0))
         torch.testing.assert_close(dot, torch.tensor(1.0), atol=ATOL, rtol=1e-5)
 
@@ -88,7 +93,7 @@ class TestSlerpQuat:
         rng = np.random.default_rng(42)
         q0 = _random_quat(rng)
         q1 = _random_quat(rng)
-        result = slerp_quat(q0, q1, 1.0)
+        result = slerp_quat(q0, q1, 1.0).float()
         dot = torch.abs(torch.dot(result, q1))
         torch.testing.assert_close(dot, torch.tensor(1.0), atol=ATOL, rtol=1e-5)
 
@@ -97,7 +102,7 @@ class TestSlerpQuat:
         rng = np.random.default_rng(42)
         q0 = _random_quat(rng)
         q1 = _random_quat(rng)
-        mid = slerp_quat(q0, q1, 0.5)
+        mid = slerp_quat(q0, q1, 0.5).float()
 
         # Geodesic distance from mid to q0 and q1 should be equal
         d0 = torch.acos((torch.abs(torch.dot(mid, q0))).clamp(max=1.0))
@@ -109,7 +114,7 @@ class TestSlerpQuat:
         rng = np.random.default_rng(42)
         q0 = _random_quat(rng)
         q1 = -_random_quat(rng)  # negate → opposite hemisphere
-        result = slerp_quat(q0, q1, 0.5)
+        result = slerp_quat(q0, q1, 0.5).float()
         assert result.shape == (4,)
         # Result should be a unit quaternion
         torch.testing.assert_close(result.norm(), torch.tensor(1.0), atol=ATOL, rtol=1e-5)
@@ -121,7 +126,7 @@ class TestSlerpQuat:
             q0 = _random_quat(rng)
             q1 = _random_quat(rng)
             t = rng.random()
-            result = slerp_quat(q0, q1, t)
+            result = slerp_quat(q0, q1, t).float()
             torch.testing.assert_close(result.norm(), torch.tensor(1.0), atol=ATOL, rtol=1e-5)
 
 
@@ -230,10 +235,10 @@ class TestActionChunkBlenderTemporalEnsemble:
 
         # The first 8 actions of chunk2 should be blended with the tail of chunk1
         # overlap = 16 - 8 = 8
-        # alpha for step k = (k+1) / (8+1) = (k+1)/9
+        # alpha for step k = (k+1) / 8
         for k in range(8):
             action = blender.pop_action()
-            alpha = (k + 1) / 9.0
+            alpha = (k + 1) / 8.0
             expected_pos = (1 - alpha) * 1.0 + alpha * 3.0
             torch.testing.assert_close(
                 action[0, DUAL_ABS_LEFT_POS_IDXS],
@@ -274,9 +279,9 @@ class TestActionChunkBlenderTemporalEnsemble:
         chunk2 = [_make_abs_tcp_action([0, 0, 0], q1, [0, 0, 0], q1) for _ in range(4)]
         blender.on_new_chunk(chunk2)
 
-        # Step 0 of chunk2: alpha = 1/3 → SLERP between identity and q1
+        # Step 0 of chunk2: alpha = 1/2 → SLERP between identity and q1
         a0 = blender.pop_action()
-        expected = slerp_quat(q0, q1, 1.0 / 3.0)
+        expected = slerp_quat(q0, q1, 1.0 / 2.0).float()
         dot = torch.abs(torch.dot(a0[0, DUAL_ABS_LEFT_QUAT_IDXS], expected))
         torch.testing.assert_close(dot, torch.tensor(1.0), atol=1e-4, rtol=1e-4)
 
@@ -306,8 +311,8 @@ class TestActionChunkBlenderOffsetDecay:
             atol=ATOL, rtol=1e-5,
         )
 
-    def test_second_chunk_decays_toward_last_sent(self):
-        """Second chunk should blend early steps toward the last-sent action."""
+    def test_second_chunk_raises_not_implemented(self):
+        """Offset-decay is disabled; second chunk should raise NotImplementedError."""
         blender = ActionChunkBlender(chunk_size=8, n_action_steps=8, decay_steps=4)
         identity_q = torch.tensor([0.0, 0.0, 0.0, 1.0])
 
@@ -320,32 +325,16 @@ class TestActionChunkBlenderOffsetDecay:
         for _ in range(8):
             blender.pop_action()  # last_sent_action will be at [1,1,1]
 
-        # Second chunk at position 5.0
+        # Second chunk at position 5.0 — should raise
         chunk2 = [
             _make_abs_tcp_action([5, 5, 5], identity_q, [5, 5, 5], identity_q)
             for _ in range(8)
         ]
-        blender.on_new_chunk(chunk2)
+        with pytest.raises(NotImplementedError):
+            blender.on_new_chunk(chunk2)
 
-        # decay_steps=4, alpha = (k+1)/(4+1)
-        # Step 0: alpha = 1/5 = 0.2  → pos = 0.8*1 + 0.2*5 = 1.8
-        a0 = blender.pop_action()
-        torch.testing.assert_close(
-            a0[0, DUAL_ABS_LEFT_POS_IDXS],
-            torch.full((3,), 1.8),
-            atol=1e-4, rtol=1e-4,
-        )
-
-        # Step 1: alpha = 2/5 = 0.4  → pos = 0.6*1 + 0.4*5 = 2.6
-        a1 = blender.pop_action()
-        torch.testing.assert_close(
-            a1[0, DUAL_ABS_LEFT_POS_IDXS],
-            torch.full((3,), 2.6),
-            atol=1e-4, rtol=1e-4,
-        )
-
-    def test_actions_beyond_decay_window_unmodified(self):
-        """Steps beyond the decay window should be unmodified."""
+    def test_actions_beyond_decay_raises_not_implemented(self):
+        """Offset-decay is disabled; second chunk should raise NotImplementedError."""
         blender = ActionChunkBlender(chunk_size=8, n_action_steps=8, decay_steps=2)
         identity_q = torch.tensor([0.0, 0.0, 0.0, 1.0])
 
@@ -355,19 +344,8 @@ class TestActionChunkBlenderOffsetDecay:
             blender.pop_action()
 
         chunk2 = [_make_abs_tcp_action([10, 10, 10], identity_q, [10, 10, 10], identity_q) for _ in range(8)]
-        blender.on_new_chunk(chunk2)
-
-        # Pop past the 2 decay steps
-        blender.pop_action()
-        blender.pop_action()
-
-        # Step 2 onward should be unmodified
-        a2 = blender.pop_action()
-        torch.testing.assert_close(
-            a2[0, DUAL_ABS_LEFT_POS_IDXS],
-            torch.tensor([10.0, 10.0, 10.0]),
-            atol=ATOL, rtol=1e-5,
-        )
+        with pytest.raises(NotImplementedError):
+            blender.on_new_chunk(chunk2)
 
 
 # =============================================================================
@@ -486,11 +464,192 @@ class TestActionChunkBlenderReset:
                 actions.append(a[0, 0].item())  # left_x
 
         # The final 4 actions (chunk=20.0) should be blended with tail of chunk=10.0
-        # overlap steps: k=0 → alpha=1/3, blended = (2/3)*10 + (1/3)*20 = 13.33
-        #                k=1 → alpha=2/3, blended = (1/3)*10 + (2/3)*20 = 16.67
+        # overlap steps: k=0 → alpha=1/2, blended = 0.5*10 + 0.5*20 = 15.0
+        #                k=1 → alpha=2/2, blended = 0.0*10 + 1.0*20 = 20.0
         # Non-overlap steps: 20.0, 20.0
         final_actions = actions[-4:]
-        assert abs(final_actions[0] - 40 / 3) < 0.1  # ≈13.33
-        assert abs(final_actions[1] - 50 / 3) < 0.1  # ≈16.67
+        assert abs(final_actions[0] - 15.0) < 0.1
+        assert abs(final_actions[1] - 20.0) < 0.1
         assert abs(final_actions[2] - 20.0) < ATOL
         assert abs(final_actions[3] - 20.0) < ATOL
+
+
+# =============================================================================
+# 6. Blending Visualization
+# =============================================================================
+
+
+PLOT_DIR = pathlib.Path(__file__).resolve().parent.parent / "plots"
+
+
+class TestBlendingVisualization:
+    """Generate a plot showing temporal-ensemble blending behaviour."""
+
+    def _make_constant_chunk(self, pos_val: float, chunk_size: int) -> list[torch.Tensor]:
+        identity_q = torch.tensor([0.0, 0.0, 0.0, 1.0])
+        return [
+            _make_abs_tcp_action(
+                [pos_val, pos_val, pos_val], identity_q,
+                [pos_val, pos_val, pos_val], identity_q,
+            )
+            for _ in range(chunk_size)
+        ]
+
+    def test_plot_linear_blending_two_chunks(self):
+        """Plot blended output for two constant chunks (0 and 1) and save figure."""
+        blender = ActionChunkBlender(chunk_size=16, n_action_steps=8)
+
+        # Chunk 1: all zeros
+        chunk1 = self._make_constant_chunk(0.0, 16)
+        blender.on_new_chunk(chunk1)
+        blended_values = []
+        for _ in range(8):
+            a = blender.pop_action()
+            blended_values.append(a[0, DUAL_ABS_LEFT_POS_IDXS][0].item())
+
+        # Chunk 2: all ones
+        chunk2 = self._make_constant_chunk(1.0, 16)
+        blender.on_new_chunk(chunk2)
+        for _ in range(8):
+            a = blender.pop_action()
+            blended_values.append(a[0, DUAL_ABS_LEFT_POS_IDXS][0].item())
+
+        # Raw (unblended) reference: hard jump at step 8
+        raw_values = [0.0] * 8 + [1.0] * 8
+        steps = list(range(16))
+
+        # --- Plot ---
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.step(steps, raw_values, where="mid", linestyle="--", color="gray",
+                linewidth=1.5, label="Raw (no blending)")
+        ax.plot(steps, blended_values, marker="o", markersize=5, linewidth=2,
+                color="#4878d0", label="Blended (temporal ensemble)")
+        ax.set_xlabel("Global step index")
+        ax.set_ylabel("Left position x")
+        ax.set_title("Temporal ensemble blending: chunk 0→1 (chunk_size=16, n_action_steps=8)")
+        ax.legend()
+        ax.set_ylim(-0.1, 1.1)
+        ax.grid(True, alpha=0.3)
+        fig.tight_layout()
+
+        # Save
+        PLOT_DIR.mkdir(parents=True, exist_ok=True)
+        out_path = PLOT_DIR / "test_blending_visualization.png"
+        fig.savefig(out_path, dpi=150)
+        plt.close(fig)
+
+        assert out_path.exists()
+        print(f"\nBlending plot saved to: {out_path}")
+
+    def _run_two_chunks(self, chunk_size: int, n_action_steps: int) -> tuple[list[float], list[float]]:
+        """Run two constant chunks (0→1) through the blender and return (steps, blended)."""
+        blender = ActionChunkBlender(chunk_size=chunk_size, n_action_steps=n_action_steps)
+        blended = []
+
+        chunk1 = self._make_constant_chunk(0.0, chunk_size)
+        blender.on_new_chunk(chunk1)
+        for _ in range(n_action_steps):
+            a = blender.pop_action()
+            blended.append(a[0, DUAL_ABS_LEFT_POS_IDXS][0].item())
+
+        chunk2 = self._make_constant_chunk(1.0, chunk_size)
+        blender.on_new_chunk(chunk2)
+        for _ in range(n_action_steps):
+            a = blender.pop_action()
+            blended.append(a[0, DUAL_ABS_LEFT_POS_IDXS][0].item())
+
+        steps = list(range(2 * n_action_steps))
+        return steps, blended
+
+    def test_plot_varying_chunk_sizes(self):
+        """Plot blending for different chunk_size / n_action_steps ratios."""
+        configs = [
+            (8,  4),   # overlap = 4
+            (16, 8),   # overlap = 8
+            (16, 4),   # overlap = 12
+            (32, 8),   # overlap = 24
+        ]
+
+        fig, axes = plt.subplots(2, 2, figsize=(14, 8))
+        axes = axes.flatten()
+
+        for ax, (cs, nas) in zip(axes, configs):
+            overlap = cs - nas
+            steps, blended = self._run_two_chunks(cs, nas)
+            raw = [0.0] * nas + [1.0] * nas
+
+            ax.step(steps, raw, where="mid", linestyle="--", color="gray",
+                    linewidth=1.5, label="Raw (no blending)")
+            ax.plot(steps, blended, marker="o", markersize=4, linewidth=2,
+                    color="#4878d0", label="Blended")
+            ax.axvline(x=nas - 0.5, color="#d65f5f", linestyle=":", alpha=0.7,
+                       label="Chunk boundary")
+            ax.set_title(f"chunk={cs}, execute={nas}, overlap={overlap}")
+            ax.set_xlabel("Global step")
+            ax.set_ylabel("Left pos x")
+            ax.set_ylim(-0.1, 1.1)
+            ax.legend(fontsize=8)
+            ax.grid(True, alpha=0.3)
+
+        fig.suptitle("Temporal ensemble blending: varying chunk sizes", fontsize=14)
+        fig.tight_layout()
+
+        PLOT_DIR.mkdir(parents=True, exist_ok=True)
+        out_path = PLOT_DIR / "test_blending_varying_chunk_sizes.png"
+        fig.savefig(out_path, dpi=150)
+        plt.close(fig)
+        assert out_path.exists()
+        print(f"\nPlot saved to: {out_path}")
+
+    def test_plot_multi_chunk_sequence(self):
+        """Plot blending across a longer sequence of alternating chunks (0, 1, 0, 1, ...)."""
+        configs = [
+            (8,  4),
+            (16, 8),
+            (16, 4),
+            (32, 8),
+        ]
+
+        fig, axes = plt.subplots(2, 2, figsize=(14, 8))
+        axes = axes.flatten()
+        chunk_values = [0.0, 1.0, 0.0, 1.0, 0.0, 1.0]
+
+        for ax, (cs, nas) in zip(axes, configs):
+            overlap = cs - nas
+            blender = ActionChunkBlender(chunk_size=cs, n_action_steps=nas)
+            blended = []
+            raw = []
+
+            for val in chunk_values:
+                chunk = self._make_constant_chunk(val, cs)
+                blender.on_new_chunk(chunk)
+                for _ in range(nas):
+                    a = blender.pop_action()
+                    blended.append(a[0, DUAL_ABS_LEFT_POS_IDXS][0].item())
+                    raw.append(val)
+
+            steps = list(range(len(blended)))
+            ax.step(steps, raw, where="mid", linestyle="--", color="gray",
+                    linewidth=1.5, label="Raw")
+            ax.plot(steps, blended, marker=".", markersize=3, linewidth=1.5,
+                    color="#4878d0", label="Blended")
+            # Mark chunk boundaries
+            for i in range(1, len(chunk_values)):
+                ax.axvline(x=i * nas - 0.5, color="#d65f5f", linestyle=":",
+                           alpha=0.5)
+            ax.set_title(f"chunk={cs}, execute={nas}, overlap={overlap}")
+            ax.set_xlabel("Global step")
+            ax.set_ylabel("Left pos x")
+            ax.set_ylim(-0.2, 1.2)
+            ax.legend(fontsize=8)
+            ax.grid(True, alpha=0.3)
+
+        fig.suptitle("Temporal ensemble: multi-chunk sequence (0→1→0→1→0→1)", fontsize=14)
+        fig.tight_layout()
+
+        PLOT_DIR.mkdir(parents=True, exist_ok=True)
+        out_path = PLOT_DIR / "test_blending_multi_chunk_sequence.png"
+        fig.savefig(out_path, dpi=150)
+        plt.close(fig)
+        assert out_path.exists()
+        print(f"\nPlot saved to: {out_path}")
