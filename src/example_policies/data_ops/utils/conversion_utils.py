@@ -48,12 +48,30 @@ def _extract_episode_metadata(metadata_record) -> dict | None:
     """
     if metadata_record.name == "pw_episode_info":
         schema_version = metadata_record.metadata.get("schema_version")
-        if schema_version and schema_version.startswith("1."):
-            from schemas.pw_episode_info_1_0 import RecorderInfo
-        elif schema_version and schema_version.startswith("2."):
-            from schemas.pw_episode_info_2_0 import RecorderInfo
-        else:
-            raise ValueError(f"Unsupported schema_version: {schema_version}")
+        try:
+            if schema_version and schema_version.startswith("1."):
+                from schemas.pw_episode_info_1_0 import RecorderInfo
+            elif schema_version and schema_version.startswith("2."):
+                from schemas.pw_episode_info_2_0 import RecorderInfo
+            else:
+                raise ValueError(f"Unsupported schema_version: {schema_version}")
+        except ImportError:
+            # schemas package not available — fall back to JSON parsing
+            data_str = metadata_record.metadata.get("data")
+            if data_str:
+                try:
+                    info = json.loads(data_str)
+                    episode = info.get("episode", {})
+                    rating = episode.get("rating")
+                    return {
+                        "rating": rating,
+                        "embodiment_name": info.get("embodiment", {}).get("name"),
+                        "end_effector_left": info.get("embodiment", {}).get("end_effector_left"),
+                        "end_effector_right": info.get("embodiment", {}).get("end_effector_right"),
+                    }
+                except json.JSONDecodeError:
+                    pass
+            return None
         data_str = metadata_record.metadata.get("data")
         if data_str:
             try:
@@ -740,6 +758,9 @@ def check_subtask_completeness(episode_path: pathlib.Path) -> tuple[bool, dict]:
                                 f"Unsupported schema_version: {schema_version}"
                             )
                         info = RecorderInfo.model_validate_json(data_str)
+                    except ImportError:
+                        logger.warning("schemas package not available, skipping subtask check")
+                        continue
                     except ValidationError as e:
                         logger.warning("pw_episode_info failed validation: %s", e)
                         continue
