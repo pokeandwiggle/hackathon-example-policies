@@ -178,6 +178,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Enable temporal-ensemble blending to smooth action chunk boundaries",
     )
+    parser.add_argument(
+        "--decay-steps",
+        type=int,
+        default=8,
+        metavar="N",
+        help="Number of offset-decay blending steps when chunk_size == n_action_steps (default: 8)",
+    )
 
     return parser
 
@@ -299,6 +306,7 @@ def main():
             blender = ActionChunkBlender(
                 chunk_size=chunk_size,
                 n_action_steps=n_action_steps,
+                decay_steps=args.decay_steps,
             )
             overlap = blender.overlap
             mode = "temporal-ensemble" if overlap > 0 else "offset-decay"
