@@ -25,7 +25,7 @@ from example_policies.data_ops.utils.conversion_utils import (
     build_output_path,
     copy_blacklist,
     filter_episode_paths,
-    get_sorted_episodes,
+    get_episodes,
     resolve_blacklist_path,
     validate_input_dir,
     validate_output_dir,
@@ -88,7 +88,7 @@ def main():
     print(f"Task: \t\t {config.task_name}")
     print("-" * 40)
 
-    episode_paths = get_sorted_episodes(config.episodes_dir)
+    episode_paths = get_episodes(config.episodes_dir)
     episode_paths = filter_episode_paths(
         episode_paths,
         config.operator_blacklist,
