@@ -212,6 +212,12 @@ class ActionChunkBlender:
             print("=== ActionChunkBlender: No previous chunk tail to blend with ===")
             print("This is expected for the first chunk of a rollout.")
             print(f"Last action: {self._last_sent_action}")
+            K = min(self.decay_steps, self.n_action_steps)
+            for k in range(K):
+                alpha = (k + 1) / K
+                translated_actions[k] = blend_abs_tcp_actions(
+                    self._last_sent_action, translated_actions[k], alpha
+                )
 
         # Store THIS chunk's tail for blending with the NEXT chunk
         if self.overlap > 0:
