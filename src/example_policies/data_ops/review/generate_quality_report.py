@@ -1183,15 +1183,25 @@ def main() -> None:
                 box_data,
                 vert=True,
                 patch_artist=True,
-                showfliers=True,
-                flierprops=dict(
-                    marker=".", markersize=3, alpha=0.4,
-                    markerfacecolor=PALETTE[3], markeredgecolor="none",
-                ),
+                showfliers=False,
                 medianprops=dict(color="#333333", linewidth=1.5),
                 whiskerprops=dict(color="#888888"),
                 capprops=dict(color="#888888"),
             )
+            # Overlay outliers as a single rasterized scatter per topic
+            for i, data in enumerate(box_data):
+                q1, q3 = np.percentile(data, [25, 75])
+                iqr = q3 - q1
+                mask = (data < q1 - 1.5 * iqr) | (data > q3 + 1.5 * iqr)
+                outliers = data[mask]
+                if len(outliers) > 0:
+                    ax_drift_box.scatter(
+                        np.full(len(outliers), i + 1),
+                        outliers,
+                        marker=".", s=3, alpha=0.4,
+                        color=PALETTE[3], edgecolors="none",
+                        rasterized=True, zorder=3,
+                    )
             for patch, color in zip(
                 bp["boxes"],
                 [PALETTE[i % len(PALETTE)] for i in range(len(box_data))],
