@@ -261,6 +261,20 @@ def main() -> None:
         metavar="VER",
         help="Only include episodes with this schema_version (e.g. 2.0)",
     )
+    parser.add_argument(
+        "--pages",
+        type=str,
+        default=None,
+        metavar="PAGES",
+        help="Comma-separated page numbers to include, e.g. '2' or '1,2' "
+             "(1=summary, 2=drift, 3+=episodes). Default: all.",
+    )
+    parser.add_argument(
+        "--dpi",
+        type=int,
+        default=200,
+        help="PDF resolution in DPI (default: 200, try 100 for smaller files)",
+    )
     args = parser.parse_args()
 
     RAW_DATA_DIR = args.dataset_path.resolve()
@@ -269,6 +283,11 @@ def main() -> None:
     MAX_EPISODES = args.max_episodes
     SUCCESS_ONLY = not args.no_success_filter
     EXCELLENT_ONLY = not args.no_excellent_filter
+
+    PDF_DPI = args.dpi
+    SELECTED_PAGES: set[int] | None = None
+    if args.pages is not None:
+        SELECTED_PAGES = {int(p.strip()) for p in args.pages.split(",")}
 
     actual_tolerance_ms = (
         TOLERANCE_MS if TOLERANCE_MS is not None else (1000.0 / TARGET_FPS)
@@ -1049,9 +1068,12 @@ def main() -> None:
     # Save PDF
     # ══════════════════════════════════════════════════════════════════
     pdf_path = OUTPUT_DIR / f"dataset_quality_report_{DATASET_LABEL}.pdf"
+    n_pages = 0
     with PdfPages(pdf_path) as pdf:
         # Page 1: one-pager summary
-        pdf.savefig(fig, dpi=200, facecolor=fig.get_facecolor())
+        if SELECTED_PAGES is None or 1 in SELECTED_PAGES:
+            pdf.savefig(fig, dpi=PDF_DPI, facecolor=fig.get_facecolor())
+            n_pages += 1
         plt.close(fig)
 
         # Page 2: sensor-vs-log time drift summary
@@ -1193,12 +1215,14 @@ def main() -> None:
                 transform=ax_drift_box.transAxes,
             )
 
-        pdf.savefig(fig_drift, dpi=200, facecolor=fig_drift.get_facecolor())
+        if SELECTED_PAGES is None or 2 in SELECTED_PAGES:
+            pdf.savefig(fig_drift, dpi=PDF_DPI, facecolor=fig_drift.get_facecolor())
+            n_pages += 1
         plt.close(fig_drift)
 
         # Pages 3+: per-episode spike timelines for violating episodes
         pdf_drill_eps = sorted(dropped_episodes)
-        for ep_idx in pdf_drill_eps:
+        for drill_idx, ep_idx in enumerate(pdf_drill_eps):
             ep_ts = episode_timestamps.get(ep_idx)
             if ep_ts is None:
                 continue
@@ -1287,13 +1311,13 @@ def main() -> None:
 
             axes_ep[-1, 0].set_xlabel("Elapsed time (s)")
             fig_ep.tight_layout(rect=[0, 0, 1, 0.95])
-            pdf.savefig(fig_ep, dpi=200, facecolor=fig_ep.get_facecolor())
+            if SELECTED_PAGES is None or (3 + drill_idx) in SELECTED_PAGES:
+                pdf.savefig(fig_ep, dpi=PDF_DPI, facecolor=fig_ep.get_facecolor())
+                n_pages += 1
             plt.close(fig_ep)
 
-    n_pages = 2 + len(pdf_drill_eps)
     print(
-        f"\n✅ PDF saved to: {pdf_path}  "
-        f"({n_pages} pages: 1 summary + 1 drift + {n_pages - 2} episode drill-downs)"
+        f"\n✅ PDF saved to: {pdf_path}  ({n_pages} pages)"
     )
 
 
