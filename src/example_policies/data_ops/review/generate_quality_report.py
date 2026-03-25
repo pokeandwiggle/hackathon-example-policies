@@ -1054,7 +1054,149 @@ def main() -> None:
         pdf.savefig(fig, dpi=200, facecolor=fig.get_facecolor())
         plt.close(fig)
 
-        # Pages 2+: per-episode spike timelines for violating episodes
+        # Page 2: sensor-vs-log time drift summary
+        fig_drift = plt.figure(figsize=(16.53, 11.69))
+        fig_drift.set_facecolor("#f0f0f0")
+        fig_drift.suptitle(
+            f"Sensor ↔ Log Time Drift — {DATASET_TITLE}",
+            fontsize=16,
+            fontweight="bold",
+            y=0.97,
+            color="#333333",
+        )
+        fig_drift.text(
+            0.5,
+            0.935,
+            f"Generated {datetime.datetime.now():%Y-%m-%d %H:%M}  |  "
+            f"{len(episode_paths)} episodes  |  "
+            f"Drift = |sensor_timestamp − log_time| per message",
+            ha="center",
+            fontsize=9,
+            color="#777",
+        )
+
+        gs_drift = GridSpec(
+            2, 1, figure=fig_drift,
+            height_ratios=[1, 1.4],
+            hspace=0.30,
+            left=0.06, right=0.96, top=0.90, bottom=0.06,
+        )
+
+        # ── Top: drift statistics table ──────────────────────────────
+        ax_drift_tbl = fig_drift.add_subplot(gs_drift[0])
+        ax_drift_tbl.set_facecolor("#f0f0f0")
+        ax_drift_tbl.axis("off")
+
+        drift_tbl_data = []
+        for label, _ in TOPICS:
+            drifts = agg_ts_drift.get(label, [])
+            if drifts:
+                d = np.array(drifts) * 1000  # convert to ms
+                drift_tbl_data.append([
+                    label,
+                    f"{len(d):,}",
+                    f"{np.min(d):.2f}",
+                    f"{np.mean(d):.2f}",
+                    f"{np.median(d):.2f}",
+                    f"{np.max(d):.2f}",
+                    f"{np.std(d):.2f}",
+                ])
+            else:
+                drift_tbl_data.append([label, "0", "—", "—", "—", "—", "—"])
+
+        drift_col_labels = [
+            "Topic", "N (sensor)", "Min (ms)", "Mean (ms)",
+            "Median (ms)", "Max (ms)", "Std (ms)",
+        ]
+        drift_table = ax_drift_tbl.table(
+            cellText=drift_tbl_data,
+            colLabels=drift_col_labels,
+            loc="center",
+            cellLoc="center",
+        )
+        drift_table.auto_set_font_size(False)
+        drift_table.set_fontsize(8)
+        drift_table.auto_set_column_width(list(range(len(drift_col_labels))))
+        drift_table.scale(1, 1.3)
+
+        for col_idx in range(len(drift_col_labels)):
+            hdr = drift_table[0, col_idx]
+            hdr.set_facecolor(PALETTE[0])
+            hdr.set_text_props(color="white", fontweight="bold")
+            hdr.set_edgecolor(PALETTE[0])
+        for row_idx in range(len(drift_tbl_data)):
+            for col_idx in range(len(drift_col_labels)):
+                c = drift_table[row_idx + 1, col_idx]
+                c.set_facecolor("#f8f8f8" if row_idx % 2 == 0 else "white")
+                c.set_edgecolor("#dddddd")
+            # Highlight max drift > 100 ms
+            if drift_tbl_data[row_idx][5] not in ("—",):
+                max_val = float(drift_tbl_data[row_idx][5])
+                cell_max = drift_table[row_idx + 1, 5]
+                if max_val >= 100:
+                    cell_max.set_facecolor("#f5b7b1")
+                elif max_val >= 10:
+                    cell_max.set_facecolor("#fdebd0")
+                else:
+                    cell_max.set_facecolor("#d5f5e3")
+
+        ax_drift_tbl.set_title(
+            "Per-Topic Drift Statistics  (|sensor_time − log_time|)",
+            fontsize=11, fontweight="medium", pad=12,
+        )
+
+        # ── Bottom: box plot of drift per topic ──────────────────────
+        ax_drift_box = fig_drift.add_subplot(gs_drift[1])
+
+        box_labels = []
+        box_data = []
+        for label in topic_order_fwd:
+            drifts = agg_ts_drift.get(label, [])
+            if drifts:
+                box_labels.append(label)
+                box_data.append(np.array(drifts) * 1000)
+
+        if box_data:
+            bp = ax_drift_box.boxplot(
+                box_data,
+                vert=True,
+                patch_artist=True,
+                showfliers=True,
+                flierprops=dict(
+                    marker=".", markersize=3, alpha=0.4,
+                    markerfacecolor=PALETTE[3], markeredgecolor="none",
+                ),
+                medianprops=dict(color="#333333", linewidth=1.5),
+                whiskerprops=dict(color="#888888"),
+                capprops=dict(color="#888888"),
+            )
+            for patch, color in zip(
+                bp["boxes"],
+                [PALETTE[i % len(PALETTE)] for i in range(len(box_data))],
+            ):
+                patch.set_facecolor(color)
+                patch.set_alpha(0.6)
+                patch.set_edgecolor("#555555")
+
+            ax_drift_box.set_xticklabels(box_labels, rotation=30, ha="right", fontsize=8)
+            ax_drift_box.set_ylabel("Drift (ms)", fontsize=9)
+            ax_drift_box.set_title(
+                "Drift Distribution per Topic",
+                fontsize=11, fontweight="medium", pad=8,
+            )
+            ax_drift_box.tick_params(axis="y", labelsize=8)
+        else:
+            ax_drift_box.axis("off")
+            ax_drift_box.text(
+                0.5, 0.5, "No sensor timestamps available",
+                ha="center", va="center", fontsize=12, color="#aaa",
+                transform=ax_drift_box.transAxes,
+            )
+
+        pdf.savefig(fig_drift, dpi=200, facecolor=fig_drift.get_facecolor())
+        plt.close(fig_drift)
+
+        # Pages 3+: per-episode spike timelines for violating episodes
         pdf_drill_eps = sorted(dropped_episodes)
         for ep_idx in pdf_drill_eps:
             ep_ts = episode_timestamps.get(ep_idx)
@@ -1148,10 +1290,10 @@ def main() -> None:
             pdf.savefig(fig_ep, dpi=200, facecolor=fig_ep.get_facecolor())
             plt.close(fig_ep)
 
-    n_pages = 1 + len(pdf_drill_eps)
+    n_pages = 2 + len(pdf_drill_eps)
     print(
         f"\n✅ PDF saved to: {pdf_path}  "
-        f"({n_pages} pages: 1 summary + {n_pages - 1} episode drill-downs)"
+        f"({n_pages} pages: 1 summary + 1 drift + {n_pages - 2} episode drill-downs)"
     )
 
 
