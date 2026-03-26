@@ -34,15 +34,10 @@ _CUSTOM_MSG_DEFS: dict[str, str] = {
         "string format\n"
     ),
     "teleop_controller_msgs/msg/PoseTwist": (
-        "std_msgs/Header header\n"
-        "geometry_msgs/Pose pose\n"
-        "geometry_msgs/Twist twist\n"
+        "std_msgs/Header header\ngeometry_msgs/Pose pose\ngeometry_msgs/Twist twist\n"
     ),
     "teleop_controller_msgs/msg/GripperValues": (
-        "std_msgs/Header header\n"
-        "float64 width\n"
-        "float64 speed\n"
-        "float64 force\n"
+        "std_msgs/Header header\nfloat64 width\nfloat64 speed\nfloat64 force\n"
     ),
 }
 

@@ -228,13 +228,14 @@ def run_check(
     # ── 2. Grab live image from robot ─────────────────────────────
     print(f"Connecting to robot at {server_address} …")
     channel = grpc.insecure_channel(server_address)
-    stub = robot_service_pb2_grpc.RobotServiceStub(channel)
-
-    print(f"Grabbing live image (camera: {camera_key}) …")
-    live_img = _grab_live_image(stub, camera_key, target_h=h, target_w=w)
-    live_img = _to_uint8(live_img)
-    channel.close()
-    print(f"  Live image shape: {live_img.shape}")
+    try:
+        stub = robot_service_pb2_grpc.RobotServiceStub(channel)
+        print(f"Grabbing live image (camera: {camera_key}) …")
+        live_img = _grab_live_image(stub, camera_key, target_h=h, target_w=w)
+        live_img = _to_uint8(live_img)
+        print(f"  Live image shape: {live_img.shape}")
+    finally:
+        channel.close()
 
     # ── 3. Compute comparison metrics ─────────────────────────────
     ds_f = dataset_img.astype(np.float64)
