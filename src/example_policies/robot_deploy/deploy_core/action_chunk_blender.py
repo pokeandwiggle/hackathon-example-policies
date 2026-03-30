@@ -135,11 +135,13 @@ class ActionChunkBlender:
         chunk_size: int,
         n_action_steps: int,
         decay_steps: int = 8,
+        blend_steps: Optional[int] = None,
     ):
         self.chunk_size = chunk_size
         self.n_action_steps = n_action_steps
         self.overlap = max(0, chunk_size - n_action_steps)
         self.decay_steps = decay_steps
+        self.blend_steps = blend_steps
 
         # Translated actions for the current chunk (set by on_new_chunk)
         self._current_chunk: Optional[list[torch.Tensor]] = None
@@ -183,6 +185,8 @@ class ActionChunkBlender:
             n_blend = min(
                 self.overlap, len(self._prev_chunk_tail), len(translated_actions)
             )
+            if self.blend_steps is not None:
+                n_blend = min(n_blend, self.blend_steps)
             print("=== ActionChunkBlender: Temporal Ensemble Blending ===")
             print(f"Blending {n_blend} overlapping steps with temporal ensemble")
             print(f"Previous chunk tail length: {len(self._prev_chunk_tail)}")

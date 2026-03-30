@@ -185,6 +185,13 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="Number of offset-decay blending steps when chunk_size == n_action_steps (default: 8)",
     )
+    parser.add_argument(
+        "--blend-steps",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Max number of temporal-ensemble blend steps (default: blend all overlapping steps)",
+    )
 
     return parser
 
@@ -307,10 +314,12 @@ def main():
                 chunk_size=chunk_size,
                 n_action_steps=n_action_steps,
                 decay_steps=args.decay_steps,
+                blend_steps=args.blend_steps,
             )
             overlap = blender.overlap
             mode = "temporal-ensemble" if overlap > 0 else "offset-decay"
-            print(f"Temporal ensemble:  {mode} (chunk={chunk_size}, execute={n_action_steps}, overlap={overlap}, decay_steps={args.decay_steps})")
+            blend_info = f", blend_steps={args.blend_steps}" if args.blend_steps is not None else ""
+            print(f"Temporal ensemble:  {mode} (chunk={chunk_size}, execute={n_action_steps}, overlap={overlap}, decay_steps={args.decay_steps}{blend_info})")
 
     with RobotConnection(args.robot_server) as stub:
         policy_bundle.config.embodiment = embodiment
