@@ -1176,9 +1176,9 @@ def main() -> None:
                 ax.axhline(
                     actual_tolerance_ms,
                     ls="--",
-                    lw=1.5,
+                    lw=1.0,
                     color=_CLR_THRESH,
-                    alpha=0.9,
+                    alpha=0.8,
                     zorder=5,
                     label=f"Threshold ({actual_tolerance_ms:.0f} ms)" if ax_row == 0 else None,
                 )
