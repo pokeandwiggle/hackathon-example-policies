@@ -772,8 +772,8 @@ def main() -> None:
         height_ratios=[0.13, 1.0, 1.6],
         hspace=0.45,
         wspace=0.25,
-        left=0.05,
-        right=0.97,
+        left=0.02,
+        right=0.98,
         top=0.95,
         bottom=0.04,
     )
@@ -787,23 +787,7 @@ def main() -> None:
         color="#333333",
     )
 
-    # Verdict badge
-    fig.text(
-        0.93,
-        0.985,
-        verdict,
-        fontsize=14,
-        fontweight="bold",
-        color="white",
-        ha="center",
-        va="center",
-        bbox=dict(
-            boxstyle="round,pad=0.4",
-            facecolor=verdict_color,
-            edgecolor="none",
-            alpha=0.9,
-        ),
-    )
+    # Verdict badge removed — verdict shown in summary row instead
 
     # ── ROW 0: Summary (full width, window style) ────────────────
     ax_stats = fig.add_subplot(gs[0, :])
@@ -813,21 +797,24 @@ def main() -> None:
     ax_stats.patch.set_linewidth(2)
 
     stats_items = [
-        ("Generated", datetime.datetime.now().strftime("%Y-%m-%d %H:%M")),
-        ("Episodes", f"{n_total_episodes}  (filtered: {n_filtered_out})"),
-        ("Operator", f"{OPERATOR_NAME}"),
-        ("Target / Tolerance", f"{TARGET_FPS} Hz / {actual_tolerance_ms:.0f} ms"),
-        ("Worst interval", f"{max((v['worst_ms'] for v in per_topic_viol.values()), default=0):.1f} ms"),
-        ("Dataset Version", dataset_version_str or "—"),
+        ("Generated", datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), None),
+        ("Episodes", f"{n_total_episodes}  (filtered: {n_filtered_out})", None),
+        ("Operator", f"{OPERATOR_NAME}", None),
+        ("Target / Tolerance", f"{TARGET_FPS} Hz / {actual_tolerance_ms:.0f} ms", None),
+        ("Worst interval", f"{max((v['worst_ms'] for v in per_topic_viol.values()), default=0):.1f} ms", None),
+        ("Dataset Version", dataset_version_str or "—", None),
+        ("Verdict", verdict, verdict_color),
     ]
     n_stat_cols = len(stats_items)
-    for col_i, (lbl, val) in enumerate(stats_items):
+    for col_i, (lbl, val, val_color) in enumerate(stats_items):
         x = (col_i + 0.5) / n_stat_cols
         ax_stats.text(x, 0.80, lbl, ha="center", va="top",
                       fontsize=9, fontweight="bold", color="#555",
                       transform=ax_stats.transAxes)
         ax_stats.text(x, 0.35, val, ha="center", va="top",
-                      fontsize=10, fontfamily="monospace", color="#222",
+                      fontsize=10, fontfamily="monospace",
+                      color=val_color if val_color else "#222",
+                      fontweight="bold" if val_color else "normal",
                       transform=ax_stats.transAxes)
 
     # ── ROW 1 LEFT: Violin (per-message frequency, all whitelisted) ─
@@ -896,6 +883,10 @@ def main() -> None:
         "Per-Message Frequency Distribution", fontsize=12, fontweight="medium", pad=8
     )
     ax_viol.tick_params(axis="x", labelsize=9)
+    ax_viol.margins(y=0.05)
+    ax_viol.figure.subplots_adjust()  # no-op, kept for clarity
+    plt.setp(ax_viol.get_yticklabels(), ha="right")
+    ax_viol.yaxis.set_tick_params(pad=4)
 
     # ── ROW 2: Timestamp source table (full width) ─────────────────
     ax_tbl = fig.add_subplot(gs[2, :])
@@ -1056,7 +1047,7 @@ def main() -> None:
         "MCAP Topics — Sources & Violations",
         fontsize=12,
         fontweight="medium",
-        pad=12,
+        pad=4,
     )
 
     # ── ROW 1 RIGHT: Episode × topic heatmap ────────────────────────
