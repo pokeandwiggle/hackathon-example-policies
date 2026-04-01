@@ -799,7 +799,7 @@ def main() -> None:
 
     stats_items = [
         ("Generated", datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), None),
-        ("Episodes", f"{n_total_episodes}  (filtered: {n_filtered_out})", None),
+        ("Episodes", f"{n_total_episodes} (filtered: {n_filtered_out})", None),
         ("Operator", f"{OPERATOR_NAME}", None),
         ("Target / Tolerance", f"{TARGET_FPS} Hz / {actual_tolerance_ms:.0f} ms", None),
         ("Worst interval", f"{max((v['worst_ms'] for v in per_topic_viol.values()), default=0):.1f} ms", None),
