@@ -1129,7 +1129,7 @@ def main() -> None:
             fig_ep, axes_ep = plt.subplots(
                 n_topics,
                 1,
-                figsize=(16.53, 11.69),
+                figsize=(16.53, max(11.69, n_topics * 1.1)),
                 sharex=True,
                 squeeze=False,
             )
@@ -1200,7 +1200,7 @@ def main() -> None:
                     ax.legend(loc="upper right", fontsize=7)
 
             axes_ep[-1, 0].set_xlabel("Elapsed time (s)")
-            fig_ep.tight_layout(rect=[0, 0, 1, 0.95])
+            fig_ep.tight_layout(rect=[0.09, 0.03, 0.91, 0.97])
             page_num = 2 + drill_idx
             if SELECTED_PAGES is None or page_num in SELECTED_PAGES:
                 pdf.savefig(fig_ep, dpi=min(PDF_DPI, 100), facecolor=fig_ep.get_facecolor())
