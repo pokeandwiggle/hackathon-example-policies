@@ -1176,9 +1176,9 @@ def main() -> None:
                 ax.axhline(
                     actual_tolerance_ms,
                     ls="--",
-                    lw=1.2,
+                    lw=1.5,
                     color=_CLR_THRESH,
-                    alpha=0.5,
+                    alpha=0.9,
                 )
 
                 # Consistent y-axis: 0 to 2× tolerance so all subplots align
