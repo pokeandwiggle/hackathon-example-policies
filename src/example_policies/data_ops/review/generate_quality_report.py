@@ -775,8 +775,8 @@ def main() -> None:
         wspace=0.25,
         left=0.09,
         right=0.91,
-        top=0.91,
-        bottom=0.09,
+        top=0.94,
+        bottom=0.06,
     )
 
     # Title bar
@@ -810,10 +810,10 @@ def main() -> None:
     for col_i, (lbl, val, val_color) in enumerate(stats_items):
         x = (col_i + 0.5) / n_stat_cols
         ax_stats.text(x, 0.80, lbl, ha="center", va="top",
-                      fontsize=10, fontweight="bold", color="#555",
+                      fontsize=12, fontweight="bold", color="#555",
                       transform=ax_stats.transAxes)
         ax_stats.text(x, 0.35, val, ha="center", va="top",
-                      fontsize=10, fontfamily="monospace",
+                      fontsize=12, fontfamily="monospace",
                       color=val_color if val_color else "#222",
                       fontweight="bold" if val_color else "normal",
                       transform=ax_stats.transAxes)
@@ -1124,10 +1124,12 @@ def main() -> None:
             ep_duration = t_end - t0
             n_topics = len(active_raw_topics)
 
+            _PLOT_H_PER_TOPIC = 1.8  # inches per subplot
+            _TITLE_OVERHEAD = 1.2   # inches for suptitle + x-label
             fig_ep, axes_ep = plt.subplots(
                 n_topics,
                 1,
-                figsize=(16.53, max(11.69, n_topics * 1.1)),
+                figsize=(16.53, n_topics * _PLOT_H_PER_TOPIC + _TITLE_OVERHEAD),
                 sharex=True,
                 squeeze=False,
             )
@@ -1218,7 +1220,7 @@ def main() -> None:
 
             axes_ep[-1, 0].set_xlabel("Elapsed time (s)")
             axes_ep[0, 0].set_xlim(0, ep_duration)
-            fig_ep.tight_layout(rect=[0.09, 0.09, 0.91, 0.91])
+            fig_ep.tight_layout(rect=[0.09, 0.06, 0.91, 0.94])
             page_num = 2 + drill_idx
             if SELECTED_PAGES is None or page_num in SELECTED_PAGES:
                 pdf.savefig(fig_ep, dpi=min(PDF_DPI, 100), facecolor=fig_ep.get_facecolor())
