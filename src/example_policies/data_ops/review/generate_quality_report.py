@@ -882,13 +882,31 @@ def main() -> None:
                         pass
                 raw_agg_source[_t]["log"] += 1
 
-    # Print topics found in MCAP but not in whitelist
+    # Print topics found in MCAP but not in whitelist, with frequency stats
     all_raw_topics_sorted = sorted(all_mcap_topics)
     extra_topics = [t for t in all_raw_topics_sorted if t not in all_whitelisted_raw]
     if extra_topics:
-        print("\nTopics in MCAP not included in table:")
+        print("\nTopics in MCAP not included in report:")
+        print(f"  {'Topic':<55s} {'Msgs':>8s} {'Hz':>8s} {'Mean(ms)':>9s} {'Std(ms)':>8s} {'Max(ms)':>8s}")
+        print(f"  {'-'*55} {'-'*8} {'-'*8} {'-'*9} {'-'*8} {'-'*8}")
         for t in extra_topics:
-            print(f"  {t}")
+            # Gather all intervals across passing episodes
+            _ivs: list[float] = []
+            _n_msgs = 0
+            for ep_idx in range(n_total_episodes):
+                ts = episode_timestamps.get(ep_idx, {}).get(t)
+                if ts is not None and len(ts) >= 2:
+                    _ivs.extend((np.diff(ts) * 1000).tolist())
+                    _n_msgs += len(ts)
+            if _ivs:
+                _arr = np.array(_ivs)
+                _mean = float(np.mean(_arr))
+                _std = float(np.std(_arr))
+                _max = float(np.max(_arr))
+                _hz = 1000.0 / _mean if _mean > 0 else 0.0
+                print(f"  {t:<55s} {_n_msgs:>8,} {_hz:>8.1f} {_mean:>9.1f} {_std:>8.1f} {_max:>8.1f}")
+            else:
+                print(f"  {t:<55s} {raw_topic_msgs.get(t, 0):>8,} {'—':>8s} {'—':>9s} {'—':>8s} {'—':>8s}")
 
     tbl_ep_pcts: list[float] = []
     tbl_data = []
