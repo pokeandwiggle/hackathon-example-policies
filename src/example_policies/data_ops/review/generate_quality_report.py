@@ -1183,6 +1183,9 @@ def main() -> None:
                     alpha=0.5,
                 )
 
+                # Consistent y-axis: 0 to 2× tolerance so all subplots align
+                ax.set_ylim(0, actual_tolerance_ms * 2)
+
                 if raw_topic in ep_kf and len(ep_kf[raw_topic]) > 0:
                     kf_elapsed = ep_kf[raw_topic] - t0
                     for k_i, kf_t in enumerate(kf_elapsed):
@@ -1195,7 +1198,20 @@ def main() -> None:
                             label="Keyframe" if k_i == 0 else None,
                         )
 
-                ax.set_ylabel(raw_topic, fontsize=7)
+                # Use display name; fall back to raw topic
+                display_name = raw_topic_to_label.get(raw_topic, raw_topic)
+                # Place name as a left-aligned text inside the axes to avoid overlap
+                ax.set_ylabel("")
+                ax.tick_params(axis="y", labelsize=7)
+                ax.text(
+                    0.002, 0.97, display_name,
+                    transform=ax.transAxes,
+                    fontsize=8, fontweight="bold",
+                    va="top", ha="left",
+                    color="#333",
+                    bbox=dict(boxstyle="round,pad=0.15", facecolor="white",
+                              edgecolor="none", alpha=0.7),
+                )
                 if ax_row == 0:
                     ax.legend(loc="upper right", fontsize=7)
 
