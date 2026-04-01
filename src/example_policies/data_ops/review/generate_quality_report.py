@@ -892,6 +892,32 @@ def main() -> None:
         for _n in _names:
             raw_topic_to_label[_n] = _lbl
 
+    # Names for whitelisted topics not already covered by TOPICS labels
+    _extra_names: dict[str, str] = {
+        "/cam_left/aligned_depth_to_color/image_compressed": "Depth L",
+        "/cam_left/color/image_rect_compressed": "RGB L",
+        "/cam_right/aligned_depth_to_color/image_compressed": "Depth R",
+        "/cam_right/color/image_rect_compressed": "RGB R",
+        "/cam_static/color/image_rect_compressed": "RGB S",
+        "/desired_gripper_values_left": "Cmd Gripper L",
+        "/desired_gripper_values_right": "Cmd Gripper R",
+        "/desired_pose_twist_left": "Cmd TCP L",
+        "/desired_pose_twist_right": "Cmd TCP R",
+        "/joint_states": "Joint State",
+        "/joint_target_left": "Cmd Joint L",
+        "/joint_target_right": "Cmd Joint R",
+        "/arm_left/tcp_pose": "TCP L",
+        "/left/franka_robot_state_broadcaster/current_pose": "TCP L",
+        "/panda_left/tcp": "TCP L",
+        "/arm_right/tcp_pose": "TCP R",
+        "/right/franka_robot_state_broadcaster/current_pose": "TCP R",
+        "/panda_right/tcp": "TCP R",
+        "/cartesian_target_left": "Cmd TCP L",
+        "/cartesian_target_right": "Cmd TCP R",
+    }
+    for _t, _n in _extra_names.items():
+        raw_topic_to_label.setdefault(_t, _n)
+
     # Print topics found in MCAP but not in whitelist
     all_raw_topics_sorted = sorted(all_mcap_topics)
     extra_topics = [t for t in all_raw_topics_sorted if t not in set(WHITELISTED_TOPICS)]
