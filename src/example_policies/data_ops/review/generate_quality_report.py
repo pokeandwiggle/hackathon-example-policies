@@ -775,7 +775,7 @@ def main() -> None:
         left=0.09,
         right=0.91,
         top=0.91,
-        bottom=0.09,
+        bottom=0.06,
     )
 
     # Title bar
