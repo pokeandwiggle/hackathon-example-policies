@@ -503,75 +503,27 @@ def main() -> None:
         episode_keyframes[new_idx] = _raw_episode_keyframes[raw_idx]
 
     # ══════════════════════════════════════════════════════════════════
-    # Whitelist & name map (used for table, heatmap, and violin)
+    # Derive all mappings from TOPICS (single source of truth)
     # ══════════════════════════════════════════════════════════════════
-    WHITELISTED_TOPICS = [
-        # State (observations)
-        "/joint_states",
-        "/arm_left/tcp_pose",
-        "/left/franka_robot_state_broadcaster/current_pose",
-        "/panda_left/tcp",
-        "/arm_right/tcp_pose",
-        "/right/franka_robot_state_broadcaster/current_pose",
-        "/panda_right/tcp",
-        # Cameras
-        "/cam_left/color/image_rect_compressed",
-        "/cam_left/aligned_depth_to_color/image_compressed",
-        "/cam_right/color/image_rect_compressed",
-        "/cam_right/aligned_depth_to_color/image_compressed",
-        "/cam_static/color/image_rect_compressed",
-        # Commands (actions)
-        "/joint_target_left",
-        "/joint_target_right",
-        "/desired_pose_twist_left",
-        "/cartesian_target_left",
-        "/desired_pose_twist_right",
-        "/cartesian_target_right",
-        "/desired_gripper_values_left",
-        "/desired_gripper_values_right",
-    ]
-
-    # Build reverse mapping: raw topic name → display name
+    # raw topic → display name
     raw_topic_to_label: dict[str, str] = {}
     for _lbl, _names in TOPICS:
         for _n in _names:
             raw_topic_to_label[_n] = _lbl
-    _extra_names: dict[str, str] = {
-        "/cam_left/aligned_depth_to_color/image_compressed": "Depth L",
-        "/cam_left/color/image_rect_compressed": "RGB L",
-        "/cam_right/aligned_depth_to_color/image_compressed": "Depth R",
-        "/cam_right/color/image_rect_compressed": "RGB R",
-        "/cam_static/color/image_rect_compressed": "RGB S",
-        "/desired_gripper_values_left": "Cmd Gripper L",
-        "/desired_gripper_values_right": "Cmd Gripper R",
-        "/desired_pose_twist_left": "Cmd TCP L",
-        "/desired_pose_twist_right": "Cmd TCP R",
-        "/joint_states": "Joint State",
-        "/joint_target_left": "Cmd Joint L",
-        "/joint_target_right": "Cmd Joint R",
-        "/arm_left/tcp_pose": "TCP L",
-        "/left/franka_robot_state_broadcaster/current_pose": "TCP L",
-        "/panda_left/tcp": "TCP L",
-        "/arm_right/tcp_pose": "TCP R",
-        "/right/franka_robot_state_broadcaster/current_pose": "TCP R",
-        "/panda_right/tcp": "TCP R",
-        "/cartesian_target_left": "Cmd TCP L",
-        "/cartesian_target_right": "Cmd TCP R",
-    }
-    for _t, _n in _extra_names.items():
-        raw_topic_to_label.setdefault(_t, _n)
 
-    whitelisted_present = [t for t in WHITELISTED_TOPICS if t in all_mcap_topics]
-    # Unique display names in whitelist order (dedup for topics sharing a label)
-    _seen_labels: set[str] = set()
+    # Flat set of all known raw topic names
+    all_whitelisted_raw: set[str] = set(raw_topic_to_label.keys())
+
+    # For each TOPICS entry, pick the first raw topic that exists in the data.
+    # This gives one representative raw topic per display label, in TOPICS order.
     wl_display_labels: list[str] = []
     wl_display_topics: list[str] = []  # one representative raw topic per label
-    for _t in whitelisted_present:
-        _lbl = raw_topic_to_label.get(_t, _t)
-        if _lbl not in _seen_labels:
-            _seen_labels.add(_lbl)
-            wl_display_labels.append(_lbl)
-            wl_display_topics.append(_t)
+    for _lbl, _names in TOPICS:
+        for _n in _names:
+            if _n in all_mcap_topics:
+                wl_display_labels.append(_lbl)
+                wl_display_topics.append(_n)
+                break
 
     # ══════════════════════════════════════════════════════════════════
     # Heatmap data (episode × whitelisted topic)
@@ -932,7 +884,7 @@ def main() -> None:
 
     # Print topics found in MCAP but not in whitelist
     all_raw_topics_sorted = sorted(all_mcap_topics)
-    extra_topics = [t for t in all_raw_topics_sorted if t not in set(WHITELISTED_TOPICS)]
+    extra_topics = [t for t in all_raw_topics_sorted if t not in all_whitelisted_raw]
     if extra_topics:
         print("\nTopics in MCAP not included in table:")
         for t in extra_topics:
@@ -940,7 +892,7 @@ def main() -> None:
 
     tbl_ep_pcts: list[float] = []
     tbl_data = []
-    for raw_topic in whitelisted_present:
+    for raw_topic in wl_display_topics:
         s = raw_agg_source[raw_topic]["sensor"]
         l_count = raw_agg_source[raw_topic]["log"]
         total = s + l_count
@@ -1134,9 +1086,9 @@ def main() -> None:
                 continue
             ep_kf = episode_keyframes.get(ep_idx, {})
 
-            # Only show whitelisted topics in the detail view.
+            # Only show topics defined in TOPICS, in order.
             _ep_present = {t for t in all_mcap_topics if t in ep_ts and len(ep_ts[t]) >= 2}
-            active_raw_topics = [t for t in WHITELISTED_TOPICS if t in _ep_present]
+            active_raw_topics = [t for t in wl_display_topics if t in _ep_present]
             if not active_raw_topics:
                 continue
 
