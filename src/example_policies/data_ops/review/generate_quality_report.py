@@ -500,21 +500,103 @@ def main() -> None:
         episode_keyframes[new_idx] = _raw_episode_keyframes[raw_idx]
 
     # ══════════════════════════════════════════════════════════════════
-    # Heatmap data (5c: episode × topic)
+    # Whitelist & name map (used for table, heatmap, and violin)
+    # ══════════════════════════════════════════════════════════════════
+    WHITELISTED_TOPICS = [
+        # State (observations)
+        "/joint_states",
+        "/arm_left/tcp_pose",
+        "/left/franka_robot_state_broadcaster/current_pose",
+        "/panda_left/tcp",
+        "/arm_right/tcp_pose",
+        "/right/franka_robot_state_broadcaster/current_pose",
+        "/panda_right/tcp",
+        # Cameras
+        "/cam_left/color/image_rect_compressed",
+        "/cam_left/aligned_depth_to_color/image_compressed",
+        "/cam_right/color/image_rect_compressed",
+        "/cam_right/aligned_depth_to_color/image_compressed",
+        "/cam_static/color/image_rect_compressed",
+        # Commands (actions)
+        "/joint_target_left",
+        "/joint_target_right",
+        "/desired_pose_twist_left",
+        "/cartesian_target_left",
+        "/desired_pose_twist_right",
+        "/cartesian_target_right",
+        "/desired_gripper_values_left",
+        "/desired_gripper_values_right",
+    ]
+
+    # Build reverse mapping: raw topic name → display name
+    raw_topic_to_label: dict[str, str] = {}
+    for _lbl, _names in TOPICS:
+        for _n in _names:
+            raw_topic_to_label[_n] = _lbl
+    _extra_names: dict[str, str] = {
+        "/cam_left/aligned_depth_to_color/image_compressed": "Depth L",
+        "/cam_left/color/image_rect_compressed": "RGB L",
+        "/cam_right/aligned_depth_to_color/image_compressed": "Depth R",
+        "/cam_right/color/image_rect_compressed": "RGB R",
+        "/cam_static/color/image_rect_compressed": "RGB S",
+        "/desired_gripper_values_left": "Cmd Gripper L",
+        "/desired_gripper_values_right": "Cmd Gripper R",
+        "/desired_pose_twist_left": "Cmd TCP L",
+        "/desired_pose_twist_right": "Cmd TCP R",
+        "/joint_states": "Joint State",
+        "/joint_target_left": "Cmd Joint L",
+        "/joint_target_right": "Cmd Joint R",
+        "/arm_left/tcp_pose": "TCP L",
+        "/left/franka_robot_state_broadcaster/current_pose": "TCP L",
+        "/panda_left/tcp": "TCP L",
+        "/arm_right/tcp_pose": "TCP R",
+        "/right/franka_robot_state_broadcaster/current_pose": "TCP R",
+        "/panda_right/tcp": "TCP R",
+        "/cartesian_target_left": "Cmd TCP L",
+        "/cartesian_target_right": "Cmd TCP R",
+    }
+    for _t, _n in _extra_names.items():
+        raw_topic_to_label.setdefault(_t, _n)
+
+    whitelisted_present = [t for t in WHITELISTED_TOPICS if t in all_mcap_topics]
+    # Unique display names in whitelist order (dedup for topics sharing a label)
+    _seen_labels: set[str] = set()
+    wl_display_labels: list[str] = []
+    wl_display_topics: list[str] = []  # one representative raw topic per label
+    for _t in whitelisted_present:
+        _lbl = raw_topic_to_label.get(_t, _t)
+        if _lbl not in _seen_labels:
+            _seen_labels.add(_lbl)
+            wl_display_labels.append(_lbl)
+            wl_display_topics.append(_t)
+
+    # ══════════════════════════════════════════════════════════════════
+    # Heatmap data (episode × whitelisted topic)
     # ══════════════════════════════════════════════════════════════════
     n_episodes = len(episode_timestamps)
-    heatmap_labels = topic_order_fwd
+    heatmap_labels = wl_display_labels
     heatmap = np.zeros((n_episodes, len(heatmap_labels)))
 
     for ep_idx in range(n_episodes):
         ep_ts = episode_timestamps.get(ep_idx, {})
-        for col_idx, label in enumerate(heatmap_labels):
-            ts = ep_ts.get(label)
+        for col_idx, raw_t in enumerate(wl_display_topics):
+            ts = ep_ts.get(raw_t)
             if ts is None or len(ts) < 2:
                 continue
             intervals_ms = np.diff(ts) * 1000
             frac = np.mean(intervals_ms > actual_tolerance_ms)
             heatmap[ep_idx, col_idx] = frac
+
+    # Intervals for violin (all whitelisted topics from episode_timestamps)
+    wl_all_intervals: dict[str, list[float]] = {}
+    for _lbl, _raw_t in zip(wl_display_labels, wl_display_topics):
+        _ivs: list[float] = []
+        for ep_idx in range(n_episodes):
+            ts = episode_timestamps.get(ep_idx, {}).get(_raw_t)
+            if ts is not None and len(ts) >= 2:
+                _ivs.extend((np.diff(ts) * 1000).tolist())
+        if _ivs:
+            wl_all_intervals[_lbl] = _ivs
 
     # ══════════════════════════════════════════════════════════════════
     # Violation-position data (5b)
@@ -679,19 +761,18 @@ def main() -> None:
     # ══════════════════════════════════════════════════════════════════
     # Build the one-pager (page 1)
     # ══════════════════════════════════════════════════════════════════
-    fig = plt.figure(figsize=(16.53, 11.69))  # landscape A4
+    fig = plt.figure(figsize=(16.53, 22))  # tall landscape
     fig.set_facecolor("#f0f0f0")
     gs = GridSpec(
-        3,
-        2,
+        4,
+        1,
         figure=fig,
-        height_ratios=[0.6, 1.0, 1.4],
-        hspace=0.35,
-        wspace=0.3,
+        height_ratios=[0.22, 1.4, 0.85, 1.3],
+        hspace=0.4,
         left=0.06,
-        right=0.96,
-        top=0.90,
-        bottom=0.06,
+        right=0.97,
+        top=0.96,
+        bottom=0.02,
     )
 
     # Title bar
@@ -732,8 +813,8 @@ def main() -> None:
         ),
     )
 
-    # ── ROW 0 LEFT: Key violation statistics ─────────────────────────
-    ax_stats = fig.add_subplot(gs[0, 0])
+    # ── ROW 0: Key violation statistics ────────────────────────────
+    ax_stats = fig.add_subplot(gs[0])
     ax_stats.set_facecolor("#f0f0f0")
     ax_stats.axis("off")
 
@@ -741,7 +822,6 @@ def main() -> None:
         ("Episodes", f"{n_total_episodes}  (filtered out: {n_filtered_out})"),
         ("Operator", f"{OPERATOR_NAME}"),
         ("Target / Tolerance", f"{TARGET_FPS} Hz / {actual_tolerance_ms:.0f} ms"),
-        ("Worst topic", f"{worst_topic} ({worst_topic_pct:.0f}% of eps)"),
         ("Worst interval", f"{max((v['worst_ms'] for v in per_topic_viol.values()), default=0):.1f} ms"),
         ("Dataset Version", dataset_version_str or "—"),
     ]
@@ -762,16 +842,16 @@ def main() -> None:
 
     ax_stats.set_title("Summary", fontsize=10, fontweight="medium", pad=8)
 
-    # ── ROW 0 RIGHT: Violin (per-message frequency) ───────────────────
-    ax_viol = fig.add_subplot(gs[0, 1])
-    topic_order_rev = list(reversed(topic_order_fwd))
+    # ── ROW 2: Violin (per-message frequency, all whitelisted) ────
+    ax_viol = fig.add_subplot(gs[2])
+    wl_rev_labels = list(reversed(wl_display_labels))
     FREQ_CLIP_HZ_PDF = 1200
 
     pdf_inst_order: list[str] = []
     pdf_inst_data: list[np.ndarray] = []
-    for label in topic_order_rev:
-        if label in all_intervals and len(all_intervals[label]) > 0:
-            intervals_ms = np.array(all_intervals[label])
+    for label in wl_rev_labels:
+        if label in wl_all_intervals and len(wl_all_intervals[label]) > 0:
+            intervals_ms = np.array(wl_all_intervals[label])
             freqs = 1000.0 / intervals_ms
             freqs = freqs[freqs <= FREQ_CLIP_HZ_PDF]
             if len(freqs) > 0:
@@ -829,8 +909,8 @@ def main() -> None:
     )
     ax_viol.tick_params(axis="x", labelsize=7)
 
-    # ── ROWS 1-2 LEFT: Timestamp source table (spans lower 2 rows) ───
-    ax_tbl = fig.add_subplot(gs[1:, 0])
+    # ── ROW 1: Timestamp source table ──────────────────────────────
+    ax_tbl = fig.add_subplot(gs[1])
     ax_tbl.set_facecolor("#f0f0f0")
     ax_tbl.axis("off")
 
@@ -861,63 +941,6 @@ def main() -> None:
                         pass
                 raw_agg_source[_t]["log"] += 1
 
-    WHITELISTED_TOPICS = [
-        # New list
-        "/cam_left/aligned_depth_to_color/image_compressed",
-        "/cam_left/color/image_rect_compressed",
-        "/cam_right/aligned_depth_to_color/image_compressed",
-        "/cam_right/color/image_rect_compressed",
-        "/cam_static/color/image_rect_compressed",
-        "/desired_gripper_values_left",
-        "/desired_gripper_values_right",
-        "/desired_pose_twist_left",
-        "/desired_pose_twist_right",
-        "/joint_states",
-        "/joint_target_left",
-        "/joint_target_right",
-        # From initial TOPICS list (raw names not already above)
-        "/arm_left/tcp_pose",
-        "/left/franka_robot_state_broadcaster/current_pose",
-        "/panda_left/tcp",
-        "/arm_right/tcp_pose",
-        "/right/franka_robot_state_broadcaster/current_pose",
-        "/panda_right/tcp",
-        "/cartesian_target_left",
-        "/cartesian_target_right",
-    ]
-
-    # Build reverse mapping: raw topic name → predefined label (for violation stats)
-    raw_topic_to_label: dict[str, str] = {}
-    for _lbl, _names in TOPICS:
-        for _n in _names:
-            raw_topic_to_label[_n] = _lbl
-
-    # Names for whitelisted topics not already covered by TOPICS labels
-    _extra_names: dict[str, str] = {
-        "/cam_left/aligned_depth_to_color/image_compressed": "Depth L",
-        "/cam_left/color/image_rect_compressed": "RGB L",
-        "/cam_right/aligned_depth_to_color/image_compressed": "Depth R",
-        "/cam_right/color/image_rect_compressed": "RGB R",
-        "/cam_static/color/image_rect_compressed": "RGB S",
-        "/desired_gripper_values_left": "Cmd Gripper L",
-        "/desired_gripper_values_right": "Cmd Gripper R",
-        "/desired_pose_twist_left": "Cmd TCP L",
-        "/desired_pose_twist_right": "Cmd TCP R",
-        "/joint_states": "Joint State",
-        "/joint_target_left": "Cmd Joint L",
-        "/joint_target_right": "Cmd Joint R",
-        "/arm_left/tcp_pose": "TCP L",
-        "/left/franka_robot_state_broadcaster/current_pose": "TCP L",
-        "/panda_left/tcp": "TCP L",
-        "/arm_right/tcp_pose": "TCP R",
-        "/right/franka_robot_state_broadcaster/current_pose": "TCP R",
-        "/panda_right/tcp": "TCP R",
-        "/cartesian_target_left": "Cmd TCP L",
-        "/cartesian_target_right": "Cmd TCP R",
-    }
-    for _t, _n in _extra_names.items():
-        raw_topic_to_label.setdefault(_t, _n)
-
     # Print topics found in MCAP but not in whitelist
     all_raw_topics_sorted = sorted(all_mcap_topics)
     extra_topics = [t for t in all_raw_topics_sorted if t not in set(WHITELISTED_TOPICS)]
@@ -926,7 +949,6 @@ def main() -> None:
         for t in extra_topics:
             print(f"  {t}")
 
-    whitelisted_present = [t for t in WHITELISTED_TOPICS if t in all_mcap_topics]
     tbl_ep_pcts: list[float] = []
     tbl_data = []
     for raw_topic in whitelisted_present:
@@ -1030,8 +1052,8 @@ def main() -> None:
         pad=12,
     )
 
-    # ── ROWS 1-2 RIGHT: Episode × topic heatmap ──────────────────────
-    ax_hm = fig.add_subplot(gs[1:, 1])
+    # ── ROW 3: Episode × topic heatmap ─────────────────────────────
+    ax_hm = fig.add_subplot(gs[3])
     ax_hm.grid(False)
     ax_hm.set_facecolor("#eaeaf2")
     hm_vmax_pdf = float(np.max(heatmap)) if np.any(heatmap > 0) else 0.05
@@ -1087,10 +1109,12 @@ def main() -> None:
                 continue
             ep_kf = episode_keyframes.get(ep_idx, {})
 
-            # Use all raw topics that have data in this episode for the detail view
-            active_raw_topics = sorted(
-                t for t in all_mcap_topics
-                if t in ep_ts and len(ep_ts[t]) >= 2
+            # Use all raw topics that have data in this episode for the detail view.
+            # Whitelisted topics come first (in defined order), then the rest alphabetically.
+            _ep_present = {t for t in all_mcap_topics if t in ep_ts and len(ep_ts[t]) >= 2}
+            active_raw_topics = (
+                [t for t in WHITELISTED_TOPICS if t in _ep_present]
+                + sorted(t for t in _ep_present if t not in set(WHITELISTED_TOPICS))
             )
             if not active_raw_topics:
                 continue
