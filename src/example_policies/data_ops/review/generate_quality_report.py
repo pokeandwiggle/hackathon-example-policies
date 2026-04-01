@@ -1120,6 +1120,8 @@ def main() -> None:
                 continue
 
             t0 = min(ep_ts[t][0] for t in active_raw_topics)
+            t_end = max(ep_ts[t][-1] for t in active_raw_topics)
+            ep_duration = t_end - t0
             n_topics = len(active_raw_topics)
 
             fig_ep, axes_ep = plt.subplots(
@@ -1213,6 +1215,7 @@ def main() -> None:
                     ax.legend(loc="upper right", fontsize=7)
 
             axes_ep[-1, 0].set_xlabel("Elapsed time (s)")
+            axes_ep[0, 0].set_xlim(0, ep_duration)
             fig_ep.tight_layout(rect=[0.09, 0.03, 0.91, 0.97])
             page_num = 2 + drill_idx
             if SELECTED_PAGES is None or page_num in SELECTED_PAGES:
