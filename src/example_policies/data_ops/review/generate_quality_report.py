@@ -1179,6 +1179,8 @@ def main() -> None:
                     lw=1.5,
                     color=_CLR_THRESH,
                     alpha=0.9,
+                    zorder=5,
+                    label=f"Threshold ({actual_tolerance_ms:.0f} ms)" if ax_row == 0 else None,
                 )
 
                 # Consistent y-axis: 0 to 2× tolerance so all subplots align
