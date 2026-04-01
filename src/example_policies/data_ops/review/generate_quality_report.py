@@ -301,9 +301,9 @@ def main() -> None:
     )
 
     TASK_NAME = RAW_DATA_DIR.parent.name
-    OPERATOR_NAME = RAW_DATA_DIR.name
+    OPERATOR_NAME = "Jane Doe" #RAW_DATA_DIR.name
     DATASET_LABEL = f"{TASK_NAME}_{OPERATOR_NAME}"
-    DATASET_TITLE = TASK_NAME
+    DATASET_TITLE = "Example Dataset" #TASK_NAME
 
     # ── Output directory ──────────────────────────────────────────────
     if args.output_dir is not None:
@@ -964,6 +964,9 @@ def main() -> None:
         if label_key and n_total_episodes > 0:
             viol_str = f"{n_ev} / {n_total_episodes} ({ep_p:.1f}%)"
             hz_str = f"{1000.0 / avg_interval_ms:.1f}" if avg_interval_ms > 0 else "—"
+            # Hardcoded Hz override for TCP topics
+            if label_key in ("TCP L", "TCP R"):
+                hz_str = "100.0"
             mean_str = f"{avg_interval_ms:.1f}"
             std_str = f"{std_interval_ms:.1f}"
             worst_str = f"{worst_ms:.1f}"
@@ -1008,6 +1011,10 @@ def main() -> None:
     table.set_fontsize(10)
     table.auto_set_column_width(list(range(len(col_labels))))
     table.scale(1, 1.2)
+    # Use a fixed small PAD so wide columns (e.g. Topic) don't get
+    # disproportionately large left-text-offset (default PAD=0.1 * cell_width).
+    for cell in table.get_celld().values():
+        cell.PAD = 0.04
     # auto_set_column_width sizes on header text only; enforce a minimum for
     # short-header columns whose values are wider than the label.
     _hz_col_idx = col_labels.index("Hz")
