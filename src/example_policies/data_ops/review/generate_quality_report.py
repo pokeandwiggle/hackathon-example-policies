@@ -769,39 +769,28 @@ def main() -> None:
         3,
         2,
         figure=fig,
-        height_ratios=[0.18, 1.4, 1.0],
+        height_ratios=[0.13, 1.0, 1.6],
         hspace=0.45,
         wspace=0.25,
         left=0.05,
         right=0.97,
-        top=0.93,
+        top=0.95,
         bottom=0.04,
     )
 
     # Title bar
     fig.suptitle(
         f"Dataset Quality Report — {DATASET_TITLE}",
-        fontsize=16,
+        fontsize=18,
         fontweight="bold",
-        y=0.98,
+        y=0.99,
         color="#333333",
-    )
-    fig.text(
-        0.5,
-        0.955,
-        f"Generated {datetime.datetime.now():%Y-%m-%d %H:%M}  |  "
-        f"{len(episode_paths)} episodes  |  {TARGET_FPS} Hz target  |  "
-        f"{actual_tolerance_ms:.0f} ms tolerance"
-        + (f"  |  v{dataset_version_str}" if dataset_version_str else ''),
-        ha="center",
-        fontsize=9,
-        color="#777",
     )
 
     # Verdict badge
     fig.text(
         0.93,
-        0.975,
+        0.985,
         verdict,
         fontsize=14,
         fontweight="bold",
@@ -816,37 +805,33 @@ def main() -> None:
         ),
     )
 
-    # ── ROW 0: Key violation statistics (full width) ───────────────
+    # ── ROW 0: Summary (full width, window style) ────────────────
     ax_stats = fig.add_subplot(gs[0, :])
-    ax_stats.set_facecolor("#f0f0f0")
+    ax_stats.set_facecolor("#eef6fb")
     ax_stats.axis("off")
+    ax_stats.patch.set_edgecolor(PALETTE[0])
+    ax_stats.patch.set_linewidth(2)
 
-    stats_lines = [
-        ("Episodes", f"{n_total_episodes}  (filtered out: {n_filtered_out})"),
+    stats_items = [
+        ("Generated", datetime.datetime.now().strftime("%Y-%m-%d %H:%M")),
+        ("Episodes", f"{n_total_episodes}  (filtered: {n_filtered_out})"),
         ("Operator", f"{OPERATOR_NAME}"),
         ("Target / Tolerance", f"{TARGET_FPS} Hz / {actual_tolerance_ms:.0f} ms"),
         ("Worst interval", f"{max((v['worst_ms'] for v in per_topic_viol.values()), default=0):.1f} ms"),
         ("Dataset Version", dataset_version_str or "—"),
     ]
+    n_stat_cols = len(stats_items)
+    for col_i, (lbl, val) in enumerate(stats_items):
+        x = (col_i + 0.5) / n_stat_cols
+        ax_stats.text(x, 0.80, lbl, ha="center", va="top",
+                      fontsize=9, fontweight="bold", color="#555",
+                      transform=ax_stats.transAxes)
+        ax_stats.text(x, 0.35, val, ha="center", va="top",
+                      fontsize=10, fontfamily="monospace", color="#222",
+                      transform=ax_stats.transAxes)
 
-    y_pos = 0.92
-    for label_txt, value_txt in stats_lines:
-        ax_stats.text(
-            0.02, y_pos, label_txt,
-            fontsize=8, fontweight="medium", color="#555",
-            transform=ax_stats.transAxes, va="top",
-        )
-        ax_stats.text(
-            0.42, y_pos, value_txt,
-            fontsize=8, fontfamily="monospace", color="#333",
-            transform=ax_stats.transAxes, va="top",
-        )
-        y_pos -= 0.16
-
-    ax_stats.set_title("Summary", fontsize=10, fontweight="medium", pad=8)
-
-    # ── ROW 2 LEFT: Violin (per-message frequency, all whitelisted) ─
-    ax_viol = fig.add_subplot(gs[2, 0])
+    # ── ROW 1 LEFT: Violin (per-message frequency, all whitelisted) ─
+    ax_viol = fig.add_subplot(gs[1, 0])
     wl_rev_labels = list(reversed(wl_display_labels))
     FREQ_CLIP_HZ_PDF = 1200
 
@@ -896,7 +881,7 @@ def main() -> None:
         xycoords=_trans_viol,
         xytext=(3, -6),
         textcoords="offset points",
-        fontsize=6,
+        fontsize=8,
         color=PALETTE[3],
         fontweight="medium",
         clip_on=False,
@@ -905,15 +890,15 @@ def main() -> None:
     )
 
     ax_viol.set_yticks(range(len(pdf_inst_order)))
-    ax_viol.set_yticklabels(pdf_inst_order, fontsize=7)
-    ax_viol.set_xlabel("Frequency (Hz)", fontsize=8)
+    ax_viol.set_yticklabels(pdf_inst_order, fontsize=9)
+    ax_viol.set_xlabel("Frequency (Hz)", fontsize=10)
     ax_viol.set_title(
-        "Per-Message Frequency Distribution", fontsize=10, fontweight="medium", pad=8
+        "Per-Message Frequency Distribution", fontsize=12, fontweight="medium", pad=8
     )
-    ax_viol.tick_params(axis="x", labelsize=7)
+    ax_viol.tick_params(axis="x", labelsize=9)
 
-    # ── ROW 1: Timestamp source table (full width) ─────────────────
-    ax_tbl = fig.add_subplot(gs[1, :])
+    # ── ROW 2: Timestamp source table (full width) ─────────────────
+    ax_tbl = fig.add_subplot(gs[2, :])
     ax_tbl.set_facecolor("#f0f0f0")
     ax_tbl.axis("off")
 
@@ -1018,9 +1003,9 @@ def main() -> None:
         cellText=tbl_data, colLabels=col_labels, loc="center", cellLoc="left"
     )
     table.auto_set_font_size(False)
-    table.set_fontsize(7)
+    table.set_fontsize(9)
     table.auto_set_column_width(list(range(len(col_labels))))
-    table.scale(1, 1.1)
+    table.scale(1, 1.4)
 
     for row_idx in range(len(tbl_data)):
         ep_p = tbl_ep_pcts[row_idx]
@@ -1042,6 +1027,25 @@ def main() -> None:
             else:
                 viol_cell.set_facecolor("#d5f5e3")
 
+        # Mean gap (ms) col index 7
+        try:
+            mean_val = float(tbl_data[row_idx][7])
+            table[row_idx + 1, 7].set_facecolor("#d5f5e3" if mean_val < 35 else ("#f8f8f8" if row_idx % 2 == 0 else "white"))
+        except (ValueError, TypeError):
+            pass
+        # Std (ms) col index 8
+        try:
+            std_val = float(tbl_data[row_idx][8])
+            table[row_idx + 1, 8].set_facecolor("#d5f5e3" if std_val < 1.0 else ("#f8f8f8" if row_idx % 2 == 0 else "white"))
+        except (ValueError, TypeError):
+            pass
+        # Max gap (ms) col index 9
+        try:
+            max_val = float(tbl_data[row_idx][9])
+            table[row_idx + 1, 9].set_facecolor("#d5f5e3" if max_val < 45 else "#fdebd0")
+        except (ValueError, TypeError):
+            pass
+
     for col_idx in range(len(col_labels)):
         hdr = table[0, col_idx]
         hdr.set_facecolor(PALETTE[0])
@@ -1050,13 +1054,13 @@ def main() -> None:
 
     ax_tbl.set_title(
         "MCAP Topics — Sources & Violations",
-        fontsize=10,
+        fontsize=12,
         fontweight="medium",
         pad=12,
     )
 
-    # ── ROW 2 RIGHT: Episode × topic heatmap ────────────────────────
-    ax_hm = fig.add_subplot(gs[2, 1])
+    # ── ROW 1 RIGHT: Episode × topic heatmap ────────────────────────
+    ax_hm = fig.add_subplot(gs[1, 1])
     ax_hm.grid(False)
     ax_hm.set_facecolor("#eaeaf2")
     hm_vmax_pdf = float(np.max(heatmap)) if np.any(heatmap > 0) else 0.05
@@ -1071,8 +1075,8 @@ def main() -> None:
         zorder=2,
     )
     ax_hm.set_xticks(range(len(heatmap_labels)))
-    ax_hm.set_xticklabels(heatmap_labels, rotation=45, ha="right", fontsize=7)
-    ax_hm.set_ylabel("Episode", fontsize=8)
+    ax_hm.set_xticklabels(heatmap_labels, rotation=45, ha="right", fontsize=9)
+    ax_hm.set_ylabel("Episode", fontsize=10)
     ax_hm.set_xticks(np.arange(-0.5, len(heatmap_labels), 1), minor=True)
     ax_hm.set_yticks(np.arange(-0.5, heatmap_masked.shape[0], 1), minor=True)
     ax_hm.grid(which="minor", color="white", linewidth=0.5, zorder=0)
@@ -1088,7 +1092,7 @@ def main() -> None:
         )
     ax_hm.set_title(
         f"Violation Heatmap (>{actual_tolerance_ms:.0f} ms)",
-        fontsize=10,
+        fontsize=12,
         fontweight="medium",
         pad=8,
     )
