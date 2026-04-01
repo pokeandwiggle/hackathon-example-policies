@@ -302,7 +302,7 @@ def main() -> None:
     TASK_NAME = RAW_DATA_DIR.parent.name
     OPERATOR_NAME = RAW_DATA_DIR.name
     DATASET_LABEL = f"{TASK_NAME}_{OPERATOR_NAME}"
-    DATASET_TITLE = f"{TASK_NAME} — {OPERATOR_NAME}"
+    DATASET_TITLE = TASK_NAME
 
     # ── Output directory ──────────────────────────────────────────────
     if args.output_dir is not None:
@@ -772,7 +772,7 @@ def main() -> None:
         height_ratios=[0.13, 1.0, 1.6],
         hspace=0.45,
         wspace=0.25,
-        left=0.02,
+        left=0.09,
         right=0.98,
         top=0.95,
         bottom=0.04,
@@ -780,7 +780,7 @@ def main() -> None:
 
     # Title bar
     fig.suptitle(
-        f"Dataset Quality Report — {DATASET_TITLE}",
+        f"Dataset Quality Report: {DATASET_TITLE}",
         fontsize=18,
         fontweight="bold",
         y=0.99,
@@ -890,6 +890,9 @@ def main() -> None:
 
     # ── ROW 2: Timestamp source table (full width) ─────────────────
     ax_tbl = fig.add_subplot(gs[2, :])
+    # Extend table axes left edge to near-figure-edge (wider than violin below)
+    _tbl_pos = ax_tbl.get_position()
+    ax_tbl.set_position([0.02, _tbl_pos.y0, 0.96, _tbl_pos.height])
     ax_tbl.set_facecolor("#f0f0f0")
     ax_tbl.axis("off")
 
@@ -991,7 +994,8 @@ def main() -> None:
         "Max gap (ms)",
     ]
     table = ax_tbl.table(
-        cellText=tbl_data, colLabels=col_labels, loc="center", cellLoc="left"
+        cellText=tbl_data, colLabels=col_labels, cellLoc="left",
+        bbox=[0, 0, 1, 1],
     )
     table.auto_set_font_size(False)
     table.set_fontsize(9)
@@ -1043,11 +1047,12 @@ def main() -> None:
         hdr.set_text_props(color="white", fontweight="bold")
         hdr.set_edgecolor(PALETTE[0])
 
-    ax_tbl.set_title(
+    ax_tbl.text(
+        0.5, 1.005,
         "MCAP Topics — Sources & Violations",
-        fontsize=12,
-        fontweight="medium",
-        pad=4,
+        ha="center", va="bottom",
+        fontsize=12, fontweight="medium",
+        transform=ax_tbl.transAxes,
     )
 
     # ── ROW 1 RIGHT: Episode × topic heatmap ────────────────────────
