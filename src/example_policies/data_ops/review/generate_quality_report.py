@@ -1113,13 +1113,9 @@ def main() -> None:
                 continue
             ep_kf = episode_keyframes.get(ep_idx, {})
 
-            # Use all raw topics that have data in this episode for the detail view.
-            # Whitelisted topics come first (in defined order), then the rest alphabetically.
+            # Only show whitelisted topics in the detail view.
             _ep_present = {t for t in all_mcap_topics if t in ep_ts and len(ep_ts[t]) >= 2}
-            active_raw_topics = (
-                [t for t in WHITELISTED_TOPICS if t in _ep_present]
-                + sorted(t for t in _ep_present if t not in set(WHITELISTED_TOPICS))
-            )
+            active_raw_topics = [t for t in WHITELISTED_TOPICS if t in _ep_present]
             if not active_raw_topics:
                 continue
 
@@ -1198,8 +1194,9 @@ def main() -> None:
                             label="Keyframe" if k_i == 0 else None,
                         )
 
-                # Use display name; fall back to raw topic
-                display_name = raw_topic_to_label.get(raw_topic, raw_topic)
+                # Use display name + ROS topic in parentheses
+                _label = raw_topic_to_label.get(raw_topic, raw_topic)
+                display_name = f"{_label} ({raw_topic})"
                 # Place name as a left-aligned text inside the axes to avoid overlap
                 ax.set_ylabel("")
                 ax.tick_params(axis="y", labelsize=7)
