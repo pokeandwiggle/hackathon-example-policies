@@ -1002,6 +1002,14 @@ def main() -> None:
     table.set_fontsize(10)
     table.auto_set_column_width(list(range(len(col_labels))))
     table.scale(1, 1.2)
+    # auto_set_column_width sizes on header text only; enforce a minimum for
+    # short-header columns whose values are wider than the label.
+    _hz_col_idx = col_labels.index("Hz")
+    _min_hz_width = 0.055  # in axes fraction; wide enough for "1000.0"
+    for row_idx in range(-1, len(tbl_data)):
+        cell = table[row_idx + 1, _hz_col_idx]
+        if cell.get_width() < _min_hz_width:
+            cell.set_width(_min_hz_width)
 
     for row_idx in range(len(tbl_data)):
         ep_p = tbl_ep_pcts[row_idx]
