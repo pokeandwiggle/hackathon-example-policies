@@ -1133,7 +1133,7 @@ def main() -> None:
             # Episodes are numbered from 1 continuously
             page_ep_num = drill_idx + 1
             fig_ep.suptitle(
-                f"Episode {page_ep_num}: Per-topic frequency overview over time",
+                f"Episode {page_ep_num}: Message Timing per Topic",
                 fontsize=14,
                 fontweight="bold",
                 y=0.97,
