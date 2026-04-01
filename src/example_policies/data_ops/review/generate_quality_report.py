@@ -132,6 +132,8 @@ TOPICS = [
     ("Depth R", ["/cam_right/aligned_depth_to_color/image_compressed"]),
     ("TCP L", [RosTopicEnum.ACTUAL_TCP_LEFT.value, "/left/franka_robot_state_broadcaster/current_pose", "/panda_left/tcp"]),
     ("TCP R", [RosTopicEnum.ACTUAL_TCP_RIGHT.value, "/right/franka_robot_state_broadcaster/current_pose", "/panda_right/tcp"]),
+    ("Cmd Joint L", ["/joint_target_left"]),
+    ("Cmd Joint R", ["/joint_target_right"]),
     ("Cmd TCP L", ["/cartesian_target_left", "/desired_pose_twist_left"]),
     ("Cmd TCP R", ["/cartesian_target_right", "/desired_pose_twist_right"]),
     ("Cmd Gripper L", [RosTopicEnum.DES_GRIPPER_LEFT.value]),
@@ -761,18 +763,19 @@ def main() -> None:
     # ══════════════════════════════════════════════════════════════════
     # Build the one-pager (page 1)
     # ══════════════════════════════════════════════════════════════════
-    fig = plt.figure(figsize=(16.53, 22))  # tall landscape
+    fig = plt.figure(figsize=(16.53, 16))  # wide page
     fig.set_facecolor("#f0f0f0")
     gs = GridSpec(
-        4,
-        1,
+        3,
+        2,
         figure=fig,
-        height_ratios=[0.22, 1.4, 0.85, 1.3],
-        hspace=0.4,
-        left=0.06,
+        height_ratios=[0.18, 1.4, 1.0],
+        hspace=0.45,
+        wspace=0.25,
+        left=0.05,
         right=0.97,
-        top=0.96,
-        bottom=0.02,
+        top=0.93,
+        bottom=0.04,
     )
 
     # Title bar
@@ -780,12 +783,12 @@ def main() -> None:
         f"Dataset Quality Report — {DATASET_TITLE}",
         fontsize=16,
         fontweight="bold",
-        y=0.97,
+        y=0.98,
         color="#333333",
     )
     fig.text(
         0.5,
-        0.935,
+        0.955,
         f"Generated {datetime.datetime.now():%Y-%m-%d %H:%M}  |  "
         f"{len(episode_paths)} episodes  |  {TARGET_FPS} Hz target  |  "
         f"{actual_tolerance_ms:.0f} ms tolerance"
@@ -798,7 +801,7 @@ def main() -> None:
     # Verdict badge
     fig.text(
         0.93,
-        0.96,
+        0.975,
         verdict,
         fontsize=14,
         fontweight="bold",
@@ -813,8 +816,8 @@ def main() -> None:
         ),
     )
 
-    # ── ROW 0: Key violation statistics ────────────────────────────
-    ax_stats = fig.add_subplot(gs[0])
+    # ── ROW 0: Key violation statistics (full width) ───────────────
+    ax_stats = fig.add_subplot(gs[0, :])
     ax_stats.set_facecolor("#f0f0f0")
     ax_stats.axis("off")
 
@@ -842,8 +845,8 @@ def main() -> None:
 
     ax_stats.set_title("Summary", fontsize=10, fontweight="medium", pad=8)
 
-    # ── ROW 2: Violin (per-message frequency, all whitelisted) ────
-    ax_viol = fig.add_subplot(gs[2])
+    # ── ROW 2 LEFT: Violin (per-message frequency, all whitelisted) ─
+    ax_viol = fig.add_subplot(gs[2, 0])
     wl_rev_labels = list(reversed(wl_display_labels))
     FREQ_CLIP_HZ_PDF = 1200
 
@@ -909,8 +912,8 @@ def main() -> None:
     )
     ax_viol.tick_params(axis="x", labelsize=7)
 
-    # ── ROW 1: Timestamp source table ──────────────────────────────
-    ax_tbl = fig.add_subplot(gs[1])
+    # ── ROW 1: Timestamp source table (full width) ─────────────────
+    ax_tbl = fig.add_subplot(gs[1, :])
     ax_tbl.set_facecolor("#f0f0f0")
     ax_tbl.axis("off")
 
@@ -1052,8 +1055,8 @@ def main() -> None:
         pad=12,
     )
 
-    # ── ROW 3: Episode × topic heatmap ─────────────────────────────
-    ax_hm = fig.add_subplot(gs[3])
+    # ── ROW 2 RIGHT: Episode × topic heatmap ────────────────────────
+    ax_hm = fig.add_subplot(gs[2, 1])
     ax_hm.grid(False)
     ax_hm.set_facecolor("#eaeaf2")
     hm_vmax_pdf = float(np.max(heatmap)) if np.any(heatmap > 0) else 0.05
