@@ -1203,7 +1203,7 @@ def main() -> None:
             fig_ep.tight_layout(rect=[0.09, 0.03, 0.91, 0.97])
             page_num = 2 + drill_idx
             if SELECTED_PAGES is None or page_num in SELECTED_PAGES:
-                pdf.savefig(fig_ep, dpi=PDF_DPI, facecolor=fig_ep.get_facecolor())
+                pdf.savefig(fig_ep, dpi=min(PDF_DPI, 100), facecolor=fig_ep.get_facecolor())
                 n_pages += 1
             plt.close(fig_ep)
             gc.collect()
