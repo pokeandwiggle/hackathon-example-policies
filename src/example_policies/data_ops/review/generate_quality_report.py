@@ -773,9 +773,9 @@ def main() -> None:
         hspace=0.45,
         wspace=0.25,
         left=0.09,
-        right=0.98,
+        right=0.95,
         top=0.95,
-        bottom=0.04,
+        bottom=0.05,
     )
 
     # Title bar
@@ -892,7 +892,7 @@ def main() -> None:
     ax_tbl = fig.add_subplot(gs[2, :])
     # Extend table axes left edge to near-figure-edge (wider than violin below)
     _tbl_pos = ax_tbl.get_position()
-    ax_tbl.set_position([0.02, _tbl_pos.y0, 0.96, _tbl_pos.height])
+    ax_tbl.set_position([0.09, _tbl_pos.y0, 0.86, _tbl_pos.height * 0.93])
     ax_tbl.set_facecolor("#f0f0f0")
     ax_tbl.axis("off")
 
@@ -1000,7 +1000,7 @@ def main() -> None:
     table.auto_set_font_size(False)
     table.set_fontsize(9)
     table.auto_set_column_width(list(range(len(col_labels))))
-    table.scale(1, 1.4)
+    table.scale(1, 1.2)
 
     for row_idx in range(len(tbl_data)):
         ep_p = tbl_ep_pcts[row_idx]
@@ -1045,10 +1045,10 @@ def main() -> None:
         hdr = table[0, col_idx]
         hdr.set_facecolor(PALETTE[0])
         hdr.set_text_props(color="white", fontweight="bold")
-        hdr.set_edgecolor(PALETTE[0])
+        hdr.set_edgecolor("white")
 
     ax_tbl.text(
-        0.5, 1.005,
+        0.5, 1.015,
         "MCAP Topics — Sources & Violations",
         ha="center", va="bottom",
         fontsize=12, fontweight="medium",
