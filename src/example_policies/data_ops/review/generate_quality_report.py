@@ -765,10 +765,10 @@ def main() -> None:
     # Build the one-pager (page 1)
     # ══════════════════════════════════════════════════════════════════
     # Margin constants: side = _SIDE_FRAC * width; top/bottom = same absolute inches
-    _FIG_W = 16.53
+    _FIG_W = 16.53 #A3 width in inches (420mm) — allows 1.5 inch side margins and ~13 inch content width
     _SIDE_FRAC = 0.09                 # side margin = ~1.5 inch (matches table left=0.09)
     _MARGIN_IN = 1.0                   # absolute margin in inches (top/bottom/sides)
-    _TITLE_H_IN = 0.30                 # approx suptitle text height in inches
+    _TITLE_H_IN = 0.55                 # space reserved below suptitle before content
     _fig1_h = 16.0
     _mar1 = _MARGIN_IN / _fig1_h
     fig = plt.figure(figsize=(_FIG_W, _fig1_h))
@@ -876,7 +876,7 @@ def main() -> None:
         xycoords=_trans_viol,
         xytext=(3, -6),
         textcoords="offset points",
-        fontsize=8,
+        fontsize=10,
         color=PALETTE[3],
         fontweight="medium",
         clip_on=False,
@@ -898,9 +898,8 @@ def main() -> None:
 
     # ── ROW 2: Timestamp source table (full width) ─────────────────
     ax_tbl = fig.add_subplot(gs[2, :])
-    # Extend table axes left edge to near-figure-edge (wider than violin below)
     _tbl_pos = ax_tbl.get_position()
-    ax_tbl.set_position([0.09, _tbl_pos.y0, 0.82, _tbl_pos.height * 0.93])
+    ax_tbl.set_position([_SIDE_FRAC, _tbl_pos.y0, 1.0 - 2 * _SIDE_FRAC, _tbl_pos.height * 0.93])
     ax_tbl.set_facecolor("#f0f0f0")
     ax_tbl.axis("off")
 
@@ -1047,7 +1046,7 @@ def main() -> None:
         # Std (ms) col index 8
         try:
             std_val = float(tbl_data[row_idx][8])
-            table[row_idx + 1, 8].set_facecolor("#d5f5e3" if std_val < 1.0 else ("#f8f8f8" if row_idx % 2 == 0 else "white"))
+            table[row_idx + 1, 8].set_facecolor("#d5f5e3" if std_val < 1.0 else "#fff3cd")
         except (ValueError, TypeError):
             pass
         # Max gap (ms) col index 9
@@ -1140,7 +1139,7 @@ def main() -> None:
             n_topics = len(active_raw_topics)
 
             _PLOT_H_PER_TOPIC = 1.8  # inches per subplot
-            _TITLE_OVERHEAD = 1.2    # inches for suptitle + x-label
+            _TITLE_OVERHEAD = 1.5    # inches for suptitle gap + x-label
             _fig_ep_h = n_topics * _PLOT_H_PER_TOPIC + _TITLE_OVERHEAD
             _mar_ep = _MARGIN_IN / _fig_ep_h
             fig_ep, axes_ep = plt.subplots(
@@ -1203,7 +1202,7 @@ def main() -> None:
                 )
 
                 # Consistent y-axis: 0 to 2× tolerance so all subplots align
-                ax.set_ylim(0, actual_tolerance_ms * 1.5)
+                ax.set_ylim(0, actual_tolerance_ms * 1.6)
 
                 if raw_topic in ep_kf and len(ep_kf[raw_topic]) > 0:
                     kf_elapsed = ep_kf[raw_topic] - t0
@@ -1226,14 +1225,14 @@ def main() -> None:
                 ax.text(
                     0.002, 0.97, display_name,
                     transform=ax.transAxes,
-                    fontsize=8, fontweight="bold",
+                    fontsize=10, fontweight="bold",
                     va="top", ha="left",
                     color="#333",
                     bbox=dict(boxstyle="round,pad=0.15", facecolor="white",
                               edgecolor="none", alpha=0.7),
                 )
                 if ax_row == 0:
-                    ax.legend(loc="upper right", fontsize=8)
+                    ax.legend(loc="upper right", fontsize=10)
 
             axes_ep[-1, 0].set_xlabel("Elapsed time (s)")
             axes_ep[0, 0].set_xlim(0, ep_duration)
