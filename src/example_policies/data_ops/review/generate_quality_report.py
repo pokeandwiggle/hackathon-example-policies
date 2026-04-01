@@ -773,9 +773,9 @@ def main() -> None:
         hspace=0.45,
         wspace=0.25,
         left=0.09,
-        right=0.95,
-        top=0.95,
-        bottom=0.05,
+        right=0.91,
+        top=0.91,
+        bottom=0.09,
     )
 
     # Title bar
@@ -783,7 +783,7 @@ def main() -> None:
         f"Dataset Quality Report: {DATASET_TITLE}",
         fontsize=18,
         fontweight="bold",
-        y=0.99,
+        y=0.97,
         color="#333333",
     )
 
@@ -892,7 +892,7 @@ def main() -> None:
     ax_tbl = fig.add_subplot(gs[2, :])
     # Extend table axes left edge to near-figure-edge (wider than violin below)
     _tbl_pos = ax_tbl.get_position()
-    ax_tbl.set_position([0.09, _tbl_pos.y0, 0.86, _tbl_pos.height * 0.93])
+    ax_tbl.set_position([0.09, _tbl_pos.y0, 0.82, _tbl_pos.height * 0.93])
     ax_tbl.set_facecolor("#f0f0f0")
     ax_tbl.axis("off")
 
