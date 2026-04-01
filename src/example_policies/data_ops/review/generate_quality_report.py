@@ -880,7 +880,7 @@ def main() -> None:
     ax_viol.set_yticklabels(pdf_inst_order, fontsize=9)
     ax_viol.set_xlabel("Frequency (Hz)", fontsize=10)
     ax_viol.set_title(
-        "Per-Message Frequency Distribution", fontsize=12, fontweight="medium", pad=8
+        "Per-Message Frequency Distribution", fontsize=12, fontweight="bold", pad=8
     )
     ax_viol.tick_params(axis="x", labelsize=9)
     ax_viol.margins(y=0.05)
@@ -1051,7 +1051,7 @@ def main() -> None:
         0.5, 1.015,
         "MCAP Topics — Sources & Violations",
         ha="center", va="bottom",
-        fontsize=12, fontweight="medium",
+        fontsize=12, fontweight="bold",
         transform=ax_tbl.transAxes,
     )
 
@@ -1089,7 +1089,7 @@ def main() -> None:
     ax_hm.set_title(
         f"Violation Heatmap (>{actual_tolerance_ms:.0f} ms)",
         fontsize=12,
-        fontweight="medium",
+        fontweight="bold",
         pad=8,
     )
 
