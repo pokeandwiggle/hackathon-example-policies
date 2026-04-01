@@ -128,6 +128,8 @@ TOPICS = [
     ("RGB L", [RosTopicEnum.RGB_LEFT_IMAGE.value]),
     ("RGB R", [RosTopicEnum.RGB_RIGHT_IMAGE.value]),
     ("RGB S", [RosTopicEnum.RGB_STATIC_IMAGE.value]),
+    ("Depth L", ["/cam_left/aligned_depth_to_color/image_compressed"]),
+    ("Depth R", ["/cam_right/aligned_depth_to_color/image_compressed"]),
     ("TCP L", [RosTopicEnum.ACTUAL_TCP_LEFT.value, "/left/franka_robot_state_broadcaster/current_pose", "/panda_left/tcp"]),
     ("TCP R", [RosTopicEnum.ACTUAL_TCP_RIGHT.value, "/right/franka_robot_state_broadcaster/current_pose", "/panda_right/tcp"]),
     ("Cmd TCP L", ["/cartesian_target_left", "/desired_pose_twist_left"]),
@@ -612,11 +614,16 @@ def main() -> None:
             (eps_with_viol / n_total_episodes * 100) if n_total_episodes > 0 else 0.0
         )
         median_viol_ms = float(np.median(viol_magnitudes)) if viol_magnitudes else 0.0
+        all_ivs = all_intervals.get(label, [])
+        avg_interval_ms = float(np.mean(all_ivs)) if all_ivs else 0.0
+        std_interval_ms = float(np.std(all_ivs)) if all_ivs else 0.0
         per_topic_viol[label] = dict(
             n_eps_viol=eps_with_viol,
             ep_pct=ep_pct,
             worst_ms=worst_ms,
             median_viol_ms=median_viol_ms,
+            avg_interval_ms=avg_interval_ms,
+            std_interval_ms=std_interval_ms,
         )
 
     worst_topic = (
@@ -675,10 +682,10 @@ def main() -> None:
     fig = plt.figure(figsize=(16.53, 11.69))  # landscape A4
     fig.set_facecolor("#f0f0f0")
     gs = GridSpec(
-        2,
+        3,
         2,
         figure=fig,
-        height_ratios=[1.1, 1.2],
+        height_ratios=[0.6, 1.0, 1.4],
         hspace=0.35,
         wspace=0.3,
         left=0.06,
@@ -725,7 +732,37 @@ def main() -> None:
         ),
     )
 
-    # ── ROW 1 RIGHT: Violin (per-message frequency) ──────────────────
+    # ── ROW 0 LEFT: Key violation statistics ─────────────────────────
+    ax_stats = fig.add_subplot(gs[0, 0])
+    ax_stats.set_facecolor("#f0f0f0")
+    ax_stats.axis("off")
+
+    stats_lines = [
+        ("Episodes", f"{n_total_episodes}  (filtered out: {n_filtered_out})"),
+        ("Operator", f"{OPERATOR_NAME}"),
+        ("Target / Tolerance", f"{TARGET_FPS} Hz / {actual_tolerance_ms:.0f} ms"),
+        ("Worst topic", f"{worst_topic} ({worst_topic_pct:.0f}% of eps)"),
+        ("Worst interval", f"{max((v['worst_ms'] for v in per_topic_viol.values()), default=0):.1f} ms"),
+        ("Dataset Version", dataset_version_str or "—"),
+    ]
+
+    y_pos = 0.92
+    for label_txt, value_txt in stats_lines:
+        ax_stats.text(
+            0.02, y_pos, label_txt,
+            fontsize=8, fontweight="medium", color="#555",
+            transform=ax_stats.transAxes, va="top",
+        )
+        ax_stats.text(
+            0.42, y_pos, value_txt,
+            fontsize=8, fontfamily="monospace", color="#333",
+            transform=ax_stats.transAxes, va="top",
+        )
+        y_pos -= 0.16
+
+    ax_stats.set_title("Summary", fontsize=10, fontweight="medium", pad=8)
+
+    # ── ROW 0 RIGHT: Violin (per-message frequency) ───────────────────
     ax_viol = fig.add_subplot(gs[0, 1])
     topic_order_rev = list(reversed(topic_order_fwd))
     FREQ_CLIP_HZ_PDF = 1200
@@ -792,8 +829,8 @@ def main() -> None:
     )
     ax_viol.tick_params(axis="x", labelsize=7)
 
-    # ── LEFT COLUMN: Timestamp source table (spans full height) ───────
-    ax_tbl = fig.add_subplot(gs[:, 0])
+    # ── ROWS 1-2 LEFT: Timestamp source table (spans lower 2 rows) ───
+    ax_tbl = fig.add_subplot(gs[1:, 0])
     ax_tbl.set_facecolor("#f0f0f0")
     ax_tbl.axis("off")
 
@@ -836,6 +873,8 @@ def main() -> None:
         "/desired_pose_twist_left",
         "/desired_pose_twist_right",
         "/joint_states",
+        "/joint_target_left",
+        "/joint_target_right",
         # From initial TOPICS list (raw names not already above)
         "/arm_left/tcp_pose",
         "/left/franka_robot_state_broadcaster/current_pose",
@@ -883,30 +922,46 @@ def main() -> None:
         n_ev = viol.get("n_eps_viol", 0)
         ep_p = float(viol.get("ep_pct", 0.0))
         worst_ms = viol.get("worst_ms", 0.0)
+        avg_interval_ms = viol.get("avg_interval_ms", 0.0)
+        std_interval_ms = viol.get("std_interval_ms", 0.0)
         if label_key and n_total_episodes > 0:
             viol_str = f"{n_ev} / {n_total_episodes} ({ep_p:.1f}%)"
+            hz_str = f"{1000.0 / avg_interval_ms:.1f}" if avg_interval_ms > 0 else "—"
+            mean_str = f"{avg_interval_ms:.1f}"
+            std_str = f"{std_interval_ms:.1f}"
             worst_str = f"{worst_ms:.1f}"
         else:
             viol_str = "—"
+            hz_str = "—"
+            mean_str = "—"
+            std_str = "—"
             worst_str = "—"
             ep_p = -1.0  # sentinel: no violation data available
         tbl_ep_pcts.append(ep_p)
         tbl_data.append([
+            label_key or "—",
             raw_topic,
             schema.split("/")[-1],
             src,
             f"{n_msgs_total:,}",
             viol_str,
+            hz_str,
+            mean_str,
+            std_str,
             worst_str,
         ])
 
     col_labels = [
+        "Name",
         "Topic",
         "Schema",
         "Source",
         "Total msgs",
         "Viol. eps (%)",
-        "Worst (ms)",
+        "Hz",
+        "Mean gap (ms)",
+        "Std (ms)",
+        "Max gap (ms)",
     ]
     table = ax_tbl.table(
         cellText=tbl_data, colLabels=col_labels, loc="center", cellLoc="left"
@@ -922,13 +977,13 @@ def main() -> None:
             c = table[row_idx + 1, col_idx]
             c.set_facecolor("#f8f8f8" if row_idx % 2 == 0 else "white")
             c.set_edgecolor("#dddddd")
-        src_cell = table[row_idx + 1, 2]
-        if "log" in tbl_data[row_idx][2]:
+        src_cell = table[row_idx + 1, 3]
+        if "log" in tbl_data[row_idx][3]:
             src_cell.set_facecolor("#fdebd0")
-        elif tbl_data[row_idx][2] == "sensor":
+        elif tbl_data[row_idx][3] == "sensor":
             src_cell.set_facecolor("#d5f5e3")
         if ep_p >= 0:
-            viol_cell = table[row_idx + 1, 4]
+            viol_cell = table[row_idx + 1, 5]
             if ep_p >= FAIL_DROP_PCT:
                 viol_cell.set_facecolor("#f5b7b1")
             elif ep_p >= WARN_DROP_PCT:
@@ -949,8 +1004,8 @@ def main() -> None:
         pad=12,
     )
 
-    # ── ROW 2 RIGHT: Episode × topic heatmap ─────────────────────────
-    ax_hm = fig.add_subplot(gs[1, 1])
+    # ── ROWS 1-2 RIGHT: Episode × topic heatmap ──────────────────────
+    ax_hm = fig.add_subplot(gs[1:, 1])
     ax_hm.grid(False)
     ax_hm.set_facecolor("#eaeaf2")
     hm_vmax_pdf = float(np.max(heatmap)) if np.any(heatmap > 0) else 0.05
