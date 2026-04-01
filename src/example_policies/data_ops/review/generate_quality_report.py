@@ -764,9 +764,14 @@ def main() -> None:
     # ══════════════════════════════════════════════════════════════════
     # Build the one-pager (page 1)
     # ══════════════════════════════════════════════════════════════════
-    # Match height to detail pages so PDF margins look identical across all pages
-    _page1_h = len(wl_display_labels) * 1.8 + 1.2
-    fig = plt.figure(figsize=(16.53, _page1_h))
+    # Margin constants: side = _SIDE_FRAC * width; top/bottom = same absolute inches
+    _FIG_W = 16.53
+    _SIDE_FRAC = 0.09
+    _MARGIN_IN = _SIDE_FRAC * _FIG_W  # absolute margin (~1.49 in)
+    _TITLE_H_IN = 0.30                 # approx suptitle text height in inches
+    _fig1_h = 16.0
+    _mar1 = _MARGIN_IN / _fig1_h
+    fig = plt.figure(figsize=(_FIG_W, _fig1_h))
     fig.set_facecolor("#f0f0f0")
     gs = GridSpec(
         3,
@@ -775,10 +780,10 @@ def main() -> None:
         height_ratios=[0.13, 1.0, 1.6],
         hspace=0.45,
         wspace=0.25,
-        left=0.09,
-        right=0.91,
-        top=0.94,
-        bottom=0.06,
+        left=_SIDE_FRAC,
+        right=1.0 - _SIDE_FRAC,
+        top=1.0 - _mar1 - _TITLE_H_IN / _fig1_h,
+        bottom=_mar1,
     )
 
     # Title bar
@@ -786,7 +791,7 @@ def main() -> None:
         f"Dataset Quality Report: {DATASET_TITLE}",
         fontsize=18,
         fontweight="bold",
-        y=0.97,
+        y=1.0 - _mar1,
         color="#333333",
     )
 
@@ -1135,11 +1140,13 @@ def main() -> None:
             n_topics = len(active_raw_topics)
 
             _PLOT_H_PER_TOPIC = 1.8  # inches per subplot
-            _TITLE_OVERHEAD = 1.2   # inches for suptitle + x-label
+            _TITLE_OVERHEAD = 1.2    # inches for suptitle + x-label
+            _fig_ep_h = n_topics * _PLOT_H_PER_TOPIC + _TITLE_OVERHEAD
+            _mar_ep = _MARGIN_IN / _fig_ep_h
             fig_ep, axes_ep = plt.subplots(
                 n_topics,
                 1,
-                figsize=(16.53, n_topics * _PLOT_H_PER_TOPIC + _TITLE_OVERHEAD),
+                figsize=(_FIG_W, _fig_ep_h),
                 sharex=True,
                 squeeze=False,
             )
@@ -1150,7 +1157,7 @@ def main() -> None:
                 f"Episode {page_ep_num}: Message Timing per Topic",
                 fontsize=14,
                 fontweight="bold",
-                y=0.97,
+                y=1.0 - _mar_ep,
             )
 
             for ax_row, raw_topic in enumerate(active_raw_topics):
@@ -1230,7 +1237,7 @@ def main() -> None:
 
             axes_ep[-1, 0].set_xlabel("Elapsed time (s)")
             axes_ep[0, 0].set_xlim(0, ep_duration)
-            fig_ep.tight_layout(rect=[0.09, 0.06, 0.91, 0.94])
+            fig_ep.tight_layout(rect=[_SIDE_FRAC, _mar_ep, 1.0 - _SIDE_FRAC, 1.0 - _mar_ep - _TITLE_H_IN / _fig_ep_h])
             page_num = 2 + drill_idx
             if SELECTED_PAGES is None or page_num in SELECTED_PAGES:
                 pdf.savefig(fig_ep, dpi=min(PDF_DPI, 100), facecolor=fig_ep.get_facecolor())
