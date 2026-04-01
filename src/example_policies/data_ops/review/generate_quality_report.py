@@ -775,7 +775,7 @@ def main() -> None:
         wspace=0.25,
         left=0.09,
         right=0.91,
-        top=0.94,
+        top=0.88,
         bottom=0.06,
     )
 
@@ -784,7 +784,7 @@ def main() -> None:
         f"Dataset Quality Report: {DATASET_TITLE}",
         fontsize=18,
         fontweight="bold",
-        y=0.97,
+        y=0.94,
         color="#333333",
     )
 
@@ -1148,7 +1148,7 @@ def main() -> None:
                 f"Episode {page_ep_num}: Message Timing per Topic",
                 fontsize=14,
                 fontweight="bold",
-                y=0.97,
+                y=0.94,
             )
 
             for ax_row, raw_topic in enumerate(active_raw_topics):
@@ -1228,7 +1228,7 @@ def main() -> None:
 
             axes_ep[-1, 0].set_xlabel("Elapsed time (s)")
             axes_ep[0, 0].set_xlim(0, ep_duration)
-            fig_ep.tight_layout(rect=[0.09, 0.06, 0.91, 0.94])
+            fig_ep.tight_layout(rect=[0.09, 0.06, 0.91, 0.88])
             page_num = 2 + drill_idx
             if SELECTED_PAGES is None or page_num in SELECTED_PAGES:
                 pdf.savefig(fig_ep, dpi=min(PDF_DPI, 100), facecolor=fig_ep.get_facecolor())
