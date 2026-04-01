@@ -154,7 +154,11 @@ def _is_av1_keyframe(video_data: bytes) -> bool:
 def analyse_episode(mcap_path, topic_names_flat):
     """Return ({topic: sorted timestamps}, {topic: source_counts},
               {topic: schema_name}, {topic: drift_list},
-              {topic: keyframe_timestamps})."""
+              {topic: keyframe_timestamps}).
+
+    Reads ALL topics from the MCAP (topic_names_flat is kept for API
+    compatibility but is no longer used as a filter).
+    """
     per_topic: dict[str, list[float]] = defaultdict(list)
     schema_cache: dict[str, str] = {}
     ts_source: dict[str, dict[str, int]] = defaultdict(lambda: {"sensor": 0, "log": 0})
@@ -165,8 +169,6 @@ def analyse_episode(mcap_path, topic_names_flat):
         reader = make_reader(f)
         for schema, channel, message in reader.iter_messages():
             t = channel.topic
-            if t not in topic_names_flat:
-                continue
             if t not in schema_cache and schema is not None:
                 schema_cache[t] = schema.name
 
@@ -357,13 +359,16 @@ def main() -> None:
         dataset_version_str = VERSION_FILTER
     rows: list[dict] = []
     all_intervals: dict[str, list[float]] = defaultdict(list)
-    episode_timestamps: dict[int, dict[str, np.ndarray]] = {}
-    episode_keyframes: dict[int, dict[str, np.ndarray]] = {}
+    # episode_timestamps uses the raw ep_idx; we will remap after filtering
+    _raw_episode_timestamps: dict[int, dict[str, np.ndarray]] = {}
+    _raw_episode_keyframes: dict[int, dict[str, np.ndarray]] = {}
     agg_ts_source: dict[str, dict[str, int]] = defaultdict(
         lambda: {"sensor": 0, "log": 0}
     )
     topic_schemas: dict[str, str] = {}
     agg_ts_drift: dict[str, list[float]] = defaultdict(list)
+    # all raw topic names seen across all episodes (for page-1 table)
+    all_mcap_topics: set[str] = set()
 
     for ep_idx, ep_path in enumerate(episode_paths):
         ts_data, ts_source, ep_schemas, ts_drift, kf_ts = analyse_episode(
@@ -372,6 +377,10 @@ def main() -> None:
         ep_ts: dict[str, np.ndarray] = {}
         ep_kf: dict[str, np.ndarray] = {}
 
+        # Collect all raw topic names present in this episode
+        all_mcap_topics.update(ts_data.keys())
+
+        # --- predefined labelled topics (for heatmap / violin / violation stats) ---
         for label, names in TOPICS:
             timestamps: list[float] = []
             matched_name = None
@@ -437,8 +446,15 @@ def main() -> None:
                 )
             )
 
-        episode_timestamps[ep_idx] = ep_ts
-        episode_keyframes[ep_idx] = ep_kf
+        # Also store raw-topic arrays for the detail pages
+        for raw_topic, raw_ts_list in ts_data.items():
+            ts_arr_raw = np.array(raw_ts_list, dtype=np.float64)
+            ep_ts[raw_topic] = ts_arr_raw
+            if raw_topic in kf_ts:
+                ep_kf[raw_topic] = np.array(kf_ts[raw_topic], dtype=np.float64)
+
+        _raw_episode_timestamps[ep_idx] = ep_ts
+        _raw_episode_keyframes[ep_idx] = ep_kf
 
         if (ep_idx + 1) % 10 == 0 or ep_idx == len(episode_paths) - 1:
             print(f"  {ep_idx + 1}/{len(episode_paths)}")
@@ -451,6 +467,35 @@ def main() -> None:
         f"\nDone. {len(df)} rows collected "
         f"({df['topic'].nunique()} topics x {df['episode'].nunique()} episodes)."
     )
+
+    # ══════════════════════════════════════════════════════════════════
+    # Filter out episodes that have ANY interval above tolerance
+    # ══════════════════════════════════════════════════════════════════
+    # Determine which raw episodes exceed tolerance on ANY predefined topic
+    _over_tolerance_raw: set[int] = set()
+    for raw_ep_idx in range(len(episode_paths)):
+        ep_ts_check = _raw_episode_timestamps.get(raw_ep_idx, {})
+        for label in topic_order_fwd:
+            ts = ep_ts_check.get(label)
+            if ts is None or len(ts) < 2:
+                continue
+            if np.any(np.diff(ts) * 1000 > actual_tolerance_ms):
+                _over_tolerance_raw.add(raw_ep_idx)
+                break
+
+    # Build remapped dicts containing ONLY passing episodes, numbered from 0
+    _passing_raw_indices = [i for i in range(len(episode_paths)) if i not in _over_tolerance_raw]
+    n_filtered_out = len(_over_tolerance_raw)
+    print(
+        f"Tolerance filter: {n_filtered_out} episodes above {actual_tolerance_ms:.1f} ms removed; "
+        f"{len(_passing_raw_indices)} passing episodes kept."
+    )
+
+    episode_timestamps: dict[int, dict[str, np.ndarray]] = {}
+    episode_keyframes: dict[int, dict[str, np.ndarray]] = {}
+    for new_idx, raw_idx in enumerate(_passing_raw_indices):
+        episode_timestamps[new_idx] = _raw_episode_timestamps[raw_idx]
+        episode_keyframes[new_idx] = _raw_episode_keyframes[raw_idx]
 
     # ══════════════════════════════════════════════════════════════════
     # Heatmap data (5c: episode × topic)
@@ -630,10 +675,10 @@ def main() -> None:
     fig = plt.figure(figsize=(16.53, 11.69))  # landscape A4
     fig.set_facecolor("#f0f0f0")
     gs = GridSpec(
-        3,
+        2,
         2,
         figure=fig,
-        height_ratios=[1.1, 1.2, 0.9],
+        height_ratios=[1.1, 1.2],
         hspace=0.35,
         wspace=0.3,
         left=0.06,
@@ -796,17 +841,46 @@ def main() -> None:
     )
     ax_viol.tick_params(axis="x", labelsize=7)
 
-    # ── ROW 2 LEFT: Timestamp source table ────────────────────────────
+    # ── ROW 2 LEFT: Timestamp source table (all MCAP topics) ─────────
     ax_tbl = fig.add_subplot(gs[1, 0])
     ax_tbl.set_facecolor("#f0f0f0")
     ax_tbl.axis("off")
 
+    # Build per-raw-topic aggregated stats from passing episodes
+    raw_topic_schemas: dict[str, str] = {}
+    raw_agg_source: dict[str, dict[str, int]] = defaultdict(lambda: {"sensor": 0, "log": 0})
+    raw_topic_msgs: dict[str, int] = defaultdict(int)
+
+    for ep_idx in range(n_total_episodes):
+        raw_ep_path = episode_paths[_passing_raw_indices[ep_idx]]
+        with open(raw_ep_path, "rb") as _f:
+            _r = make_reader(_f)
+            _schema_cache: dict[str, str] = {}
+            for _schema, _channel, _msg in _r.iter_messages():
+                _t = _channel.topic
+                if _t not in _schema_cache and _schema is not None:
+                    _schema_cache[_t] = _schema.name
+                    raw_topic_schemas[_t] = _schema.name
+                raw_topic_msgs[_t] += 1
+                _log_ts = _msg.log_time * 1e-9
+                if _t in _schema_cache:
+                    try:
+                        _sts = extract_sensor_timestamp(_msg.data, _schema_cache[_t])
+                        if _sts is not None:
+                            raw_agg_source[_t]["sensor"] += 1
+                            continue
+                    except Exception:
+                        pass
+                raw_agg_source[_t]["log"] += 1
+
+    all_raw_topics_sorted = sorted(all_mcap_topics)
+
     tbl_data = []
-    for label, _ in TOPICS:
-        s = agg_ts_source[label]["sensor"]
-        l_count = agg_ts_source[label]["log"]
+    for raw_topic in all_raw_topics_sorted:
+        s = raw_agg_source[raw_topic]["sensor"]
+        l_count = raw_agg_source[raw_topic]["log"]
         total = s + l_count
-        schema = topic_schemas.get(label, "—")
+        schema = raw_topic_schemas.get(raw_topic, "—")
         if total == 0:
             src = "no data"
         elif l_count == 0:
@@ -815,28 +889,19 @@ def main() -> None:
             src = "log_time"
         else:
             src = f"mixed ({l_count / total * 100:.0f}% log)"
-        drifts = agg_ts_drift.get(label, [])
-        if drifts:
-            d = np.array(drifts) * 1000
-            drift_str = f"{np.median(d):.1f} / {np.max(d):.1f}"
-        else:
-            drift_str = "—"
-        viol = per_topic_viol.get(label, {})
-        n_ev = viol.get("n_eps_viol", 0)
-        ep_p = viol.get("ep_pct", 0)
-        viol_str = (
-            f"{n_ev} / {n_total_episodes} ({ep_p:.0f}%)"
-            if n_total_episodes > 0
-            else "—"
-        )
-        tbl_data.append([label, schema.split("/")[-1], src, drift_str, viol_str])
+        n_msgs_total = raw_topic_msgs.get(raw_topic, 0)
+        tbl_data.append([
+            raw_topic,
+            schema.split("/")[-1],
+            src,
+            f"{n_msgs_total:,}",
+        ])
 
     col_labels = [
         "Topic",
         "Schema",
         "Source",
-        "Drift med/max (ms)",
-        "Violations (eps)",
+        "Total msgs",
     ]
     table = ax_tbl.table(
         cellText=tbl_data, colLabels=col_labels, loc="center", cellLoc="left"
@@ -847,14 +912,6 @@ def main() -> None:
     table.scale(1, 1.15)
 
     for row_idx in range(len(tbl_data)):
-        cell = table[row_idx + 1, 4]
-        ep_p = per_topic_viol.get(tbl_data[row_idx][0], {}).get("ep_pct", 0)
-        if ep_p >= FAIL_DROP_PCT:
-            cell.set_facecolor("#f5b7b1")
-        elif ep_p >= WARN_DROP_PCT:
-            cell.set_facecolor("#fdebd0")
-        else:
-            cell.set_facecolor("#d5f5e3")
         src_cell = table[row_idx + 1, 2]
         if "log" in tbl_data[row_idx][2]:
             src_cell.set_facecolor("#fdebd0")
@@ -862,7 +919,7 @@ def main() -> None:
             src_cell.set_facecolor("#d5f5e3")
         for col_idx in range(len(col_labels)):
             c = table[row_idx + 1, col_idx]
-            if col_idx not in (2, 4):
+            if col_idx != 2:
                 c.set_facecolor("#f8f8f8" if row_idx % 2 == 0 else "white")
             c.set_edgecolor("#dddddd")
 
@@ -873,7 +930,7 @@ def main() -> None:
         hdr.set_edgecolor(PALETTE[0])
 
     ax_tbl.set_title(
-        "Timestamp Sources & Violation Rates",
+        "All MCAP Topics — Timestamp Sources",
         fontsize=10,
         fontweight="medium",
         pad=12,
@@ -909,161 +966,6 @@ def main() -> None:
         pad=8,
     )
 
-    # ── ROW 3: Violation position scatter ─────────────────────────────
-    ax_pos_pct = fig.add_subplot(gs[2, 0])
-    ax_pos_sec = fig.add_subplot(gs[2, 1])
-
-    pdf_viol_data: list[tuple[int, list[tuple[float, float, float]]]] = []
-
-    for ep_idx in sorted(episode_timestamps.keys()):
-        ep_ts = episode_timestamps[ep_idx]
-        ep_points: list[tuple[float, float, float]] = []
-
-        for label in topic_order_fwd:
-            ts = ep_ts.get(label)
-            if ts is None or len(ts) < 2:
-                continue
-            intervals_ms = np.diff(ts) * 1000
-            duration = ts[-1] - ts[0]
-            if duration <= 0:
-                continue
-            mid_times = ts[:-1] + np.diff(ts) / 2
-            elapsed = mid_times - ts[0]
-            mask = intervals_ms > actual_tolerance_ms
-            if mask.any():
-                for p, s_val, m in zip(
-                    (elapsed[mask] / duration * 100).tolist(),
-                    elapsed[mask].tolist(),
-                    intervals_ms[mask].tolist(),
-                ):
-                    ep_points.append((p, s_val, m))
-
-        if ep_points:
-            pdf_viol_data.append((ep_idx, ep_points))
-
-    if pdf_viol_data:
-        n_ve = len(pdf_viol_data)
-        pdf_ve_indices: list[int] = []
-        all_pct_x: list[float] = []
-        all_pct_y: list[float] = []
-        all_sec_x: list[float] = []
-        all_sec_y: list[float] = []
-        all_mag: list[float] = []
-
-        for row, (ep_idx, points) in enumerate(pdf_viol_data):
-            pdf_ve_indices.append(ep_idx)
-            for p, s_val, m in points:
-                all_pct_x.append(p)
-                all_pct_y.append(row)
-                all_sec_x.append(s_val)
-                all_sec_y.append(row)
-                all_mag.append(m)
-
-        all_pct_x_a = np.array(all_pct_x)
-        all_pct_y_a = np.array(all_pct_y)
-        all_sec_x_a = np.array(all_sec_x)
-        all_sec_y_a = np.array(all_sec_y)
-        all_mag_a = np.array(all_mag)
-
-        # Left: normalised (%)
-        sc_p = ax_pos_pct.scatter(
-            all_pct_x_a,
-            all_pct_y_a,
-            c=all_mag_a,
-            cmap="magma_r",
-            s=12,
-            alpha=0.8,
-            edgecolors="white",
-            linewidths=0.3,
-            vmin=actual_tolerance_ms,
-            zorder=3,
-        )
-        ax_pos_pct.set_yticks(range(n_ve))
-        ax_pos_pct.set_yticklabels([str(i) for i in pdf_ve_indices], fontsize=5)
-        ax_pos_pct.set_ylabel("Episode", fontsize=8)
-        ax_pos_pct.set_xlabel("Position (%)", fontsize=8)
-        ax_pos_pct.set_title(
-            "Violation Position — Normalised",
-            fontsize=10,
-            fontweight="medium",
-            pad=8,
-        )
-        ax_pos_pct.set_xlim(-2, 102)
-        ax_pos_pct.set_ylim(n_ve - 0.5, -0.5)
-        fig.colorbar(
-            sc_p, ax=ax_pos_pct, shrink=0.7, pad=0.02, label="Interval (ms)"
-        )
-
-        if all_kf_pct:
-            ax_pos_pct.scatter(
-                all_kf_pct,
-                [-0.8] * len(all_kf_pct),
-                marker="|",
-                s=20,
-                lw=0.5,
-                color=PALETTE[2],
-                alpha=0.5,
-                clip_on=False,
-                label="Keyframes",
-            )
-            ax_pos_pct.legend(fontsize=6, loc="upper right")
-
-        # Right: absolute (seconds)
-        sc_s = ax_pos_sec.scatter(
-            all_sec_x_a,
-            all_sec_y_a,
-            c=all_mag_a,
-            cmap="magma_r",
-            s=12,
-            alpha=0.8,
-            edgecolors="white",
-            linewidths=0.3,
-            vmin=actual_tolerance_ms,
-            zorder=3,
-        )
-        ax_pos_sec.set_yticks(range(n_ve))
-        ax_pos_sec.set_yticklabels([str(i) for i in pdf_ve_indices], fontsize=5)
-        ax_pos_sec.set_ylabel("Episode", fontsize=8)
-        ax_pos_sec.set_xlabel("Position (s)", fontsize=8)
-        ax_pos_sec.set_title(
-            "Violation Position — Absolute",
-            fontsize=10,
-            fontweight="medium",
-            pad=8,
-        )
-        ax_pos_sec.set_ylim(n_ve - 0.5, -0.5)
-        fig.colorbar(
-            sc_s, ax=ax_pos_sec, shrink=0.7, pad=0.02, label="Interval (ms)"
-        )
-
-        if all_kf_sec:
-            ax_pos_sec.scatter(
-                all_kf_sec,
-                [-0.8] * len(all_kf_sec),
-                marker="|",
-                s=20,
-                lw=0.5,
-                color=PALETTE[2],
-                alpha=0.5,
-                clip_on=False,
-            )
-
-        ax_pos_pct.tick_params(labelsize=7)
-        ax_pos_sec.tick_params(labelsize=7)
-    else:
-        for ax_empty in [ax_pos_pct, ax_pos_sec]:
-            ax_empty.axis("off")
-            ax_empty.text(
-                0.5,
-                0.5,
-                "No violations",
-                ha="center",
-                va="center",
-                fontsize=12,
-                color="#aaa",
-                transform=ax_empty.transAxes,
-            )
-
     # ══════════════════════════════════════════════════════════════════
     # Save PDF
     # ══════════════════════════════════════════════════════════════════
@@ -1076,178 +978,23 @@ def main() -> None:
             n_pages += 1
         plt.close(fig)
 
-        # Page 2: sensor-vs-log time drift summary
-        fig_drift = plt.figure(figsize=(16.53, 11.69))
-        fig_drift.set_facecolor("#f0f0f0")
-        fig_drift.suptitle(
-            f"Sensor ↔ Log Time Drift — {DATASET_TITLE}",
-            fontsize=16,
-            fontweight="bold",
-            y=0.97,
-            color="#333333",
-        )
-        fig_drift.text(
-            0.5,
-            0.935,
-            f"Generated {datetime.datetime.now():%Y-%m-%d %H:%M}  |  "
-            f"{len(episode_paths)} episodes  |  "
-            f"Drift = |sensor_timestamp − log_time| per message",
-            ha="center",
-            fontsize=9,
-            color="#777",
-        )
-
-        gs_drift = GridSpec(
-            2, 1, figure=fig_drift,
-            height_ratios=[1, 1.4],
-            hspace=0.30,
-            left=0.06, right=0.96, top=0.90, bottom=0.06,
-        )
-
-        # ── Top: drift statistics table ──────────────────────────────
-        ax_drift_tbl = fig_drift.add_subplot(gs_drift[0])
-        ax_drift_tbl.set_facecolor("#f0f0f0")
-        ax_drift_tbl.axis("off")
-
-        drift_tbl_data = []
-        for label, _ in TOPICS:
-            drifts = agg_ts_drift.get(label, [])
-            if drifts:
-                d = np.array(drifts) * 1000  # convert to ms
-                drift_tbl_data.append([
-                    label,
-                    f"{len(d):,}",
-                    f"{np.min(d):.2f}",
-                    f"{np.mean(d):.2f}",
-                    f"{np.median(d):.2f}",
-                    f"{np.max(d):.2f}",
-                    f"{np.std(d):.2f}",
-                ])
-            else:
-                drift_tbl_data.append([label, "0", "—", "—", "—", "—", "—"])
-
-        drift_col_labels = [
-            "Topic", "N (sensor)", "Min (ms)", "Mean (ms)",
-            "Median (ms)", "Max (ms)", "Std (ms)",
-        ]
-        drift_table = ax_drift_tbl.table(
-            cellText=drift_tbl_data,
-            colLabels=drift_col_labels,
-            loc="center",
-            cellLoc="center",
-        )
-        drift_table.auto_set_font_size(False)
-        drift_table.set_fontsize(8)
-        drift_table.auto_set_column_width(list(range(len(drift_col_labels))))
-        drift_table.scale(1, 1.3)
-
-        for col_idx in range(len(drift_col_labels)):
-            hdr = drift_table[0, col_idx]
-            hdr.set_facecolor(PALETTE[0])
-            hdr.set_text_props(color="white", fontweight="bold")
-            hdr.set_edgecolor(PALETTE[0])
-        for row_idx in range(len(drift_tbl_data)):
-            for col_idx in range(len(drift_col_labels)):
-                c = drift_table[row_idx + 1, col_idx]
-                c.set_facecolor("#f8f8f8" if row_idx % 2 == 0 else "white")
-                c.set_edgecolor("#dddddd")
-            # Highlight max drift > 100 ms
-            if drift_tbl_data[row_idx][5] not in ("—",):
-                max_val = float(drift_tbl_data[row_idx][5])
-                cell_max = drift_table[row_idx + 1, 5]
-                if max_val >= 100:
-                    cell_max.set_facecolor("#f5b7b1")
-                elif max_val >= 10:
-                    cell_max.set_facecolor("#fdebd0")
-                else:
-                    cell_max.set_facecolor("#d5f5e3")
-
-        ax_drift_tbl.set_title(
-            "Per-Topic Drift Statistics  (|sensor_time − log_time|)",
-            fontsize=11, fontweight="medium", pad=12,
-        )
-
-        # ── Bottom: box plot of drift per topic ──────────────────────
-        ax_drift_box = fig_drift.add_subplot(gs_drift[1])
-
-        box_labels = []
-        box_data = []
-        for label in topic_order_fwd:
-            drifts = agg_ts_drift.get(label, [])
-            if drifts:
-                box_labels.append(label)
-                box_data.append(np.array(drifts) * 1000)
-
-        if box_data:
-            bp = ax_drift_box.boxplot(
-                box_data,
-                vert=True,
-                patch_artist=True,
-                showfliers=False,
-                medianprops=dict(color="#333333", linewidth=1.5),
-                whiskerprops=dict(color="#888888"),
-                capprops=dict(color="#888888"),
-            )
-            # Overlay outliers as a single rasterized scatter per topic
-            for i, data in enumerate(box_data):
-                q1, q3 = np.percentile(data, [25, 75])
-                iqr = q3 - q1
-                mask = (data < q1 - 1.5 * iqr) | (data > q3 + 1.5 * iqr)
-                outliers = data[mask]
-                if len(outliers) > 0:
-                    ax_drift_box.scatter(
-                        np.full(len(outliers), i + 1),
-                        outliers,
-                        marker=".", s=3, alpha=0.4,
-                        color=PALETTE[3], edgecolors="none",
-                        rasterized=True, zorder=3,
-                    )
-            for patch, color in zip(
-                bp["boxes"],
-                [PALETTE[i % len(PALETTE)] for i in range(len(box_data))],
-            ):
-                patch.set_facecolor(color)
-                patch.set_alpha(0.6)
-                patch.set_edgecolor("#555555")
-
-            ax_drift_box.set_xticklabels(box_labels, rotation=30, ha="right", fontsize=8)
-            ax_drift_box.set_ylabel("Drift (ms)", fontsize=9)
-            ax_drift_box.set_title(
-                "Drift Distribution per Topic",
-                fontsize=11, fontweight="medium", pad=8,
-            )
-            ax_drift_box.tick_params(axis="y", labelsize=8)
-        else:
-            ax_drift_box.axis("off")
-            ax_drift_box.text(
-                0.5, 0.5, "No sensor timestamps available",
-                ha="center", va="center", fontsize=12, color="#aaa",
-                transform=ax_drift_box.transAxes,
-            )
-
-        if SELECTED_PAGES is None or 2 in SELECTED_PAGES:
-            pdf.savefig(fig_drift, dpi=PDF_DPI, facecolor=fig_drift.get_facecolor())
-            n_pages += 1
-        plt.close(fig_drift)
-
-        # Pages 3+: per-episode spike timelines for violating episodes
-        pdf_drill_eps = sorted(dropped_episodes)
-        for drill_idx, ep_idx in enumerate(pdf_drill_eps):
+        # Pages 2+: per-episode detail timelines for all passing episodes
+        for drill_idx, ep_idx in enumerate(sorted(episode_timestamps.keys())):
             ep_ts = episode_timestamps.get(ep_idx)
             if ep_ts is None:
                 continue
             ep_kf = episode_keyframes.get(ep_idx, {})
 
-            active_topics = [
-                lbl
-                for lbl in topic_order_fwd
-                if lbl in ep_ts and len(ep_ts[lbl]) >= 2
-            ]
-            if not active_topics:
+            # Use all raw topics that have data in this episode for the detail view
+            active_raw_topics = sorted(
+                t for t in all_mcap_topics
+                if t in ep_ts and len(ep_ts[t]) >= 2
+            )
+            if not active_raw_topics:
                 continue
 
-            t0 = min(ep_ts[lbl][0] for lbl in active_topics)
-            n_topics = len(active_topics)
+            t0 = min(ep_ts[t][0] for t in active_raw_topics)
+            n_topics = len(active_raw_topics)
 
             fig_ep, axes_ep = plt.subplots(
                 n_topics,
@@ -1257,16 +1004,18 @@ def main() -> None:
                 squeeze=False,
             )
             fig_ep.set_facecolor("#f0f0f0")
+            # Episodes are numbered from 1 continuously
+            page_ep_num = drill_idx + 1
             fig_ep.suptitle(
-                f"Episode {ep_idx} — inter-message interval vs. time",
+                f"Episode {page_ep_num} — inter-message interval vs. time",
                 fontsize=14,
                 fontweight="bold",
                 y=0.97,
             )
 
-            for ax_row, label in enumerate(active_topics):
+            for ax_row, raw_topic in enumerate(active_raw_topics):
                 ax = axes_ep[ax_row, 0]
-                ts = ep_ts[label]
+                ts = ep_ts[raw_topic]
                 elapsed = ts - t0
                 intervals_ms = np.diff(ts) * 1000
                 mid_times = elapsed[:-1] + np.diff(elapsed) / 2
@@ -1284,17 +1033,18 @@ def main() -> None:
                     zorder=3,
                     rasterized=True,
                 )
-                ax.scatter(
-                    mid_times[~ok],
-                    intervals_ms[~ok],
-                    s=28,
-                    alpha=0.9,
-                    color=_CLR_VIOL,
-                    edgecolors="none",
-                    marker="X",
-                    label=f">{actual_tolerance_ms:.0f} ms  (n={n_viol})",
-                    zorder=4,
-                )
+                if n_viol > 0:
+                    ax.scatter(
+                        mid_times[~ok],
+                        intervals_ms[~ok],
+                        s=28,
+                        alpha=0.9,
+                        color=_CLR_VIOL,
+                        edgecolors="none",
+                        marker="X",
+                        label=f">{actual_tolerance_ms:.0f} ms  (n={n_viol})",
+                        zorder=4,
+                    )
                 ax.axhline(
                     actual_tolerance_ms,
                     ls="--",
@@ -1303,8 +1053,8 @@ def main() -> None:
                     alpha=0.5,
                 )
 
-                if label in ep_kf and len(ep_kf[label]) > 0:
-                    kf_elapsed = ep_kf[label] - t0
+                if raw_topic in ep_kf and len(ep_kf[raw_topic]) > 0:
+                    kf_elapsed = ep_kf[raw_topic] - t0
                     for k_i, kf_t in enumerate(kf_elapsed):
                         ax.axvline(
                             kf_t,
@@ -1315,13 +1065,14 @@ def main() -> None:
                             label="Keyframe" if k_i == 0 else None,
                         )
 
-                ax.set_ylabel(label, fontsize=9)
+                ax.set_ylabel(raw_topic, fontsize=7)
                 if ax_row == 0:
                     ax.legend(loc="upper right", fontsize=7)
 
             axes_ep[-1, 0].set_xlabel("Elapsed time (s)")
             fig_ep.tight_layout(rect=[0, 0, 1, 0.95])
-            if SELECTED_PAGES is None or (3 + drill_idx) in SELECTED_PAGES:
+            page_num = 2 + drill_idx
+            if SELECTED_PAGES is None or page_num in SELECTED_PAGES:
                 pdf.savefig(fig_ep, dpi=PDF_DPI, facecolor=fig_ep.get_facecolor())
                 n_pages += 1
             plt.close(fig_ep)
