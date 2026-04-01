@@ -725,55 +725,6 @@ def main() -> None:
         ),
     )
 
-    # ── ROW 1 LEFT: Key violation statistics ──────────────────────────
-    ax_stats = fig.add_subplot(gs[0, 0])
-    ax_stats.set_facecolor("#f0f0f0")
-    ax_stats.axis("off")
-
-    stats_lines = [
-        (
-            "Episode drop rate",
-            f"{n_dropped} / {n_total_episodes}  ({drop_pct:.1f}%)",
-        ),
-        ("Surviving episodes", f"{n_surviving}"),
-        ("Worst topic", f"{worst_topic} ({worst_topic_pct:.0f}% of episodes)"),
-        (
-            "Worst single interval",
-            f"{max((v['worst_ms'] for v in per_topic_viol.values()), default=0):.1f} ms",
-        ),
-        ("Operator", f"{OPERATOR_NAME}"),
-        ("Target / Tolerance", f"{TARGET_FPS} Hz / {actual_tolerance_ms:.0f} ms"),
-        ("Dataset Version", dataset_version_str or "—"),
-    ]
-
-    y_pos = 0.95
-    for label_txt, value_txt in stats_lines:
-        ax_stats.text(
-            0.05,
-            y_pos,
-            label_txt,
-            fontsize=9,
-            fontweight="medium",
-            color="#555",
-            transform=ax_stats.transAxes,
-            va="top",
-        )
-        ax_stats.text(
-            0.55,
-            y_pos,
-            value_txt,
-            fontsize=9,
-            fontfamily="monospace",
-            color="#333",
-            transform=ax_stats.transAxes,
-            va="top",
-        )
-        y_pos -= 0.12
-
-    ax_stats.set_title(
-        "Violation Summary", fontsize=10, fontweight="medium", pad=12
-    )
-
     # ── ROW 1 RIGHT: Violin (per-message frequency) ──────────────────
     ax_viol = fig.add_subplot(gs[0, 1])
     topic_order_rev = list(reversed(topic_order_fwd))
@@ -841,8 +792,8 @@ def main() -> None:
     )
     ax_viol.tick_params(axis="x", labelsize=7)
 
-    # ── ROW 2 LEFT: Timestamp source table (all MCAP topics) ─────────
-    ax_tbl = fig.add_subplot(gs[1, 0])
+    # ── LEFT COLUMN: Timestamp source table (spans full height) ───────
+    ax_tbl = fig.add_subplot(gs[:, 0])
     ax_tbl.set_facecolor("#f0f0f0")
     ax_tbl.axis("off")
 
@@ -873,10 +824,47 @@ def main() -> None:
                         pass
                 raw_agg_source[_t]["log"] += 1
 
-    all_raw_topics_sorted = sorted(all_mcap_topics)
+    WHITELISTED_TOPICS = [
+        # New list
+        "/cam_left/aligned_depth_to_color/image_compressed",
+        "/cam_left/color/image_rect_compressed",
+        "/cam_right/aligned_depth_to_color/image_compressed",
+        "/cam_right/color/image_rect_compressed",
+        "/cam_static/color/image_rect_compressed",
+        "/desired_gripper_values_left",
+        "/desired_gripper_values_right",
+        "/desired_pose_twist_left",
+        "/desired_pose_twist_right",
+        "/joint_states",
+        # From initial TOPICS list (raw names not already above)
+        "/arm_left/tcp_pose",
+        "/left/franka_robot_state_broadcaster/current_pose",
+        "/panda_left/tcp",
+        "/arm_right/tcp_pose",
+        "/right/franka_robot_state_broadcaster/current_pose",
+        "/panda_right/tcp",
+        "/cartesian_target_left",
+        "/cartesian_target_right",
+    ]
 
+    # Build reverse mapping: raw topic name → predefined label (for violation stats)
+    raw_topic_to_label: dict[str, str] = {}
+    for _lbl, _names in TOPICS:
+        for _n in _names:
+            raw_topic_to_label[_n] = _lbl
+
+    # Print topics found in MCAP but not in whitelist
+    all_raw_topics_sorted = sorted(all_mcap_topics)
+    extra_topics = [t for t in all_raw_topics_sorted if t not in set(WHITELISTED_TOPICS)]
+    if extra_topics:
+        print("\nTopics in MCAP not included in table:")
+        for t in extra_topics:
+            print(f"  {t}")
+
+    whitelisted_present = [t for t in WHITELISTED_TOPICS if t in all_mcap_topics]
+    tbl_ep_pcts: list[float] = []
     tbl_data = []
-    for raw_topic in all_raw_topics_sorted:
+    for raw_topic in whitelisted_present:
         s = raw_agg_source[raw_topic]["sensor"]
         l_count = raw_agg_source[raw_topic]["log"]
         total = s + l_count
@@ -890,11 +878,26 @@ def main() -> None:
         else:
             src = f"mixed ({l_count / total * 100:.0f}% log)"
         n_msgs_total = raw_topic_msgs.get(raw_topic, 0)
+        label_key = raw_topic_to_label.get(raw_topic)
+        viol = per_topic_viol.get(label_key, {}) if label_key else {}
+        n_ev = viol.get("n_eps_viol", 0)
+        ep_p = float(viol.get("ep_pct", 0.0))
+        worst_ms = viol.get("worst_ms", 0.0)
+        if label_key and n_total_episodes > 0:
+            viol_str = f"{n_ev} / {n_total_episodes} ({ep_p:.1f}%)"
+            worst_str = f"{worst_ms:.1f}"
+        else:
+            viol_str = "—"
+            worst_str = "—"
+            ep_p = -1.0  # sentinel: no violation data available
+        tbl_ep_pcts.append(ep_p)
         tbl_data.append([
             raw_topic,
             schema.split("/")[-1],
             src,
             f"{n_msgs_total:,}",
+            viol_str,
+            worst_str,
         ])
 
     col_labels = [
@@ -902,26 +905,36 @@ def main() -> None:
         "Schema",
         "Source",
         "Total msgs",
+        "Viol. eps (%)",
+        "Worst (ms)",
     ]
     table = ax_tbl.table(
         cellText=tbl_data, colLabels=col_labels, loc="center", cellLoc="left"
     )
     table.auto_set_font_size(False)
-    table.set_fontsize(7.5)
+    table.set_fontsize(7)
     table.auto_set_column_width(list(range(len(col_labels))))
-    table.scale(1, 1.15)
+    table.scale(1, 1.1)
 
     for row_idx in range(len(tbl_data)):
+        ep_p = tbl_ep_pcts[row_idx]
+        for col_idx in range(len(col_labels)):
+            c = table[row_idx + 1, col_idx]
+            c.set_facecolor("#f8f8f8" if row_idx % 2 == 0 else "white")
+            c.set_edgecolor("#dddddd")
         src_cell = table[row_idx + 1, 2]
         if "log" in tbl_data[row_idx][2]:
             src_cell.set_facecolor("#fdebd0")
         elif tbl_data[row_idx][2] == "sensor":
             src_cell.set_facecolor("#d5f5e3")
-        for col_idx in range(len(col_labels)):
-            c = table[row_idx + 1, col_idx]
-            if col_idx != 2:
-                c.set_facecolor("#f8f8f8" if row_idx % 2 == 0 else "white")
-            c.set_edgecolor("#dddddd")
+        if ep_p >= 0:
+            viol_cell = table[row_idx + 1, 4]
+            if ep_p >= FAIL_DROP_PCT:
+                viol_cell.set_facecolor("#f5b7b1")
+            elif ep_p >= WARN_DROP_PCT:
+                viol_cell.set_facecolor("#fdebd0")
+            else:
+                viol_cell.set_facecolor("#d5f5e3")
 
     for col_idx in range(len(col_labels)):
         hdr = table[0, col_idx]
@@ -930,7 +943,7 @@ def main() -> None:
         hdr.set_edgecolor(PALETTE[0])
 
     ax_tbl.set_title(
-        "All MCAP Topics — Timestamp Sources",
+        "MCAP Topics — Sources & Violations",
         fontsize=10,
         fontweight="medium",
         pad=12,
@@ -959,6 +972,14 @@ def main() -> None:
     ax_hm.grid(which="minor", color="white", linewidth=0.5, zorder=0)
     ax_hm.tick_params(which="minor", length=0)
     fig.colorbar(im, ax=ax_hm, shrink=0.7, pad=0.02, label="Violation frac.")
+    if not np.any(heatmap > 0):
+        ax_hm.text(
+            0.5, 0.5, "No violations",
+            ha="center", va="center",
+            fontsize=14, color="#aaaaaa",
+            fontweight="medium",
+            transform=ax_hm.transAxes,
+        )
     ax_hm.set_title(
         f"Violation Heatmap (>{actual_tolerance_ms:.0f} ms)",
         fontsize=10,
