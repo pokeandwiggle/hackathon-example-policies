@@ -766,8 +766,8 @@ def main() -> None:
     # ══════════════════════════════════════════════════════════════════
     # Margin constants: side = _SIDE_FRAC * width; top/bottom = same absolute inches
     _FIG_W = 16.53
-    _SIDE_FRAC = 0.09
-    _MARGIN_IN = _SIDE_FRAC * _FIG_W  # absolute margin (~1.49 in)
+    _SIDE_FRAC = 0.09                 # side margin = ~1.5 inch (matches table left=0.09)
+    _MARGIN_IN = 1.0                   # absolute margin in inches (top/bottom/sides)
     _TITLE_H_IN = 0.30                 # approx suptitle text height in inches
     _fig1_h = 16.0
     _mar1 = _MARGIN_IN / _fig1_h
@@ -1203,7 +1203,7 @@ def main() -> None:
                 )
 
                 # Consistent y-axis: 0 to 2× tolerance so all subplots align
-                ax.set_ylim(0, actual_tolerance_ms * 2)
+                ax.set_ylim(0, actual_tolerance_ms * 1.5)
 
                 if raw_topic in ep_kf and len(ep_kf[raw_topic]) > 0:
                     kf_elapsed = ep_kf[raw_topic] - t0
@@ -1237,7 +1237,14 @@ def main() -> None:
 
             axes_ep[-1, 0].set_xlabel("Elapsed time (s)")
             axes_ep[0, 0].set_xlim(0, ep_duration)
-            fig_ep.tight_layout(rect=[_SIDE_FRAC, _mar_ep, 1.0 - _SIDE_FRAC, 1.0 - _mar_ep - _TITLE_H_IN / _fig_ep_h])
+            # Use subplots_adjust so plot areas align exactly with the table on page 1.
+            fig_ep.subplots_adjust(
+                left=_SIDE_FRAC,
+                right=1.0 - _SIDE_FRAC,
+                top=1.0 - _mar_ep - _TITLE_H_IN / _fig_ep_h,
+                bottom=_mar_ep,
+                hspace=0.15,
+            )
             page_num = 2 + drill_idx
             if SELECTED_PAGES is None or page_num in SELECTED_PAGES:
                 pdf.savefig(fig_ep, dpi=min(PDF_DPI, 100), facecolor=fig_ep.get_facecolor())
