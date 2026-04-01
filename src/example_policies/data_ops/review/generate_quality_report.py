@@ -60,7 +60,7 @@ plt.rcParams.update(
         # Figure
         "figure.facecolor": "#f0f0f0",
         "figure.dpi": 130,
-        "figure.titlesize": 15,
+        "figure.titlesize": 14,
         "figure.titleweight": "bold",
         # Axes
         "axes.facecolor": "#eaeaf2",
@@ -68,8 +68,8 @@ plt.rcParams.update(
         "axes.linewidth": 0,
         "axes.grid": True,
         "axes.axisbelow": True,
-        "axes.labelsize": 11,
-        "axes.titlesize": 13,
+        "axes.labelsize": 12,
+        "axes.titlesize": 14,
         "axes.titleweight": "medium",
         "axes.titlepad": 10,
         # Grid
@@ -91,12 +91,12 @@ plt.rcParams.update(
         # Font
         "font.family": "sans-serif",
         "font.sans-serif": ["DejaVu Sans", "Helvetica", "Arial", "sans-serif"],
-        "font.size": 11,
+        "font.size": 12,
         "text.color": "#333333",
         "axes.labelcolor": "#333333",
         # Legend
         "legend.frameon": False,
-        "legend.fontsize": 9,
+        "legend.fontsize": 10,
         # Savefig
         "savefig.facecolor": "#f0f0f0",
         "savefig.edgecolor": "#f0f0f0",
@@ -776,7 +776,7 @@ def main() -> None:
         left=0.09,
         right=0.91,
         top=0.91,
-        bottom=0.03,
+        bottom=0.09,
     )
 
     # Title bar
@@ -810,7 +810,7 @@ def main() -> None:
     for col_i, (lbl, val, val_color) in enumerate(stats_items):
         x = (col_i + 0.5) / n_stat_cols
         ax_stats.text(x, 0.80, lbl, ha="center", va="top",
-                      fontsize=9, fontweight="bold", color="#555",
+                      fontsize=10, fontweight="bold", color="#555",
                       transform=ax_stats.transAxes)
         ax_stats.text(x, 0.35, val, ha="center", va="top",
                       fontsize=10, fontfamily="monospace",
@@ -878,12 +878,12 @@ def main() -> None:
     )
 
     ax_viol.set_yticks(range(len(pdf_inst_order)))
-    ax_viol.set_yticklabels(pdf_inst_order, fontsize=9)
+    ax_viol.set_yticklabels(pdf_inst_order, fontsize=10)
     ax_viol.set_xlabel("Frequency (Hz)", fontsize=10)
     ax_viol.set_title(
         "Per-Message Frequency Distribution", fontsize=12, fontweight="bold", pad=8
     )
-    ax_viol.tick_params(axis="x", labelsize=9)
+    ax_viol.tick_params(axis="x", labelsize=10)
     ax_viol.margins(y=0.05)
     ax_viol.figure.subplots_adjust()  # no-op, kept for clarity
     plt.setp(ax_viol.get_yticklabels(), ha="right")
@@ -999,7 +999,7 @@ def main() -> None:
         bbox=[0, 0, 1, 1],
     )
     table.auto_set_font_size(False)
-    table.set_fontsize(9)
+    table.set_fontsize(10)
     table.auto_set_column_width(list(range(len(col_labels))))
     table.scale(1, 1.2)
 
@@ -1072,7 +1072,7 @@ def main() -> None:
         zorder=2,
     )
     ax_hm.set_xticks(range(len(heatmap_labels)))
-    ax_hm.set_xticklabels(heatmap_labels, rotation=45, ha="right", fontsize=9)
+    ax_hm.set_xticklabels(heatmap_labels, rotation=45, ha="right", fontsize=10)
     ax_hm.set_ylabel("Episode", fontsize=10)
     ax_hm.set_xticks(np.arange(-0.5, len(heatmap_labels), 1), minor=True)
     ax_hm.set_yticks(np.arange(-0.5, heatmap_masked.shape[0], 1), minor=True)
@@ -1203,7 +1203,7 @@ def main() -> None:
                 display_name = f"{_label} ({raw_topic})"
                 # Place name as a left-aligned text inside the axes to avoid overlap
                 ax.set_ylabel("")
-                ax.tick_params(axis="y", labelsize=7)
+                ax.tick_params(axis="y", labelsize=8)
                 ax.text(
                     0.002, 0.97, display_name,
                     transform=ax.transAxes,
@@ -1214,11 +1214,11 @@ def main() -> None:
                               edgecolor="none", alpha=0.7),
                 )
                 if ax_row == 0:
-                    ax.legend(loc="upper right", fontsize=7)
+                    ax.legend(loc="upper right", fontsize=8)
 
             axes_ep[-1, 0].set_xlabel("Elapsed time (s)")
             axes_ep[0, 0].set_xlim(0, ep_duration)
-            fig_ep.tight_layout(rect=[0.09, 0.03, 0.91, 0.97])
+            fig_ep.tight_layout(rect=[0.09, 0.09, 0.91, 0.91])
             page_num = 2 + drill_idx
             if SELECTED_PAGES is None or page_num in SELECTED_PAGES:
                 pdf.savefig(fig_ep, dpi=min(PDF_DPI, 100), facecolor=fig_ep.get_facecolor())
