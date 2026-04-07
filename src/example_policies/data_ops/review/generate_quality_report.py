@@ -1145,7 +1145,7 @@ def main() -> None:
             n_topics = len(active_raw_topics)
 
             _PLOT_H_PER_TOPIC = 1.8  # inches per subplot
-            _TITLE_OVERHEAD = 1.5    # inches for suptitle gap + x-label
+            _TITLE_OVERHEAD = 1.8    # inches for suptitle + subtitle + x-label
             _fig_ep_h = n_topics * _PLOT_H_PER_TOPIC + _TITLE_OVERHEAD
             _mar_ep = _MARGIN_IN / _fig_ep_h
             fig_ep, axes_ep = plt.subplots(
@@ -1171,11 +1171,12 @@ def main() -> None:
             _ep_name = episode_name_map.get(ep_idx, "")
             if _ep_name:
                 fig_ep.text(
-                    0.5, 1.0 - _mar_ep - 0.025,
+                    0.5, 1.0 - _mar_ep - 0.012,
                     _ep_name,
                     ha="center", va="top",
                     fontsize=10, color="#666666",
                     fontstyle="italic",
+                    transform=fig_ep.transFigure,
                 )
 
             for ax_row, raw_topic in enumerate(active_raw_topics):
