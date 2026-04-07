@@ -301,9 +301,9 @@ def main() -> None:
     )
 
     TASK_NAME = RAW_DATA_DIR.parent.name
-    OPERATOR_NAME = "Jane Doe" #RAW_DATA_DIR.name
+    OPERATOR_NAME =  RAW_DATA_DIR.name #"Jane Doe"
     DATASET_LABEL = f"{TASK_NAME}_{OPERATOR_NAME}"
-    DATASET_TITLE = "Example Dataset" #TASK_NAME
+    DATASET_TITLE =  TASK_NAME #"Example Dataset"
 
     # ── Output directory ──────────────────────────────────────────────
     if args.output_dir is not None:
@@ -935,8 +935,8 @@ def main() -> None:
             viol_str = f"{n_ev} / {n_total_episodes} ({ep_p:.1f}%)"
             hz_str = f"{1000.0 / avg_interval_ms:.1f}" if avg_interval_ms > 0 else "—"
             # Hardcoded Hz override for TCP topics
-            if label_key in ("TCP L", "TCP R"):
-                hz_str = "100.0"
+            # if label_key in ("TCP L", "TCP R"):
+            #     hz_str = "100.0"
             mean_str = f"{avg_interval_ms:.1f}"
             std_str = f"{std_interval_ms:.1f}"
             worst_str = f"{worst_ms:.1f}"
