@@ -505,10 +505,12 @@ def main() -> None:
 
     episode_timestamps: dict[int, dict[str, np.ndarray]] = {}
     episode_keyframes: dict[int, dict[str, np.ndarray]] = {}
+    episode_name_map: dict[int, str] = {}  # new_idx -> raw episode filename
     _filtered_episode_indices: set[int] = set()  # new indices of tolerance-filtered episodes
     for new_idx, raw_idx in enumerate(_passing_raw_indices):
         episode_timestamps[new_idx] = _raw_episode_timestamps[raw_idx]
         episode_keyframes[new_idx] = _raw_episode_keyframes[raw_idx]
+        episode_name_map[new_idx] = episode_paths[raw_idx].stem
 
     if SHOW_FILTERED:
         # Append filtered episodes after passing ones, tracking their indices
@@ -517,6 +519,7 @@ def main() -> None:
         for raw_idx in _filtered_raw_indices:
             episode_timestamps[_next_idx] = _raw_episode_timestamps[raw_idx]
             episode_keyframes[_next_idx] = _raw_episode_keyframes[raw_idx]
+            episode_name_map[_next_idx] = episode_paths[raw_idx].stem
             _filtered_episode_indices.add(_next_idx)
             _next_idx += 1
 
@@ -885,8 +888,9 @@ def main() -> None:
     raw_agg_source: dict[str, dict[str, int]] = defaultdict(lambda: {"sensor": 0, "log": 0})
     raw_topic_msgs: dict[str, int] = defaultdict(int)
 
-    for ep_idx in range(n_total_episodes):
-        raw_ep_path = episode_paths[_passing_raw_indices[ep_idx]]
+    n_passing = len(_passing_raw_indices)
+    for pass_idx in range(n_passing):
+        raw_ep_path = episode_paths[_passing_raw_indices[pass_idx]]
         with open(raw_ep_path, "rb") as _f:
             _r = make_reader(_f)
             _schema_cache: dict[str, str] = {}
@@ -1164,6 +1168,15 @@ def main() -> None:
                 y=1.0 - _mar_ep,
                 color=_title_color,
             )
+            _ep_name = episode_name_map.get(ep_idx, "")
+            if _ep_name:
+                fig_ep.text(
+                    0.5, 1.0 - _mar_ep - 0.025,
+                    _ep_name,
+                    ha="center", va="top",
+                    fontsize=10, color="#666666",
+                    fontstyle="italic",
+                )
 
             for ax_row, raw_topic in enumerate(active_raw_topics):
                 ax = axes_ep[ax_row, 0]
