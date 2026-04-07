@@ -16,6 +16,7 @@ Options
     --max-episodes N      Limit number of episodes (default: all)
     --no-success-filter   Include non-success episodes
     --no-excellent-filter Include non-excellent episodes
+    --show-filtered       Plot tolerance-filtered episodes (red headline)
 """
 
 from __future__ import annotations
@@ -277,6 +278,11 @@ def main() -> None:
              "(1=summary, 2=drift, 3+=episodes). Default: all.",
     )
     parser.add_argument(
+        "--show-filtered",
+        action="store_true",
+        help="Include tolerance-filtered episodes in per-episode pages (marked with red headline)",
+    )
+    parser.add_argument(
         "--dpi",
         type=int,
         default=200,
@@ -290,6 +296,7 @@ def main() -> None:
     MAX_EPISODES = args.max_episodes
     SUCCESS_ONLY = not args.no_success_filter
     EXCELLENT_ONLY = not args.no_excellent_filter
+    SHOW_FILTERED = args.show_filtered
 
     PDF_DPI = args.dpi
     SELECTED_PAGES: set[int] | None = None
@@ -498,9 +505,20 @@ def main() -> None:
 
     episode_timestamps: dict[int, dict[str, np.ndarray]] = {}
     episode_keyframes: dict[int, dict[str, np.ndarray]] = {}
+    _filtered_episode_indices: set[int] = set()  # new indices of tolerance-filtered episodes
     for new_idx, raw_idx in enumerate(_passing_raw_indices):
         episode_timestamps[new_idx] = _raw_episode_timestamps[raw_idx]
         episode_keyframes[new_idx] = _raw_episode_keyframes[raw_idx]
+
+    if SHOW_FILTERED:
+        # Append filtered episodes after passing ones, tracking their indices
+        _next_idx = len(_passing_raw_indices)
+        _filtered_raw_indices = sorted(_over_tolerance_raw)
+        for raw_idx in _filtered_raw_indices:
+            episode_timestamps[_next_idx] = _raw_episode_timestamps[raw_idx]
+            episode_keyframes[_next_idx] = _raw_episode_keyframes[raw_idx]
+            _filtered_episode_indices.add(_next_idx)
+            _next_idx += 1
 
     # ══════════════════════════════════════════════════════════════════
     # Derive all mappings from TOPICS (single source of truth)
@@ -673,21 +691,28 @@ def main() -> None:
     )
 
     # Episode drop rate
-    dropped_episodes: set[int] = set()
-    for ep_idx in range(n_total_episodes):
-        ep_ts = episode_timestamps.get(ep_idx, {})
-        for label in topic_order_fwd:
-            ts = ep_ts.get(label)
-            if ts is None or len(ts) < 2:
-                continue
-            intervals_ms = np.diff(ts) * 1000
-            if np.any(intervals_ms > actual_tolerance_ms):
-                dropped_episodes.add(ep_idx)
-                break
-
-    n_dropped = len(dropped_episodes)
-    drop_pct = (n_dropped / n_total_episodes * 100) if n_total_episodes > 0 else 0.0
-    n_surviving = n_total_episodes - n_dropped
+    if SHOW_FILTERED:
+        # Use pre-filter counts so the verdict reflects the true drop rate
+        n_total_raw = len(_passing_raw_indices) + n_filtered_out
+        n_dropped = n_filtered_out
+        drop_pct = (n_dropped / n_total_raw * 100) if n_total_raw > 0 else 0.0
+        n_surviving = n_total_raw - n_dropped
+    else:
+        # Only passing episodes are in scope; recompute violations among them
+        dropped_episodes: set[int] = set()
+        for ep_idx in range(n_total_episodes):
+            ep_ts = episode_timestamps.get(ep_idx, {})
+            for label in topic_order_fwd:
+                ts = ep_ts.get(label)
+                if ts is None or len(ts) < 2:
+                    continue
+                intervals_ms = np.diff(ts) * 1000
+                if np.any(intervals_ms > actual_tolerance_ms):
+                    dropped_episodes.add(ep_idx)
+                    break
+        n_dropped = len(dropped_episodes)
+        drop_pct = (n_dropped / n_total_episodes * 100) if n_total_episodes > 0 else 0.0
+        n_surviving = n_total_episodes - n_dropped
 
     print("\nPer-topic violations (episode-based):")
     for label in topic_order_fwd:
@@ -1129,11 +1154,15 @@ def main() -> None:
             fig_ep.set_facecolor("#f0f0f0")
             # Episodes are numbered from 1 continuously
             page_ep_num = drill_idx + 1
+            _is_filtered = ep_idx in _filtered_episode_indices
+            _title_color = "#cc0000" if _is_filtered else "#333333"
+            _title_suffix = "  [FILTERED]" if _is_filtered else ""
             fig_ep.suptitle(
-                f"Episode {page_ep_num}: Message Timing per Topic",
+                f"Episode {page_ep_num}: Message Timing per Topic{_title_suffix}",
                 fontsize=14,
                 fontweight="bold",
                 y=1.0 - _mar_ep,
+                color=_title_color,
             )
 
             for ax_row, raw_topic in enumerate(active_raw_topics):
